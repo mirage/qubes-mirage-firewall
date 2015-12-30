@@ -19,7 +19,6 @@ val client_vifs : int -> client_vif list Lwt.t
 (** [client_vif domid] is the list of network interfaces to the client VM [domid]. *)
 
 type network_config = {
-  uplink_prefix : Ipaddr.V4.Prefix.t; (* The network connecting us to NetVM *)
   uplink_netvm_ip : Ipaddr.V4.t;      (* The IP address of NetVM (our gateway) *)
   uplink_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
 

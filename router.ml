@@ -34,7 +34,7 @@ let remove_client t = Client_eth.remove_client t.client_eth
 let forward_ipv4 router buf =
   match Memory_pressure.status () with
   | `Memory_critical -> (* TODO: should happen before copying and async *)
-      print_endline "Memory low - dropping packet";
+      Log.warn "Memory low - dropping packet" Logs.unit;
       return ()
   | `Ok ->
   match target router buf with

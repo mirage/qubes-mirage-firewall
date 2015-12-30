@@ -43,11 +43,12 @@ module Make(Clock : V1.CLOCK) = struct
 
   let listen t router =
     Netif.listen t.net (fun frame ->
-      Eth.input
+      (* Handle one Ethernet frame from NetVM *)
+      Eth.input t.eth
         ~arpv4:(Arp.input t.arp)
         ~ipv4:(unnat t router frame)
         ~ipv6:(fun _buf -> return ())
-        t.eth frame
+        frame
     )
 
   let interface t = t.interface
