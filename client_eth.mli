@@ -18,6 +18,9 @@ val remove_client : t -> client_link -> unit
 
 val prefix : t -> Ipaddr.V4.Prefix.t
 
+val classify : t -> Ipaddr.t ->
+  [ `Client of client_link | `Unknown_client | `Client_gateway | `External ]
+
 val lookup : t -> Ipaddr.V4.t -> client_link option
 
 module ARP : sig

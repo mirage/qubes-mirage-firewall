@@ -18,18 +18,27 @@ let create ~prefix ~client_gw =
 let prefix t = t.prefix
 
 let add_client t iface =
-  let ip = iface#client_ip in
+  let ip = iface#other_ip in
   assert (Ipaddr.V4.Prefix.mem ip t.prefix);
   (* TODO: Should probably wait for the previous client to disappear. *)
   (* assert (not (IpMap.mem ip t.iface_of_ip)); *)
   t.iface_of_ip <- t.iface_of_ip |> IpMap.add ip iface
 
 let remove_client t iface =
-  let ip = iface#client_ip in
+  let ip = iface#other_ip in
   assert (IpMap.mem ip t.iface_of_ip);
   t.iface_of_ip <- t.iface_of_ip |> IpMap.remove ip
 
 let lookup t ip = IpMap.find ip t.iface_of_ip
+
+let classify t = function
+  | Ipaddr.V6 _ -> `External
+  | Ipaddr.V4 ip ->
+  if ip === t.client_gw then `Client_gateway
+  else match lookup t ip with
+  | Some client_link -> `Client client_link
+  | None when Ipaddr.V4.Prefix.mem ip t.prefix -> `Unknown_client
+  | None -> `External
 
 module ARP = struct
   type arp = {
@@ -40,7 +49,7 @@ module ARP = struct
   let lookup t ip =
     if ip === t.net.client_gw then Some t.client_link#my_mac
     else match IpMap.find ip t.net.iface_of_ip with
-    | Some client_iface -> Some client_iface#client_mac
+    | Some client_iface -> Some client_iface#other_mac
     | None -> None
 
   let create ~net client_link = {net; client_link}
@@ -87,7 +96,7 @@ module ARP = struct
     let open Arpv4_wire in
     let req_ipv4 = Ipaddr.V4.of_int32 (get_arp_tpa frame) in
     Log.info "who-has %s?" (fun f -> f (Ipaddr.V4.to_string req_ipv4));
-    if req_ipv4 === t.client_link#client_ip then (
+    if req_ipv4 === t.client_link#other_ip then (
       Log.info "ignoring request for client's own IP" Logs.unit;
       None
     ) else match lookup t req_ipv4 with

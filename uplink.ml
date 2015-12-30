@@ -19,35 +19,24 @@ module Make(Clock : V1.CLOCK) = struct
     arp : Arp.t;
     interface : interface;
     my_ip : Ipaddr.t;
-    nat_table : Nat_lookup.t;
   }
 
-  class netvm_iface eth my_ip mac nat_table = object
+  class netvm_iface eth mac netvm_ip : interface = object
     method my_mac = Eth.mac eth
+    method other_ip = netvm_ip
     method writev ip =
       mac >>= fun dst ->
       let eth_hdr = eth_header_ipv4 ~src:(Eth.mac eth) ~dst in
-      match Nat_rules.nat my_ip nat_table Nat_rewrite.Source (Cstruct.concat (eth_hdr :: ip)) with
-      | None -> return ()
-      | Some frame -> Eth.writev eth (fixup_checksums frame)
+      Eth.writev eth (eth_hdr :: ip)
   end
-
-  let unnat t router frame _ip =
-    match Nat_rules.nat t.my_ip t.nat_table Nat_rewrite.Destination frame with
-    | None ->
-        Log.debug "Discarding unexpected frame" Logs.unit;
-        return ()
-    | Some frame ->
-        let frame = fixup_checksums frame |> Cstruct.concat in
-        Router.forward_ipv4 router (Cstruct.shift frame Wire_structs.sizeof_ethernet)
 
   let listen t router =
     Netif.listen t.net (fun frame ->
       (* Handle one Ethernet frame from NetVM *)
       Eth.input t.eth
         ~arpv4:(Arp.input t.arp)
-        ~ipv4:(unnat t router frame)
-        ~ipv6:(fun _buf -> return ())
+        ~ipv4:(fun _ip -> Firewall.ipv4_from_netvm router frame)
+        ~ipv6:(fun _ip -> return ())
         frame
     )
 
@@ -67,7 +56,6 @@ module Make(Clock : V1.CLOCK) = struct
       | `Timeout -> failwith "ARP timeout getting MAC of our NetVM"
       | `Ok netvm_mac -> netvm_mac in
     let my_ip = Ipaddr.V4 ip in
-    let nat_table = Nat_lookup.empty () in
-    let interface = new netvm_iface eth my_ip netvm_mac nat_table in
-    return { net; eth; arp; interface; my_ip; nat_table }
+    let interface = new netvm_iface eth netvm_mac config.Dao.uplink_netvm_ip in
+    return { net; eth; arp; interface; my_ip }
 end

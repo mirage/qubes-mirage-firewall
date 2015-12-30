@@ -12,8 +12,8 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 class client_iface eth client_ip client_mac : client_link = object
   method my_mac = ClientEth.mac eth
-  method client_mac = client_mac
-  method client_ip = client_ip
+  method other_mac = client_mac
+  method other_ip = client_ip
   method writev ip =
     let eth_hdr = eth_header_ipv4 ~src:(ClientEth.mac eth) ~dst:client_mac in
     ClientEth.writev eth (fixup_checksums (Cstruct.concat (eth_hdr :: ip)))
@@ -41,10 +41,10 @@ let start_client ~router domid =
       ClientEth.connect backend >>= or_fail "Can't make Ethernet device" >>= fun eth ->
       let client_mac = Netback.mac backend in
       let iface = new client_iface eth client_ip client_mac in
-      let fixed_arp = Client_eth.ARP.create ~net:(Router.client_eth router) iface in
+      let fixed_arp = Client_eth.ARP.create ~net:router.Router.client_eth iface in
       Router.add_client router iface;
       Cleanup.on_cleanup cleanup_tasks (fun () -> Router.remove_client router iface);
-      Netback.listen backend (
+      Netback.listen backend (fun frame ->
         ClientEth.input
           ~arpv4:(fun buf ->
             match Client_eth.ARP.input fixed_arp buf with
@@ -53,7 +53,7 @@ let start_client ~router domid =
           )
           ~ipv4:(fun packet ->
             let src = Wire_structs.Ipv4_wire.get_ipv4_src packet |> Ipaddr.V4.of_int32 in
-            if src === client_ip then Router.forward_ipv4 router packet
+            if src === client_ip then Firewall.ipv4_from_client router frame
             else (
               Log.warn "Incorrect source IP %a in IP packet from %a (dropping)"
                 (fun f -> f Ipaddr.V4.pp_hum src Ipaddr.V4.pp_hum client_ip);
@@ -61,7 +61,7 @@ let start_client ~router domid =
             )
           )
           ~ipv6:(fun _buf -> return ())
-          eth
+          eth frame
       )
     )
     (fun ex ->

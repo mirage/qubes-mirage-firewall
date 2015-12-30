@@ -22,13 +22,13 @@ module IntMap = Map.Make(Int)
 class type interface = object
   method my_mac : Macaddr.t
   method writev : Cstruct.t list -> unit Lwt.t
+  method other_ip : Ipaddr.V4.t
 end
 
 (** An Ethernet interface connected to a clientVM. *)
 class type client_link = object
   inherit interface
-  method client_ip : Ipaddr.V4.t
-  method client_mac : Macaddr.t
+  method other_mac : Macaddr.t
 end
 
 (** An Ethernet header from [src]'s MAC address to [dst]'s with an IPv4 payload. *)

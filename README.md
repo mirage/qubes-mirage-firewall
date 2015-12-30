@@ -3,11 +3,7 @@
 An **experimental** unikernel that can run as a QubesOS ProxyVM, replacing `sys-firewall`.
 It uses the [mirage-qubes][] library to implement the Qubes protocols.
 
-Note: This firewall *ignores the rules set in the Qubes GUI*.
-
-Currently it only prevents incoming connections from the outside world (which is really just a side-effect of doing NAT). So currently it's really just a router rather than a firewall.
-
-Also, it doesn't yet proxy DNS requests.
+Note: This firewall *ignores the rules set in the Qubes GUI*. See `rules.ml` for the actual policy.
 
 To build:
 
