@@ -37,8 +37,7 @@ module Main (Clock : V1.CLOCK) = struct
     (* Watch for shutdown requests from Qubes *)
     let shutdown_rq = OS.Lifecycle.await_shutdown () >|= function `Poweroff | `Reboot -> () in
     (* Set up networking *)
-    OS.Xs.make () >>= fun xs ->
-    let net = N.connect ~xs qubesDB in
+    let net = N.connect qubesDB in
     (* Run until something fails or we get a shutdown request. *)
     Lwt.choose [agent_listener; net; shutdown_rq] >>= fun () ->
     (* Give the console daemon time to show any final log messages. *)

@@ -10,6 +10,14 @@ module IpMap = struct
     with Not_found -> None
 end
 
+module Int = struct
+  type t = int
+  let compare (a:t) (b:t) = compare a b
+end
+
+module IntSet = Set.Make(Int)
+module IntMap = Map.Make(Int)
+
 (** An Ethernet interface. *)
 class type interface = object
   method my_mac : Macaddr.t

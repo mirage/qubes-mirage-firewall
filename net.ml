@@ -5,10 +5,6 @@
 
 open Lwt.Infix
 open Utils
-open Qubes
-
-module StringMap = Map.Make(String)
-module StringSet = Set.Make(String)
 
 module Eth = Ethif.Make(Netif)
 
@@ -61,16 +57,11 @@ module Make(Clock : V1.CLOCK) = struct
       ClientEth.writev eth (fixup_checksums (Cstruct.concat (eth_hdr :: ip)))
   end
 
-  let random_user_port () =
-    1024 + Random.int (0xffff - 1024)
-
-  let pp_ip4 = Ipaddr.V4.pp_hum
-
   let or_fail msg = function
     | `Ok x -> return x
     | `Error _ -> fail (Failure msg)
 
-  let clients : Cleanup.t StringMap.t ref = ref StringMap.empty
+  let clients : Cleanup.t IntMap.t ref = ref IntMap.empty
 
   let forward_ipv4 router buf =
     match Memory_pressure.status () with
@@ -84,21 +75,16 @@ module Make(Clock : V1.CLOCK) = struct
 
   let start_client ~router domid =
     let cleanup_tasks = Cleanup.create () in
-    Log.info "start_client in domain %s" (fun f -> f domid);
+    Log.info "start_client in domain %d" (fun f -> f domid);
     Lwt.async (fun () ->
       Lwt.catch (fun () ->
-        let domid = int_of_string domid in
-        let path = Printf.sprintf "backend/vif/%d" domid in
-        OS.Xs.make () >>= fun xs ->
-        OS.Xs.immediate xs (fun h ->
-          OS.Xs.directory h path >>= function
-          | [] -> return None
-          | device_id :: others ->
-              if others <> [] then Log.warn "Client has multiple interfaces; using first" Logs.unit;
-              let device_id = int_of_string device_id in
-              OS.Xs.read h (Printf.sprintf "%s/%d/ip" path device_id) >>= fun client_ip ->
-              Netback.make ~domid ~device_id >|= fun backend ->
-              Some (backend, Ipaddr.V4.of_string_exn client_ip)
+        Dao.client_vifs domid >>= (function
+        | [] -> return None
+        | vif :: others ->
+            if others <> [] then Log.warn "Client has multiple interfaces; using first" Logs.unit;
+            let { Dao.domid; device_id; client_ip } = vif in
+            Netback.make ~domid ~device_id >|= fun backend ->
+            Some (backend, client_ip)
         ) >>= function
         | None -> Log.warn "Client has no interfaces" Logs.unit; return ()
         | Some (backend, client_ip) ->
@@ -131,60 +117,37 @@ module Make(Clock : V1.CLOCK) = struct
         )
       )
       (fun ex ->
-        Log.warn "Error connecting client domain %s: %s"
+        Log.warn "Error connecting client domain %d: %s"
           (fun f -> f domid (Printexc.to_string ex));
         return ()
       )
     );
     cleanup_tasks
 
-  let watch_clients ~router xs =
+  let watch_clients router =
     let backend_vifs = "backend/vif" in
     Log.info "Watching %s" (fun f -> f backend_vifs);
-    Xs.wait xs (fun handle ->
-      begin Lwt.catch
-        (fun () -> Xs.directory handle backend_vifs)
-        (function
-          | Xs_protocol.Enoent _ -> return []
-          | ex -> fail ex)
-      end >>= fun items ->
-      Log.debug "Items: %s" (fun f -> f (String.concat ", " items));
-      let new_set = items
-        |> List.fold_left (fun acc key -> StringSet.add key acc) StringSet.empty in
+    Dao.watch_clients (fun new_set ->
       (* Check for removed clients *)
-      !clients |> StringMap.iter (fun key cleanup ->
-        if not (StringSet.mem key new_set) then (
-          clients := !clients |> StringMap.remove key;
-          Log.info "stop_client %S" (fun f -> f key);
+      !clients |> IntMap.iter (fun key cleanup ->
+        if not (IntSet.mem key new_set) then (
+          clients := !clients |> IntMap.remove key;
+          Log.info "stop_client %d" (fun f -> f key);
           Cleanup.cleanup cleanup
         )
       );
       (* Check for added clients *)
-      new_set |> StringSet.iter (fun key ->
-        if not (StringMap.mem key !clients) then (
+      new_set |> IntSet.iter (fun key ->
+        if not (IntMap.mem key !clients) then (
           let cleanup = start_client ~router key in
-          clients := !clients |> StringMap.add key cleanup
+          clients := !clients |> IntMap.add key cleanup
         )
-      );
-      (* Wait for further updates *)
-      fail Xs_protocol.Eagain
+      )
     )
 
-  let connect qubesDB ~xs =
+  let connect_uplink config =
     let nat_table = Nat_lookup.empty () in
-    let get name =
-      match DB.read qubesDB name with
-      | None -> raise (error "QubesDB key %S not present" name)
-      | Some value -> value in
-    let ip = get "/qubes-ip" |> Ipaddr.of_string_exn in
-    (* let netmask = get "/qubes-netmask" |> Ipaddr.V4.of_string_exn in *)
-    let gateway = get "/qubes-gateway" |> Ipaddr.V4.of_string_exn in
-    (* This is oddly named: seems to be the network we provde to our clients *)
-    let client_prefix =
-      let client_network = get "/qubes-netvm-network" |> Ipaddr.V4.of_string_exn in
-      let client_netmask = get "/qubes-netvm-netmask" |> Ipaddr.V4.of_string_exn in
-      Ipaddr.V4.Prefix.of_netmask client_netmask client_network in
-    let client_gw = get "/qubes-netvm-gateway" |> Ipaddr.V4.of_string_exn in
+    let ip = config.Dao.uplink_our_ip in
     Netif.connect "tap0" >>= function
     | `Error (`Unknown msg) -> failwith msg
     | `Error `Disconnected -> failwith "Disconnected"
@@ -192,24 +155,15 @@ module Make(Clock : V1.CLOCK) = struct
     | `Ok net0 ->
     Eth.connect net0 >>= or_fail "Can't make Ethernet device for tap" >>= fun eth0 ->
     Arp.connect eth0 >>= or_fail "Can't add ARP" >>= fun arp0 ->
-    match Ipaddr.to_v4 ip with
-    | None -> failwith "Don't have an IPv4 address!"
-    | Some ip4 ->
-    Arp.add_ip arp0 ip4 >>= fun () ->
-    DB.write qubesDB "/qubes-iptables-error" "" >>= fun () ->
-    Logs.info "Client (internal) network is %a"
-      (fun f -> f Ipaddr.V4.Prefix.pp_hum client_prefix);
-    let netvm_iface =
-      let netvm_mac = Arp.query arp0 gateway >|= function
-        | `Timeout -> failwith "ARP timeout getting MAC of our NetVM"
-        | `Ok netvm_mac -> netvm_mac in
-      new netvm_iface eth0 ip netvm_mac nat_table in
-    let client_net = Client_net.create ~client_gw ~prefix:client_prefix in
-    let router = Router.create ~default_gateway:netvm_iface ~client_net in
-    let clients = watch_clients ~router xs in
-    let wan =
+    Arp.add_ip arp0 ip >>= fun () ->
+    let netvm_mac = Arp.query arp0 config.Dao.uplink_netvm_ip >|= function
+      | `Timeout -> failwith "ARP timeout getting MAC of our NetVM"
+      | `Ok netvm_mac -> netvm_mac in
+    let ip46 = Ipaddr.V4 ip in
+    let iface = new netvm_iface eth0 ip46 netvm_mac nat_table in
+    let listen router =
       let unnat frame _ip = 
-        match Nat_rules.nat ip nat_table Nat_rewrite.Destination frame with
+        match Nat_rules.nat ip46 nat_table Nat_rewrite.Destination frame with
         | None ->
             Log.debug "Discarding unexpected frame" Logs.unit;
             return ()
@@ -223,5 +177,22 @@ module Make(Clock : V1.CLOCK) = struct
           ~ipv6:(fun _buf -> return ())
           eth0 frame
       ) in
-    Lwt.join [clients; wan]
+    return (iface, listen)
+
+  let connect qubesDB =
+    let config = Dao.read_network_config qubesDB in
+    connect_uplink config >>= fun (netvm_iface, netvm_listen) ->
+    Dao.set_iptables_error qubesDB "" >>= fun () ->
+    Logs.info "Client (internal) network is %a"
+      (fun f -> f Ipaddr.V4.Prefix.pp_hum config.Dao.clients_prefix);
+    let client_net = Client_net.create
+      ~client_gw:config.Dao.clients_our_ip
+      ~prefix:config.Dao.clients_prefix in
+    let router = Router.create
+      ~default_gateway:netvm_iface
+      ~client_net in
+    Lwt.join [
+      watch_clients router;
+      netvm_listen router
+    ]
 end
