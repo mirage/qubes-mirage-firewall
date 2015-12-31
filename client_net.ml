@@ -22,10 +22,10 @@ end
 let clients : Cleanup.t IntMap.t ref = ref IntMap.empty
 
 (** Handle an ARP message from the client. *)
-let input_arp ~fixed_arp ~eth buf =
-  match Client_eth.ARP.input fixed_arp buf with
+let input_arp ~fixed_arp ~eth request =
+  match Client_eth.ARP.input fixed_arp request with
   | None -> return ()
-  | Some frame -> ClientEth.write eth frame
+  | Some response -> ClientEth.write eth response
 
 (** Handle an IPv4 packet from the client. *)
 let input_ipv4 ~client_ip ~router frame packet =
@@ -49,10 +49,14 @@ let add_vif { Dao.domid; device_id; client_ip } ~router ~cleanup_tasks =
   Cleanup.on_cleanup cleanup_tasks (fun () -> Router.remove_client router iface);
   let fixed_arp = Client_eth.ARP.create ~net:router.Router.client_eth iface in
   Netback.listen backend (fun frame ->
-    ClientEth.input eth frame
-      ~arpv4:(input_arp ~fixed_arp ~eth)
-      ~ipv4:(input_ipv4 ~client_ip ~router frame)
-      ~ipv6:(fun _buf -> return ())
+    match Wire_structs.parse_ethernet_frame frame with
+    | None -> Log.warn "Invalid Ethernet frame" Logs.unit; return ()
+    | Some (typ, _destination, payload) ->
+        match typ with
+        | Some Wire_structs.ARP -> input_arp ~fixed_arp ~eth payload
+        | Some Wire_structs.IPv4 -> input_ipv4 ~client_ip ~router frame payload
+        | Some Wire_structs.IPv6 -> return ()
+        | None -> Logs.warn "Unknown Ethernet type" Logs.unit; Lwt.return_unit
   )
 
 (** A new client VM has been found in XenStore. Find its interface and connect to it. *)
