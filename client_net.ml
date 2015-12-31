@@ -21,48 +21,53 @@ end
 
 let clients : Cleanup.t IntMap.t ref = ref IntMap.empty
 
-let start_client ~router domid =
+(** Handle an ARP message from the client. *)
+let input_arp ~fixed_arp ~eth buf =
+  match Client_eth.ARP.input fixed_arp buf with
+  | None -> return ()
+  | Some frame -> ClientEth.write eth frame
+
+(** Handle an IPv4 packet from the client. *)
+let input_ipv4 ~client_ip ~router frame packet =
+  let src = Wire_structs.Ipv4_wire.get_ipv4_src packet |> Ipaddr.V4.of_int32 in
+  if src === client_ip then Firewall.ipv4_from_client router frame
+  else (
+    Log.warn "Incorrect source IP %a in IP packet from %a (dropping)"
+      (fun f -> f Ipaddr.V4.pp_hum src Ipaddr.V4.pp_hum client_ip);
+    return ()
+  )
+
+(** Connect to a new client's interface and listen for incoming frames. *)
+let add_vif { Dao.domid; device_id; client_ip } ~router ~cleanup_tasks =
+  Netback.make ~domid ~device_id >>= fun backend ->
+  Log.info "Client %d (IP: %s) ready" (fun f ->
+    f domid (Ipaddr.V4.to_string client_ip));
+  ClientEth.connect backend >>= or_fail "Can't make Ethernet device" >>= fun eth ->
+  let client_mac = Netback.mac backend in
+  let iface = new client_iface eth client_ip client_mac in
+  Router.add_client router iface;
+  Cleanup.on_cleanup cleanup_tasks (fun () -> Router.remove_client router iface);
+  let fixed_arp = Client_eth.ARP.create ~net:router.Router.client_eth iface in
+  Netback.listen backend (fun frame ->
+    ClientEth.input eth frame
+      ~arpv4:(input_arp ~fixed_arp ~eth)
+      ~ipv4:(input_ipv4 ~client_ip ~router frame)
+      ~ipv6:(fun _buf -> return ())
+  )
+
+(** A new client VM has been found in XenStore. Find its interface and connect to it. *)
+let add_client ~router domid =
   let cleanup_tasks = Cleanup.create () in
-  Log.info "start_client in domain %d" (fun f -> f domid);
+  Log.info "add client domain %d" (fun f -> f domid);
   Lwt.async (fun () ->
     Lwt.catch (fun () ->
-      Dao.client_vifs domid >>= (function
-      | [] -> return None
+      Dao.client_vifs domid >>= function
+      | [] ->
+          Log.warn "Client has no interfaces" Logs.unit;
+          return ()
       | vif :: others ->
           if others <> [] then Log.warn "Client has multiple interfaces; using first" Logs.unit;
-          let { Dao.domid; device_id; client_ip } = vif in
-          Netback.make ~domid ~device_id >|= fun backend ->
-          Some (backend, client_ip)
-      ) >>= function
-      | None -> Log.warn "Client has no interfaces" Logs.unit; return ()
-      | Some (backend, client_ip) ->
-      Log.info "Client %d (IP: %s) ready" (fun f ->
-        f domid (Ipaddr.V4.to_string client_ip));
-      ClientEth.connect backend >>= or_fail "Can't make Ethernet device" >>= fun eth ->
-      let client_mac = Netback.mac backend in
-      let iface = new client_iface eth client_ip client_mac in
-      let fixed_arp = Client_eth.ARP.create ~net:router.Router.client_eth iface in
-      Router.add_client router iface;
-      Cleanup.on_cleanup cleanup_tasks (fun () -> Router.remove_client router iface);
-      Netback.listen backend (fun frame ->
-        ClientEth.input
-          ~arpv4:(fun buf ->
-            match Client_eth.ARP.input fixed_arp buf with
-            | None -> return ()
-            | Some frame -> ClientEth.write eth frame
-          )
-          ~ipv4:(fun packet ->
-            let src = Wire_structs.Ipv4_wire.get_ipv4_src packet |> Ipaddr.V4.of_int32 in
-            if src === client_ip then Firewall.ipv4_from_client router frame
-            else (
-              Log.warn "Incorrect source IP %a in IP packet from %a (dropping)"
-                (fun f -> f Ipaddr.V4.pp_hum src Ipaddr.V4.pp_hum client_ip);
-              return ()
-            )
-          )
-          ~ipv6:(fun _buf -> return ())
-          eth frame
-      )
+          add_vif vif ~router ~cleanup_tasks
     )
     (fun ex ->
       Log.warn "Error connecting client domain %d: %s"
@@ -72,6 +77,7 @@ let start_client ~router domid =
   );
   cleanup_tasks
 
+(** Watch XenStore for notifications of new clients. *)
 let listen router =
   let backend_vifs = "backend/vif" in
   Log.info "Watching %s" (fun f -> f backend_vifs);
@@ -80,14 +86,14 @@ let listen router =
     !clients |> IntMap.iter (fun key cleanup ->
       if not (IntSet.mem key new_set) then (
         clients := !clients |> IntMap.remove key;
-        Log.info "stop_client %d" (fun f -> f key);
+        Log.info "client %d has gone" (fun f -> f key);
         Cleanup.cleanup cleanup
       )
     );
     (* Check for added clients *)
     new_set |> IntSet.iter (fun key ->
       if not (IntMap.mem key !clients) then (
-        let cleanup = start_client ~router key in
+        let cleanup = add_client ~router key in
         clients := !clients |> IntMap.add key cleanup
       )
     )
