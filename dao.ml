@@ -48,6 +48,7 @@ type network_config = {
   clients_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to our client VMs (their gateway) *)
 }
 
+(* TODO: /qubes-secondary-dns *)
 let read_network_config qubesDB =
   let get name =
     match DB.read qubesDB name with

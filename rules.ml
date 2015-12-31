@@ -11,11 +11,11 @@ open Packet
 (** Decide what to do with a packet from a client VM.
     Note: If the packet matched an existing NAT rule then this isn't called. *)
 let from_client = function
-  | { dst = `External } -> `Accept
+  | { dst = `External _ } -> `Accept
   | { dst = `Client_gateway; proto = `UDP { dport = 53 } } -> `Redirect_to_netvm 53
   | { dst = (`Client_gateway | `Firewall_uplink) } -> `Drop "packet addressed to firewall itself"
   | { dst = `Client _ } -> `Drop "prevent communication between client VMs"
-  | { dst = `Unknown_client } -> `Drop "target client not running"
+  | { dst = `Unknown_client _ } -> `Drop "target client not running"
 
 (** Decide what to do with a packet received from the outside world.
     Note: If the packet matched an existing NAT rule then this isn't called. *)

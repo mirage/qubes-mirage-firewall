@@ -45,6 +45,28 @@ let classify t frame =
     proto;
   }
 
+let pp_ports fmt {sport; dport} =
+  Format.fprintf fmt "sport=%d dport=%d" sport dport
+
+let pp_host fmt = function
+  | `Client c -> Ipaddr.V4.pp_hum fmt (c#other_ip)
+  | `Unknown_client ip -> Format.fprintf fmt "unknown-client(%a)" Ipaddr.pp_hum ip
+  | `External ip -> Format.fprintf fmt "external(%a)" Ipaddr.pp_hum ip
+  | `Firewall_uplink -> Format.pp_print_string fmt "firewall(uplink)"
+  | `Client_gateway -> Format.pp_print_string fmt "firewall(client-gw)"
+
+let pp_proto fmt = function
+  | `UDP ports -> Format.fprintf fmt "UDP(%a)" pp_ports ports
+  | `TCP ports -> Format.fprintf fmt "TCP(%a)" pp_ports ports
+  | `ICMP -> Format.pp_print_string fmt "ICMP"
+  | `Unknown -> Format.pp_print_string fmt "UnknownProtocol"
+
+let pp_packet fmt {src; dst; proto; frame = _} =
+  Format.fprintf fmt "[src=%a dst=%a proto=%a]"
+    pp_host src
+    pp_host dst
+    pp_proto proto
+
 (* NAT *)
 
 let translate t frame =
@@ -119,16 +141,16 @@ let ipv4_from_client t frame =
   | Some info ->
   match Rules.from_client info, info.dst with
   | `Accept, `Client client_link -> transmit ~frame client_link
-  | `Accept, `External -> add_nat_and_forward_ipv4 t frame
-  | `Accept, `Unknown_client ->
-      Log.warn "Dropping packet to unknown client" Logs.unit;
+  | `Accept, `External _ -> add_nat_and_forward_ipv4 t frame
+  | `Accept, `Unknown_client _ ->
+      Log.warn "Dropping packet to unknown client %a" (fun f -> f pp_packet info);
       return ()
   | `Accept, (`Firewall_uplink | `Client_gateway) ->
-      Log.warn "Bad rule: firewall can't accept packets" Logs.unit;
+      Log.warn "Bad rule: firewall can't accept packets %a" (fun f -> f pp_packet info);
       return ()
   | `Redirect_to_netvm port, _ -> redirect_to_netvm t ~frame ~port
   | `Drop reason, _ ->
-      Log.info "Dropped packet (%s)" (fun f -> f reason);
+      Log.info "Dropped packet (%s) %a" (fun f -> f reason pp_packet info);
       return ()
 
 let ipv4_from_netvm t frame =
@@ -141,14 +163,14 @@ let ipv4_from_netvm t frame =
   | None -> return ()
   | Some info ->
   match info.src with
-  | `Client _ | `Unknown_client | `Firewall_uplink | `Client_gateway ->
-    Log.warn "Frame from NetVM has internal source IP address!" Logs.unit;
+  | `Client _ | `Unknown_client _ | `Firewall_uplink | `Client_gateway ->
+    Log.warn "Frame from NetVM has internal source IP address! %a" (fun f -> f pp_packet info);
     return ()
-  | `External ->
+  | `External _ ->
   match translate t frame with
   | Some frame -> forward_ipv4 t frame
   | None ->
   match Rules.from_netvm info with
   | `Drop reason ->
-      Log.info "Dropped packet (%s)" (fun f -> f reason);
+      Log.info "Dropped packet (%s) %a" (fun f -> f reason pp_packet info);
       return ()

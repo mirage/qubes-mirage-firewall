@@ -31,14 +31,15 @@ let remove_client t iface =
 
 let lookup t ip = IpMap.find ip t.iface_of_ip
 
-let classify t = function
-  | Ipaddr.V6 _ -> `External
-  | Ipaddr.V4 ip ->
-  if ip === t.client_gw then `Client_gateway
-  else match lookup t ip with
+let classify t ip =
+  match ip with
+  | Ipaddr.V6 _ -> `External ip
+  | Ipaddr.V4 ip4 ->
+  if ip4 === t.client_gw then `Client_gateway
+  else match lookup t ip4 with
   | Some client_link -> `Client client_link
-  | None when Ipaddr.V4.Prefix.mem ip t.prefix -> `Unknown_client
-  | None -> `External
+  | None when Ipaddr.V4.Prefix.mem ip4 t.prefix -> `Unknown_client ip
+  | None -> `External ip
 
 module ARP = struct
   type arp = {
