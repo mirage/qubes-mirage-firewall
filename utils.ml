@@ -22,6 +22,7 @@ module IntMap = Map.Make(Int)
 class type interface = object
   method my_mac : Macaddr.t
   method writev : Cstruct.t list -> unit Lwt.t
+  method my_ip : Ipaddr.V4.t
   method other_ip : Ipaddr.V4.t
 end
 

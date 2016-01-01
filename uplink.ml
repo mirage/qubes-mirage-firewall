@@ -18,12 +18,12 @@ module Make(Clock : V1.CLOCK) = struct
     eth : Eth.t;
     arp : Arp.t;
     interface : interface;
-    my_ip : Ipaddr.t;
   }
 
-  class netvm_iface eth mac netvm_ip : interface = object
+  class netvm_iface eth mac ~my_ip ~other_ip : interface = object
     method my_mac = Eth.mac eth
-    method other_ip = netvm_ip
+    method my_ip = my_ip
+    method other_ip = other_ip
     method writev ip =
       mac >>= fun dst ->
       let eth_hdr = eth_header_ipv4 ~src:(Eth.mac eth) ~dst in
@@ -51,7 +51,8 @@ module Make(Clock : V1.CLOCK) = struct
     let netvm_mac = Arp.query arp config.Dao.uplink_netvm_ip >|= function
       | `Timeout -> failwith "ARP timeout getting MAC of our NetVM"
       | `Ok netvm_mac -> netvm_mac in
-    let my_ip = Ipaddr.V4 ip in
-    let interface = new netvm_iface eth netvm_mac config.Dao.uplink_netvm_ip in
-    return { net; eth; arp; interface; my_ip }
+    let interface = new netvm_iface eth netvm_mac
+      ~my_ip:ip
+      ~other_ip:config.Dao.uplink_netvm_ip in
+    return { net; eth; arp; interface }
 end

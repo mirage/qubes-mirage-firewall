@@ -37,8 +37,7 @@ module Main (Clock : V1.CLOCK) = struct
     (* Set up routing between networks and hosts *)
     let router = Router.create
       ~client_eth
-      ~default_gateway:(Uplink.interface uplink)
-      ~my_uplink_ip:(Ipaddr.V4 config.Dao.uplink_our_ip) in
+      ~uplink:(Uplink.interface uplink) in
     (* Handle packets from both networks *)
     Lwt.join [
       Client_net.listen router;

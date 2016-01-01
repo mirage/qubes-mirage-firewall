@@ -11,13 +11,12 @@ module Log = (val Logs.src_log src : Logs.LOG)
 type t = {
   client_eth : Client_eth.t;
   nat : Nat_lookup.t;
-  default_gateway : interface;
-  my_uplink_ip : Ipaddr.t;
+  uplink : interface;
 }
 
-let create ~client_eth ~default_gateway ~my_uplink_ip =
+let create ~client_eth ~uplink =
   let nat = Nat_lookup.empty () in
-  { client_eth; nat; default_gateway; my_uplink_ip }
+  { client_eth; nat; uplink }
 
 let target t buf =
   let open Wire_structs.Ipv4_wire in
@@ -29,12 +28,17 @@ let target t buf =
       Log.warn "Packet to unknown internal client %a - dropping"
         (fun f -> f Ipaddr.V4.pp_hum dst_ip);
       None
-  ) else Some t.default_gateway
+  ) else Some t.uplink
 
 let add_client t = Client_eth.add_client t.client_eth
 let remove_client t = Client_eth.remove_client t.client_eth
 
 let classify t ip =
-  let (===) a b = (Ipaddr.compare a b = 0) in
-  if ip === t.my_uplink_ip then `Firewall_uplink
+  if ip = Ipaddr.V4 t.uplink#my_ip then `Firewall_uplink
+  else if ip = Ipaddr.V4 t.uplink#other_ip then `NetVM
   else (Client_eth.classify t.client_eth ip :> Packet.host)
+
+let resolve t = function
+  | `Firewall_uplink -> Ipaddr.V4 t.uplink#my_ip
+  | `NetVM -> Ipaddr.V4 t.uplink#other_ip
+  | #Client_eth.host as host -> Client_eth.resolve t.client_eth host

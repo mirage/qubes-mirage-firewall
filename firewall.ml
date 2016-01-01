@@ -51,6 +51,7 @@ let pp_ports fmt {sport; dport} =
 let pp_host fmt = function
   | `Client c -> Ipaddr.V4.pp_hum fmt (c#other_ip)
   | `Unknown_client ip -> Format.fprintf fmt "unknown-client(%a)" Ipaddr.pp_hum ip
+  | `NetVM -> Format.pp_print_string fmt "net-vm"
   | `External ip -> Format.fprintf fmt "external(%a)" Ipaddr.pp_hum ip
   | `Firewall_uplink -> Format.pp_print_string fmt "firewall(uplink)"
   | `Client_gateway -> Format.pp_print_string fmt "firewall(client-gw)"
@@ -94,8 +95,9 @@ let rec add_nat_rule_and_transmit t frame fn fmt logf =
 
 (* Add a NAT rule for the endpoints in this frame, via a random port on the firewall. *)
 let add_nat_and_forward_ipv4 t frame =
+  let xl_host = Ipaddr.V4 t.Router.uplink#my_ip in
   add_nat_rule_and_transmit t frame
-    (Nat_rewrite.make_nat_entry t.Router.nat frame t.Router.my_uplink_ip)
+    (Nat_rewrite.make_nat_entry t.Router.nat frame xl_host)
     "added NAT entry: %s:%d -> firewall:%d -> %d:%s"
     (fun xl_port f ->
       match Nat_rewrite.layers frame with
@@ -106,12 +108,13 @@ let add_nat_and_forward_ipv4 t frame =
       f (Ipaddr.to_string src) sport xl_port dport (Ipaddr.to_string dst)
     )
 
-(* Add a NAT rule to redirect this conversation to NetVM instead of us. *)
-let redirect_to_netvm t ~frame ~port =
-  let gw = Ipaddr.V4 t.Router.default_gateway#other_ip in
+(* Add a NAT rule to redirect this conversation to [host:port] instead of us. *)
+let nat_to t ~frame ~host ~port =
+  let gw = Router.resolve t host in
+  let xl_host = Ipaddr.V4 t.Router.uplink#my_ip in
   add_nat_rule_and_transmit t frame
     (fun xl_port ->
-      Nat_rewrite.make_redirect_entry t.Router.nat frame (t.Router.my_uplink_ip, xl_port) (gw, port)
+      Nat_rewrite.make_redirect_entry t.Router.nat frame (xl_host, xl_port) (gw, port)
     )
     "added NAT redirect %s:%d -> %d:firewall:%d -> %d:NetVM"
     (fun xl_port f ->
@@ -141,14 +144,15 @@ let ipv4_from_client t frame =
   | Some info ->
   match Rules.from_client info, info.dst with
   | `Accept, `Client client_link -> transmit ~frame client_link
-  | `Accept, `External _ -> add_nat_and_forward_ipv4 t frame
+  | `Accept, (`External _ | `NetVM) -> transmit ~frame t.Router.uplink
   | `Accept, `Unknown_client _ ->
       Log.warn "Dropping packet to unknown client %a" (fun f -> f pp_packet info);
       return ()
   | `Accept, (`Firewall_uplink | `Client_gateway) ->
       Log.warn "Bad rule: firewall can't accept packets %a" (fun f -> f pp_packet info);
       return ()
-  | `Redirect_to_netvm port, _ -> redirect_to_netvm t ~frame ~port
+  | `NAT, _ -> add_nat_and_forward_ipv4 t frame
+  | `NAT_to (host, port), _ -> nat_to t ~frame ~host ~port
   | `Drop reason, _ ->
       Log.info "Dropped packet (%s) %a" (fun f -> f reason pp_packet info);
       return ()
@@ -166,7 +170,7 @@ let ipv4_from_netvm t frame =
   | `Client _ | `Unknown_client _ | `Firewall_uplink | `Client_gateway ->
     Log.warn "Frame from NetVM has internal source IP address! %a" (fun f -> f pp_packet info);
     return ()
-  | `External _ ->
+  | `External _ | `NetVM ->
   match translate t frame with
   | Some frame -> forward_ipv4 t frame
   | None ->

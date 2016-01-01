@@ -12,10 +12,17 @@ type t = {
   client_gw : Ipaddr.V4.t;  (* The IP that clients are given as their default gateway. *)
 }
 
+type host =
+  [ `Client of client_link
+  | `Unknown_client of Ipaddr.t
+  | `Client_gateway
+  | `External of Ipaddr.t ]
+
 let create ~prefix ~client_gw =
   { iface_of_ip = IpMap.empty; client_gw; prefix }
 
 let prefix t = t.prefix
+let client_gw t = t.client_gw
 
 let add_client t iface =
   let ip = iface#other_ip in
@@ -40,6 +47,12 @@ let classify t ip =
   | Some client_link -> `Client client_link
   | None when Ipaddr.V4.Prefix.mem ip4 t.prefix -> `Unknown_client ip
   | None -> `External ip
+
+let resolve t : host -> Ipaddr.t = function
+  | `Client client_link -> Ipaddr.V4 client_link#other_ip
+  | `Client_gateway -> Ipaddr.V4 t.client_gw
+  | `Unknown_client addr
+  | `External addr -> addr
 
 module ARP = struct
   type arp = {
