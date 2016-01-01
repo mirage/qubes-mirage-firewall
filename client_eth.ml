@@ -35,7 +35,7 @@ let classify t ip =
   match ip with
   | Ipaddr.V6 _ -> `External ip
   | Ipaddr.V4 ip4 ->
-  if ip4 === t.client_gw then `Client_gateway
+  if ip4 = t.client_gw then `Client_gateway
   else match lookup t ip4 with
   | Some client_link -> `Client client_link
   | None when Ipaddr.V4.Prefix.mem ip4 t.prefix -> `Unknown_client ip
@@ -48,7 +48,7 @@ module ARP = struct
   }
 
   let lookup t ip =
-    if ip === t.net.client_gw then Some t.client_link#my_mac
+    if ip = t.net.client_gw then Some t.client_link#my_mac
     else match IpMap.find ip t.net.iface_of_ip with
     | Some client_iface -> Some client_iface#other_mac
     | None -> None
@@ -97,7 +97,7 @@ module ARP = struct
     let open Arpv4_wire in
     let req_ipv4 = Ipaddr.V4.of_int32 (get_arp_tpa frame) in
     Log.info "who-has %s?" (fun f -> f (Ipaddr.V4.to_string req_ipv4));
-    if req_ipv4 === t.client_link#other_ip then (
+    if req_ipv4 = t.client_link#other_ip then (
       Log.info "ignoring request for client's own IP" Logs.unit;
       None
     ) else match lookup t req_ipv4 with

@@ -62,7 +62,7 @@ module Main (Clock : V1.CLOCK) = struct
     Log.info "agents connected in %.3f s (CPU time used since boot: %.3f s)"
       (fun f -> f (Clock.time () -. start_time) (Sys.time ()));
     (* Watch for shutdown requests from Qubes *)
-    let shutdown_rq = OS.Lifecycle.await_shutdown () >|= function `Poweroff | `Reboot -> () in
+    let shutdown_rq = OS.Lifecycle.await_shutdown () >>= function `Poweroff | `Reboot -> return () in
     (* Set up networking *)
     let net_listener = network qubesDB in
     (* Run until something fails or we get a shutdown request. *)

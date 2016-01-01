@@ -44,11 +44,7 @@ module Make(Clock : V1.CLOCK) = struct
 
   let connect config =
     let ip = config.Dao.uplink_our_ip in
-    Netif.connect "tap0" >>= function
-    | `Error (`Unknown msg) -> failwith msg
-    | `Error `Disconnected -> failwith "Disconnected"
-    | `Error `Unimplemented -> failwith "Unimplemented"
-    | `Ok net ->
+    Netif.connect "tap0" >>= or_fail "Can't connect uplink device" >>= fun net ->
     Eth.connect net >>= or_fail "Can't make Ethernet device for tap" >>= fun eth ->
     Arp.connect eth >>= or_fail "Can't add ARP" >>= fun arp ->
     Arp.add_ip arp ip >>= fun () ->

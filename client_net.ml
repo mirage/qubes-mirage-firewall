@@ -30,7 +30,7 @@ let input_arp ~fixed_arp ~eth request =
 (** Handle an IPv4 packet from the client. *)
 let input_ipv4 ~client_ip ~router frame packet =
   let src = Wire_structs.Ipv4_wire.get_ipv4_src packet |> Ipaddr.V4.of_int32 in
-  if src === client_ip then Firewall.ipv4_from_client router frame
+  if src = client_ip then Firewall.ipv4_from_client router frame
   else (
     Log.warn "Incorrect source IP %a in IP packet from %a (dropping)"
       (fun f -> f Ipaddr.V4.pp_hum src Ipaddr.V4.pp_hum client_ip);

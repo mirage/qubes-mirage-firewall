@@ -52,8 +52,6 @@ let fixup_checksums frame =
     in
     [just_headers; higherlevel_data]
 
-let (===) a b = (Ipaddr.V4.compare a b = 0)
-
 let error fmt =
   let err s = Failure s in
   Printf.ksprintf err fmt
