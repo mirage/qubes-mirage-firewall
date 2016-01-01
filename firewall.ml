@@ -94,7 +94,7 @@ let rec add_nat_rule_and_transmit t frame fn fmt logf =
           return ()
 
 (* Add a NAT rule for the endpoints in this frame, via a random port on the firewall. *)
-let add_nat_and_forward_ipv4 t frame =
+let add_nat_and_forward_ipv4 t ~frame =
   let xl_host = Ipaddr.V4 t.Router.uplink#my_ip in
   add_nat_rule_and_transmit t frame
     (Nat_rewrite.make_nat_entry t.Router.nat frame xl_host)
@@ -128,6 +128,22 @@ let nat_to t ~frame ~host ~port =
 
 (* Handle incoming packets *)
 
+let apply_rules t rules info =
+  match rules info, info.dst with
+  | `Accept, `Client client_link -> transmit ~frame:info.frame client_link
+  | `Accept, (`External _ | `NetVM) -> transmit ~frame:info.frame t.Router.uplink
+  | `Accept, `Unknown_client _ ->
+      Log.warn "Dropping packet to unknown client %a" (fun f -> f pp_packet info);
+      return ()
+  | `Accept, (`Firewall_uplink | `Client_gateway) ->
+      Log.warn "Bad rule: firewall can't accept packets %a" (fun f -> f pp_packet info);
+      return ()
+  | `NAT, _ -> add_nat_and_forward_ipv4 t ~frame:info.frame
+  | `NAT_to (host, port), _ -> nat_to t ~frame:info.frame ~host ~port
+  | `Drop reason, _ ->
+      Log.info "Dropped packet (%s) %a" (fun f -> f reason pp_packet info);
+      return ()
+
 let ipv4_from_client t frame =
   match Memory_pressure.status () with
   | `Memory_critical -> (* TODO: should happen before copying and async *)
@@ -141,21 +157,7 @@ let ipv4_from_client t frame =
   (* No existing NAT entry. Check the firewall rules. *)
   match classify t frame with
   | None -> return ()
-  | Some info ->
-  match Rules.from_client info, info.dst with
-  | `Accept, `Client client_link -> transmit ~frame client_link
-  | `Accept, (`External _ | `NetVM) -> transmit ~frame t.Router.uplink
-  | `Accept, `Unknown_client _ ->
-      Log.warn "Dropping packet to unknown client %a" (fun f -> f pp_packet info);
-      return ()
-  | `Accept, (`Firewall_uplink | `Client_gateway) ->
-      Log.warn "Bad rule: firewall can't accept packets %a" (fun f -> f pp_packet info);
-      return ()
-  | `NAT, _ -> add_nat_and_forward_ipv4 t frame
-  | `NAT_to (host, port), _ -> nat_to t ~frame ~host ~port
-  | `Drop reason, _ ->
-      Log.info "Dropped packet (%s) %a" (fun f -> f reason pp_packet info);
-      return ()
+  | Some info -> apply_rules t Rules.from_client info
 
 let ipv4_from_netvm t frame =
   match Memory_pressure.status () with
@@ -174,7 +176,4 @@ let ipv4_from_netvm t frame =
   match translate t frame with
   | Some frame -> forward_ipv4 t frame
   | None ->
-  match Rules.from_netvm info with
-  | `Drop reason ->
-      Log.info "Dropped packet (%s) %a" (fun f -> f reason pp_packet info);
-      return ()
+  apply_rules t Rules.from_netvm info
