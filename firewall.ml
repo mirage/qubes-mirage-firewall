@@ -129,17 +129,18 @@ let nat_to t ~frame ~host ~port =
 (* Handle incoming packets *)
 
 let apply_rules t rules info =
+  let frame = info.frame in
   match rules info, info.dst with
-  | `Accept, `Client client_link -> transmit ~frame:info.frame client_link
-  | `Accept, (`External _ | `NetVM) -> transmit ~frame:info.frame t.Router.uplink
+  | `Accept, `Client client_link -> transmit ~frame client_link
+  | `Accept, (`External _ | `NetVM) -> transmit ~frame t.Router.uplink
   | `Accept, `Unknown_client _ ->
       Log.warn "Dropping packet to unknown client %a" (fun f -> f pp_packet info);
       return ()
   | `Accept, (`Firewall_uplink | `Client_gateway) ->
       Log.warn "Bad rule: firewall can't accept packets %a" (fun f -> f pp_packet info);
       return ()
-  | `NAT, _ -> add_nat_and_forward_ipv4 t ~frame:info.frame
-  | `NAT_to (host, port), _ -> nat_to t ~frame:info.frame ~host ~port
+  | `NAT, _ -> add_nat_and_forward_ipv4 t ~frame
+  | `NAT_to (host, port), _ -> nat_to t ~frame ~host ~port
   | `Drop reason, _ ->
       Log.info "Dropped packet (%s) %a" (fun f -> f reason pp_packet info);
       return ()
