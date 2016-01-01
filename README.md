@@ -1,23 +1,45 @@
 # qubes-mirage-firewall
 
-An **experimental** unikernel that can run as a QubesOS ProxyVM, replacing `sys-firewall`.
+A unikernel that can run as a QubesOS ProxyVM, replacing `sys-firewall`.
 It uses the [mirage-qubes][] library to implement the Qubes protocols.
 
 Note: This firewall *ignores the rules set in the Qubes GUI*. See `rules.ml` for the actual policy.
 
-To build:
+To build (tested by creating a fresh Fedora 23 AppVM in Qubes):
 
-    $ opam install mirage
-    $ opam pin add mirage-clock-xen https://github.com/mirage/mirage-clock.git
-    $ opam pin add mirage-net-xen 'https://github.com/talex5/mirage-net-xen.git#disconnect'
-    $ opam pin add tcpip https://github.com/mirage/mirage-tcpip.git
-    $ opam pin add mirage-xen 'https://github.com/talex5/mirage-platform.git#mm'
-    $ opam pin add mirage-qubes https://github.com/talex5/mirage-qubes.git
-    $ opam pin add mirage-nat 'https://github.com/talex5/mirage-nat.git#simplify-checksum'
-    $ mirage configure --xen
-    $ make
+1. Install build tools:
 
-You can use this with the [test-mirage][] scripts to deploy the unikernel (`mir-qubes-firewall.xen`) from your development AppVM. e.g.
+        sudo yum install git gcc m4 0install
+        mkdir ~/bin
+        0install add opam http://tools.ocaml.org/opam.xml
+        opam init --comp=4.02.3
+        eval `opam config env`
+
+2. Install mirage, pinning a few unreleased features we need:
+
+        opam pin add -y mirage-xen 'https://github.com/talex5/mirage-platform.git#mm'
+        opam pin add -y mirage-clock-xen https://github.com/mirage/mirage-clock.git
+        opam pin add -y mirage-net-xen 'https://github.com/talex5/mirage-net-xen.git#disconnect'
+        opam pin add -y tcpip https://github.com/mirage/mirage-tcpip.git
+        opam pin add -y mirage-qubes https://github.com/talex5/mirage-qubes.git
+        opam pin add -y mirage-nat 'https://github.com/talex5/mirage-nat.git#simplify-checksum'
+        opam install mirage
+
+3. Build mirage-firewall:
+
+        git clone https://github.com/talex5/qubes-mirage-firewall.git
+        cd qubes-mirage-firewall
+        mirage configure --xen
+        make
+
+If you want to deploy manually, use `make tar` to create `mirage-firewall.tar.bz2` and unpack this in dom0, inside `/var/lib/qubes/vm-kernels/`. e.g. (if `dev` is the AppVM where you built it):
+
+        [tal@dom0 ~]$ cd /var/lib/qubes/vm-kernels/
+        [tal@dom0 vm-kernels]$ qvm-run -p dev 'cat qubes-mirage-firewall/mirage-firewall.tar.bz2' | tar xjf -
+
+The tarball contains `vmlinuz`, which is the unikernel itself, plus a couple of dummy files that Qubes requires.
+
+For development, use the [test-mirage][] scripts to deploy the unikernel (`mir-qubes-firewall.xen`) from your development AppVM. e.g.
 
     $ test-mirage mir-firewall.xen mirage-firewall
     Waiting for 'Ready'... OK
