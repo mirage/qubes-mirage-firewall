@@ -11,10 +11,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let () =
   let open Logs in
   (* Set default log level *)
-  set_level (Some Logs.Info);
-  (* Debug-level logging for XenStore while tracking down occasional EACCES error. *)
-  Src.list () |> List.find (fun src -> Src.name src = "xenstore.client") |> fun xs ->
-  Src.set_level xs (Some Debug)
+  set_level (Some Logs.Info)
 
 module Main (Clock : V1.CLOCK) = struct
   module Log_reporter = Mirage_logs.Make(Clock)
