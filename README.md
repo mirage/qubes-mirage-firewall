@@ -5,6 +5,8 @@ It uses the [mirage-qubes][] library to implement the Qubes protocols.
 
 Note: This firewall *ignores the rules set in the Qubes GUI*. See `rules.ml` for the actual policy.
 
+See [A Unikernel Firewall for QubesOS][] for more details.
+
 To build (tested by creating a fresh Fedora 23 AppVM in Qubes):
 
 1. Install build tools:
@@ -105,3 +107,4 @@ gg
 
 [test-mirage]: https://github.com/talex5/qubes-test-mirage
 [mirage-qubes]: https://github.com/talex5/mirage-qubes
+[A Unikernel Firewall for QubesOS]: http://roscidus.com/blog/blog/2016/01/01/a-unikernel-firewall-for-qubesos/
