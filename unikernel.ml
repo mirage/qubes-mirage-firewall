@@ -61,6 +61,8 @@ module Main (Clock : V1.CLOCK) = struct
     let shutdown_rq = OS.Lifecycle.await_shutdown () >>= fun (`Poweroff | `Reboot) -> return () in
     (* Set up networking *)
     let net_listener = network qubesDB in
+    (* Report memory usage to XenStore *)
+    Memory_pressure.init ();
     (* Run until something fails or we get a shutdown request. *)
     Lwt.choose [agent_listener; net_listener; shutdown_rq] >>= fun () ->
     (* Give the console daemon time to show any final log messages. *)
