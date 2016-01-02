@@ -78,10 +78,16 @@ let translate t frame =
 let random_user_port () =
   1024 + Random.int (0xffff - 1024)
 
-let rec add_nat_rule_and_transmit t frame fn fmt logf =
+let rec add_nat_rule_and_transmit ?(retries=100) t frame fn fmt logf =
   let xl_port = random_user_port () in
   match fn xl_port with
-  | Nat_rewrite.Overlap -> add_nat_rule_and_transmit t frame fn fmt logf (* Try a different port *)
+  | Nat_rewrite.Overlap when retries < 0 -> return ()
+  | Nat_rewrite.Overlap ->
+      if retries = 0 then (
+        Log.warn "Failed to find a free port; resetting NAT table" Logs.unit;
+        Router.reset t;
+      );
+      add_nat_rule_and_transmit ~retries:(retries - 1) t frame fn fmt logf (* Try a different port *)
   | Nat_rewrite.Unparseable ->
       Log.warn "Failed to add NAT rule: Unparseable" Logs.unit;
       return ()
