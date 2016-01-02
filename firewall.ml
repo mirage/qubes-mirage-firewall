@@ -116,20 +116,20 @@ let add_nat_and_forward_ipv4 t ~frame =
 
 (* Add a NAT rule to redirect this conversation to [host:port] instead of us. *)
 let nat_to t ~frame ~host ~port =
-  let gw = Router.resolve t host in
+  let target = Router.resolve t host in
   let xl_host = Ipaddr.V4 t.Router.uplink#my_ip in
   add_nat_rule_and_transmit t frame
     (fun xl_port ->
-      Nat_rewrite.make_redirect_entry t.Router.nat frame (xl_host, xl_port) (gw, port)
+      Nat_rewrite.make_redirect_entry t.Router.nat frame (xl_host, xl_port) (target, port)
     )
-    "added NAT redirect %s:%d -> %d:firewall:%d -> %d:NetVM"
+    "added NAT redirect %s:%d -> %d:firewall:%d -> %d:%a"
     (fun xl_port f ->
       match Nat_rewrite.layers frame with
       | None -> assert false
       | Some (_eth, ip, transport) ->
       let src, _dst = Nat_rewrite.addresses_of_ip ip in
       let sport, dport = Nat_rewrite.ports_of_transport transport in
-      f (Ipaddr.to_string src) sport dport xl_port port
+      f (Ipaddr.to_string src) sport dport xl_port port pp_host host
     )
 
 (* Handle incoming packets *)
