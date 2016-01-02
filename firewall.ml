@@ -145,11 +145,17 @@ let apply_rules t rules info =
       Log.info "Dropped packet (%s) %a" (fun f -> f reason pp_packet info);
       return ()
 
-let ipv4_from_client t frame =
+let handle_low_memory t =
   match Memory_pressure.status () with
   | `Memory_critical -> (* TODO: should happen before copying and async *)
-      Log.warn "Memory low - dropping packet" Logs.unit;
-      return ()
+      Log.warn "Memory low - dropping packet and resetting NAT table" Logs.unit;
+      Router.reset t;
+      `Memory_critical
+  | `Ok -> `Ok
+
+let ipv4_from_client t frame =
+  match handle_low_memory t with
+  | `Memory_critical -> return ()
   | `Ok ->
   (* Check for existing NAT entry for this packet *)
   match translate t frame with
@@ -161,10 +167,8 @@ let ipv4_from_client t frame =
   | Some info -> apply_rules t Rules.from_client info
 
 let ipv4_from_netvm t frame =
-  match Memory_pressure.status () with
-  | `Memory_critical -> (* TODO: should happen before copying and async *)
-      Log.warn "Memory low - dropping packet" Logs.unit;
-      return ()
+  match handle_low_memory t with
+  | `Memory_critical -> return ()
   | `Ok ->
   match classify t frame with
   | None -> return ()

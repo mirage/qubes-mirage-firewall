@@ -7,7 +7,7 @@ open Utils
 
 type t = private {
   client_eth : Client_eth.t;
-  nat : Nat_lookup.t;
+  mutable nat : Nat_lookup.t;
   uplink : interface;
 }
 (** A routing table. *)
@@ -30,3 +30,6 @@ val remove_client : t -> client_link -> unit
 
 val classify : t -> Ipaddr.t -> Packet.host
 val resolve : t -> Packet.host -> Ipaddr.t
+
+val reset : t -> unit
+(** Clear the NAT table (to free memory). *)

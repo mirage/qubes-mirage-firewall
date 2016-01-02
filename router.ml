@@ -10,7 +10,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 type t = {
   client_eth : Client_eth.t;
-  nat : Nat_lookup.t;
+  mutable nat : Nat_lookup.t;
   uplink : interface;
 }
 
@@ -42,3 +42,6 @@ let resolve t = function
   | `Firewall_uplink -> Ipaddr.V4 t.uplink#my_ip
   | `NetVM -> Ipaddr.V4 t.uplink#other_ip
   | #Client_eth.host as host -> Client_eth.resolve t.client_eth host
+
+let reset t =
+  t.nat <- Nat_lookup.empty ()
