@@ -101,6 +101,12 @@ let rec add_nat_rule_and_transmit ?(retries=100) t frame fn fmt logf =
       | None ->
           Log.warn "No NAT entry, even after adding one!" Logs.unit;
           return ()
+  | exception Out_of_memory ->
+      (* Because hash tables resize in big steps, this can happen even if we have a fair
+         chunk of free memory. *)
+      Log.warn "Out_of_memory adding NAT rule. Dropping NAT table..." Logs.unit;
+      Router.reset t;
+      add_nat_rule_and_transmit ~retries:(retries - 1) t frame fn fmt logf
 
 (* Add a NAT rule for the endpoints in this frame, via a random port on the firewall. *)
 let add_nat_and_forward_ipv4 t ~frame =
