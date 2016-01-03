@@ -10,13 +10,18 @@ module Log = (val Logs.src_log src : Logs.LOG)
 (* Transmission *)
 
 let transmit ~frame iface =
+  (* If packet has been NAT'd then we certainly need to recalculate the checksum,
+     but even for direct pass-through it might have been received with an invalid
+     checksum due to checksum offload. For now, recalculate full checksum in all
+     cases. *)
+  let frame = fixup_checksums frame |> Cstruct.concat in
   let packet = Cstruct.shift frame Wire_structs.sizeof_ethernet in
   iface#writev [packet]
 
 let forward_ipv4 t frame =
   let packet = Cstruct.shift frame Wire_structs.sizeof_ethernet in
   match Router.target t packet with
-  | Some iface -> iface#writev [packet]
+  | Some iface -> transmit ~frame iface
   | None -> return ()
 
 (* Packet classification *)
@@ -71,9 +76,7 @@ let pp_packet fmt {src; dst; proto; frame = _} =
 (* NAT *)
 
 let translate t frame =
-  match Nat_rewrite.translate t.Router.nat frame with
-  | None -> None
-  | Some frame -> Some (fixup_checksums frame |> Cstruct.concat)
+  Nat_rewrite.translate t.Router.nat frame
 
 let random_user_port () =
   1024 + Random.int (0xffff - 1024)
