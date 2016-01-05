@@ -23,4 +23,5 @@ let handler ~user:_ cmd flow =
     Flow.ewritef flow "%s [while processing %S]" s cmd >|= fun () -> 1 in
   match cmd with
   | "QUBESRPC qubes.SetDateTime dom0" -> set_date_time flow
+  | "QUBESRPC qubes.WaitForSession none" -> return 0  (* Always ready! *)
   | cmd -> error "Unknown command %S" cmd
