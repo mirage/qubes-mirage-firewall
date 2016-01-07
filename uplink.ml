@@ -21,13 +21,16 @@ module Make(Clock : V1.CLOCK) = struct
   }
 
   class netvm_iface eth mac ~my_ip ~other_ip : interface = object
+    val queue = FrameQ.create (Ipaddr.V4.to_string other_ip)
     method my_mac = Eth.mac eth
     method my_ip = my_ip
     method other_ip = other_ip
     method writev ip =
-      mac >>= fun dst ->
-      let eth_hdr = eth_header_ipv4 ~src:(Eth.mac eth) ~dst in
-      Eth.writev eth (eth_hdr :: ip)
+      FrameQ.send queue (fun () ->
+        mac >>= fun dst ->
+        let eth_hdr = eth_header_ipv4 ~src:(Eth.mac eth) ~dst in
+        Eth.writev eth (eth_hdr :: ip)
+      )
   end
 
   let listen t router =

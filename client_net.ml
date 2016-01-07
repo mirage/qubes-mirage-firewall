@@ -11,13 +11,16 @@ let src = Logs.Src.create "net" ~doc:"Client networking"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 class client_iface eth ~gateway_ip ~client_ip client_mac : client_link = object
+  val queue = FrameQ.create (Ipaddr.V4.to_string client_ip)
   method my_mac = ClientEth.mac eth
   method other_mac = client_mac
   method my_ip = gateway_ip
   method other_ip = client_ip
   method writev ip =
-    let eth_hdr = eth_header_ipv4 ~src:(ClientEth.mac eth) ~dst:client_mac in
-    ClientEth.writev eth (fixup_checksums (Cstruct.concat (eth_hdr :: ip)))
+    FrameQ.send queue (fun () ->
+      let eth_hdr = eth_header_ipv4 ~src:(ClientEth.mac eth) ~dst:client_mac in
+      ClientEth.writev eth (fixup_checksums (Cstruct.concat (eth_hdr :: ip)))
+    )
 end
 
 let clients : Cleanup.t IntMap.t ref = ref IntMap.empty
