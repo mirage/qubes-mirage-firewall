@@ -33,7 +33,7 @@ let ports transport =
 let classify t frame =
   match Nat_rewrite.layers frame with
   | None ->
-      Log.warn "Failed to parse frame" Logs.unit;
+      Log.warn (fun f -> f "Failed to parse frame");
       None
   | Some (_eth, ip, transport) ->
   let src, dst = Nat_rewrite.addresses_of_ip ip in
@@ -81,31 +81,31 @@ let translate t frame =
 let random_user_port () =
   1024 + Random.int (0xffff - 1024)
 
-let rec add_nat_rule_and_transmit ?(retries=100) t frame fn fmt logf =
+let rec add_nat_rule_and_transmit ?(retries=100) t frame fn logf =
   let xl_port = random_user_port () in
   match fn xl_port with
   | exception Out_of_memory ->
       (* Because hash tables resize in big steps, this can happen even if we have a fair
          chunk of free memory. *)
-      Log.warn "Out_of_memory adding NAT rule. Dropping NAT table..." Logs.unit;
+      Log.warn (fun f -> f "Out_of_memory adding NAT rule. Dropping NAT table...");
       Router.reset t;
-      add_nat_rule_and_transmit ~retries:(retries - 1) t frame fn fmt logf
+      add_nat_rule_and_transmit ~retries:(retries - 1) t frame fn logf
   | Nat_rewrite.Overlap when retries < 0 -> return ()
   | Nat_rewrite.Overlap ->
       if retries = 0 then (
-        Log.warn "Failed to find a free port; resetting NAT table" Logs.unit;
+        Log.warn (fun f -> f "Failed to find a free port; resetting NAT table");
         Router.reset t;
       );
-      add_nat_rule_and_transmit ~retries:(retries - 1) t frame fn fmt logf (* Try a different port *)
+      add_nat_rule_and_transmit ~retries:(retries - 1) t frame fn logf (* Try a different port *)
   | Nat_rewrite.Unparseable ->
-      Log.warn "Failed to add NAT rule: Unparseable" Logs.unit;
+      Log.warn (fun f -> f "Failed to add NAT rule: Unparseable");
       return ()
   | Nat_rewrite.Ok _ ->
-      Log.info fmt (logf xl_port);
+      Log.info (logf xl_port);
       match translate t frame with
       | Some frame -> forward_ipv4 t frame
       | None ->
-          Log.warn "No NAT entry, even after adding one!" Logs.unit;
+          Log.warn (fun f -> f "No NAT entry, even after adding one!");
           return ()
 
 (* Add a NAT rule for the endpoints in this frame, via a random port on the firewall. *)
@@ -113,14 +113,13 @@ let add_nat_and_forward_ipv4 t ~frame =
   let xl_host = Ipaddr.V4 t.Router.uplink#my_ip in
   add_nat_rule_and_transmit t frame
     (Nat_rewrite.make_nat_entry t.Router.nat frame xl_host)
-    "added NAT entry: %s:%d -> firewall:%d -> %d:%s"
     (fun xl_port f ->
       match Nat_rewrite.layers frame with
       | None -> assert false
       | Some (_eth, ip, transport) ->
       let src, dst = Nat_rewrite.addresses_of_ip ip in
       let sport, dport = Nat_rewrite.ports_of_transport transport in
-      f (Ipaddr.to_string src) sport xl_port dport (Ipaddr.to_string dst)
+      f "added NAT entry: %s:%d -> firewall:%d -> %d:%s" (Ipaddr.to_string src) sport xl_port dport (Ipaddr.to_string dst)
     )
 
 (* Add a NAT rule to redirect this conversation to [host:port] instead of us. *)
@@ -131,14 +130,14 @@ let nat_to t ~frame ~host ~port =
     (fun xl_port ->
       Nat_rewrite.make_redirect_entry t.Router.nat frame (xl_host, xl_port) (target, port)
     )
-    "added NAT redirect %s:%d -> %d:firewall:%d -> %d:%a"
     (fun xl_port f ->
       match Nat_rewrite.layers frame with
       | None -> assert false
       | Some (_eth, ip, transport) ->
       let src, _dst = Nat_rewrite.addresses_of_ip ip in
       let sport, dport = Nat_rewrite.ports_of_transport transport in
-      f (Ipaddr.to_string src) sport dport xl_port port pp_host host
+      f "added NAT redirect %s:%d -> %d:firewall:%d -> %d:%a"
+        (Ipaddr.to_string src) sport dport xl_port port pp_host host
     )
 
 (* Handle incoming packets *)
@@ -149,21 +148,21 @@ let apply_rules t rules info =
   | `Accept, `Client client_link -> transmit ~frame client_link
   | `Accept, (`External _ | `NetVM) -> transmit ~frame t.Router.uplink
   | `Accept, `Unknown_client _ ->
-      Log.warn "Dropping packet to unknown client %a" (fun f -> f pp_packet info);
+      Log.warn (fun f -> f "Dropping packet to unknown client %a" pp_packet info);
       return ()
   | `Accept, (`Firewall_uplink | `Client_gateway) ->
-      Log.warn "Bad rule: firewall can't accept packets %a" (fun f -> f pp_packet info);
+      Log.warn (fun f -> f "Bad rule: firewall can't accept packets %a" pp_packet info);
       return ()
   | `NAT, _ -> add_nat_and_forward_ipv4 t ~frame
   | `NAT_to (host, port), _ -> nat_to t ~frame ~host ~port
   | `Drop reason, _ ->
-      Log.info "Dropped packet (%s) %a" (fun f -> f reason pp_packet info);
+      Log.info (fun f -> f "Dropped packet (%s) %a" reason pp_packet info);
       return ()
 
 let handle_low_memory t =
   match Memory_pressure.status () with
   | `Memory_critical -> (* TODO: should happen before copying and async *)
-      Log.warn "Memory low - dropping packet and resetting NAT table" Logs.unit;
+      Log.warn (fun f -> f "Memory low - dropping packet and resetting NAT table");
       Router.reset t;
       `Memory_critical
   | `Ok -> `Ok
@@ -190,7 +189,7 @@ let ipv4_from_netvm t frame =
   | Some info ->
   match info.src with
   | `Client _ | `Unknown_client _ | `Firewall_uplink | `Client_gateway ->
-    Log.warn "Frame from NetVM has internal source IP address! %a" (fun f -> f pp_packet info);
+    Log.warn (fun f -> f "Frame from NetVM has internal source IP address! %a" pp_packet info);
     return ()
   | `External _ | `NetVM ->
   match translate t frame with

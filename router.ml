@@ -25,8 +25,8 @@ let target t buf =
     match Client_eth.lookup t.client_eth dst_ip with
     | Some client_link -> Some (client_link :> interface)
     | None ->
-      Log.warn "Packet to unknown internal client %a - dropping"
-        (fun f -> f Ipaddr.V4.pp_hum dst_ip);
+      Log.warn (fun f -> f "Packet to unknown internal client %a - dropping"
+        Ipaddr.V4.pp_hum dst_ip);
       None
   ) else Some t.uplink
 

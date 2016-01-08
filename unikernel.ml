@@ -21,8 +21,8 @@ module Main (Clock : V1.CLOCK) = struct
   let network qubesDB =
     (* Read configuration from QubesDB *)
     let config = Dao.read_network_config qubesDB in
-    Logs.info "Client (internal) network is %a"
-      (fun f -> f Ipaddr.V4.Prefix.pp_hum config.Dao.clients_prefix);
+    Logs.info (fun f -> f "Client (internal) network is %a"
+      Ipaddr.V4.Prefix.pp_hum config.Dao.clients_prefix);
     (* Initialise connection to NetVM *)
     Uplink.connect config >>= fun uplink ->
     (* Report success *)
@@ -55,10 +55,12 @@ module Main (Clock : V1.CLOCK) = struct
     gui >>= fun gui ->
     Lwt.async (fun () -> GUI.listen gui);
     qubesDB >>= fun qubesDB ->
-    Log.info "agents connected in %.3f s (CPU time used since boot: %.3f s)"
-      (fun f -> f (Clock.time () -. start_time) (Sys.time ()));
+    Log.info (fun f -> f "agents connected in %.3f s (CPU time used since boot: %.3f s)"
+      (Clock.time () -. start_time) (Sys.time ()));
     (* Watch for shutdown requests from Qubes *)
-    let shutdown_rq = OS.Lifecycle.await_shutdown () >>= fun (`Poweroff | `Reboot) -> return () in
+    let shutdown_rq =
+      OS.Lifecycle.await_shutdown_request () >>= fun (`Poweroff | `Reboot) ->
+      return () in
     (* Set up networking *)
     let net_listener = network qubesDB in
     (* Report memory usage to XenStore *)

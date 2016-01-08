@@ -19,7 +19,7 @@ let fmt_timestamp tm =
 
 module Make (C : V1.CLOCK) = struct
   let init_logging () =
-    let report src level k fmt msgf =
+    let report src level ~over k msgf =
       let now = C.time () |> Clock.gmtime |> fmt_timestamp in
       let lvl = string_of_level level in
       let k _ =
@@ -28,8 +28,9 @@ module Make (C : V1.CLOCK) = struct
         output_string stderr (msg ^ "\n");
         flush stderr;
         MProf.Trace.label msg;
+        over ();
         k () in
-      msgf @@ fun ?header:_ ?tags:_ ->
+      msgf @@ fun ?header:_ ?tags:_ fmt ->
       Format.kfprintf k log_fmt ("%s: %s [%s] " ^^ fmt) now lvl (Logs.Src.name src) in
     Logs.set_reporter { Logs.report }
 end

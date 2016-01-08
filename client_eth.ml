@@ -109,16 +109,16 @@ module ARP = struct
   let input_query t frame =
     let open Arpv4_wire in
     let req_ipv4 = Ipaddr.V4.of_int32 (get_arp_tpa frame) in
-    Log.info "who-has %s?" (fun f -> f (Ipaddr.V4.to_string req_ipv4));
+    Log.info (fun f -> f "who-has %s?" (Ipaddr.V4.to_string req_ipv4));
     if req_ipv4 = t.client_link#other_ip then (
-      Log.info "ignoring request for client's own IP" Logs.unit;
+      Log.info (fun f -> f "ignoring request for client's own IP");
       None
     ) else match lookup t req_ipv4 with
     | None ->
-        Log.info "unknown address; not responding" Logs.unit;
+        Log.info (fun f -> f "unknown address; not responding");
         None
     | Some req_mac ->
-        Log.info "responding to: who-has %s?" (fun f -> f (Ipaddr.V4.to_string req_ipv4));
+        Log.info (fun f -> f "responding to: who-has %s?" (Ipaddr.V4.to_string req_ipv4));
         Some (to_wire {
           op = `Reply;
           (* The Target Hardware Address and IP are copied from the request *)
@@ -134,18 +134,18 @@ module ARP = struct
     let sha = Macaddr.of_bytes_exn (copy_arp_sha frame) in
     match lookup t spa with
     | Some real_mac when Macaddr.compare sha real_mac = 0 ->
-        Log.info "client suggests updating %s -> %s (as expected)"
-          (fun f -> f (Ipaddr.V4.to_string spa) (Macaddr.to_string sha));
+        Log.info (fun f -> f "client suggests updating %s -> %s (as expected)"
+          (Ipaddr.V4.to_string spa) (Macaddr.to_string sha));
     | Some other_mac ->
-        Log.warn "client suggests incorrect update %s -> %s (should be %s)"
-          (fun f -> f (Ipaddr.V4.to_string spa) (Macaddr.to_string sha) (Macaddr.to_string other_mac));
+        Log.warn (fun f -> f "client suggests incorrect update %s -> %s (should be %s)"
+          (Ipaddr.V4.to_string spa) (Macaddr.to_string sha) (Macaddr.to_string other_mac));
     | None ->
-        Log.warn "client suggests incorrect update %s -> %s (unexpected IP)"
-          (fun f -> f (Ipaddr.V4.to_string spa) (Macaddr.to_string sha))
+        Log.warn (fun f -> f "client suggests incorrect update %s -> %s (unexpected IP)"
+          (Ipaddr.V4.to_string spa) (Macaddr.to_string sha))
 
   let input t frame =
     match Arpv4_wire.get_arp_op frame with
     |1 -> input_query t frame
     |2 -> input_gratuitous t frame; None
-    |n -> Log.warn "unknown message %d - ignored" (fun f -> f n); None
+    |n -> Log.warn (fun f -> f "unknown message %d - ignored" n); None
 end

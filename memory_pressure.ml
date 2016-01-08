@@ -12,8 +12,8 @@ let pagesize_kb = Io_page.page_size / 1024
 let meminfo ~used =
   let mem_total = total_pages * pagesize_kb in
   let mem_free = (total_pages - used) * pagesize_kb in
-  Log.info "Writing meminfo: free %d / %d kB (%.2f %%)"
-    (fun f -> f mem_free mem_total (float_of_int mem_free /. float_of_int mem_total *. 100.0));
+  Log.info (fun f -> f "Writing meminfo: free %d / %d kB (%.2f %%)"
+    mem_free mem_total (float_of_int mem_free /. float_of_int mem_total *. 100.0));
   Printf.sprintf "MemTotal: %d kB\n\
                   MemFree: %d kB\n\
                   Buffers: 0 kB\n\
