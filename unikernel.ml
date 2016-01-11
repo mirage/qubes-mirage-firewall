@@ -11,10 +11,13 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let () =
   let open Logs in
   (* Set default log level *)
-  set_level (Some Logs.Info)
+  set_level (Some Logs.Info);
+  (* Debug-level logging for XenStore while tracking down occasional EACCES error. *)
+  Src.list () |> List.find (fun src -> Src.name src = "xenstore.client") |> fun xs ->
+  Src.set_level xs (Some Debug)
 
 module Main (Clock : V1.CLOCK) = struct
-  module Log_reporter = Mirage_logs.Make(Clock)
+  module Logs_reporter = Mirage_logs.Make(Clock)
   module Uplink = Uplink.Make(Clock)
 
   (* Set up networking and listen for incoming packets. *)
@@ -41,10 +44,16 @@ module Main (Clock : V1.CLOCK) = struct
       Uplink.listen uplink router
     ]
 
+  (* Control which of the messages that reach the reporter are logged to the console.
+     The rest will be displayed only if an error occurs.
+     Note: use the regular [Logs] configuration settings to determine which messages
+     reach the reporter in the first place. *)
+  let console_threshold _ = Logs.Info
+
   (* Main unikernel entry point (called from auto-generated main.ml). *)
   let start () =
     let start_time = Clock.time () in
-    Log_reporter.init_logging ();
+    Logs_reporter.(create ~ring_size:20 ~console_threshold () |> run) @@ fun () ->
     (* Start qrexec agent, GUI agent and QubesDB agent in parallel *)
     let qrexec = RExec.connect ~domid:0 () in
     let gui = GUI.connect ~domid:0 () in

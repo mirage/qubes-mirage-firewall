@@ -7,8 +7,8 @@ open Mirage
 
 let main =
   foreign
-    ~libraries:["mirage-net-xen"; "tcpip.stack-direct"; "tcpip.xen"; "mirage-qubes"; "mirage-nat"]
-    ~packages:["vchan"; "cstruct"; "tcpip"; "mirage-net-xen"; "mirage-qubes"; "mirage-nat"]
+    ~libraries:["mirage-net-xen"; "tcpip.stack-direct"; "tcpip.xen"; "mirage-qubes"; "mirage-nat"; "mirage-logs"]
+    ~packages:["vchan"; "cstruct"; "tcpip"; "mirage-net-xen"; "mirage-qubes"; "mirage-nat"; "mirage-logs"]
     "Unikernel.Main" (clock @-> job)
 
 let () =
