@@ -19,4 +19,4 @@ addons:
     - camlp4-extra
     - time
 env:
-  - FORK_USER=talex5 FORK_BRANCH=unikernel OCAML_VERSION=4.02 MIRAGE_BACKEND=xen PINS="mirage-xen:https://github.com/talex5/mirage-platform.git#mm mirage-qubes:https://github.com/talex5/mirage-qubes.git mirage-nat:https://github.com/talex5/mirage-nat.git#simplify-checksum tcpip:https://github.com/mirage/mirage-tcpip.git mirage-net-xen:https://github.com/talex5/mirage-net-xen.git#disconnect"
+  - FORK_USER=talex5 FORK_BRANCH=unikernel OCAML_VERSION=4.02 MIRAGE_BACKEND=xen PINS="mirage-xen:https://github.com/talex5/mirage-platform.git#mm mirage-qubes:https://github.com/talex5/mirage-qubes.git mirage-nat:https://github.com/talex5/mirage-nat.git#simplify-checksum tcpip:https://github.com/mirage/mirage-tcpip.git"

@@ -20,7 +20,6 @@ To build (tested by creating a fresh Fedora 23 AppVM in Qubes):
 2. Install mirage, pinning a few unreleased features we need:
 
         opam pin add -y mirage-xen 'https://github.com/talex5/mirage-platform.git#mm'
-        opam pin add -y mirage-net-xen 'https://github.com/talex5/mirage-net-xen.git#disconnect'
         opam pin add -y tcpip https://github.com/mirage/mirage-tcpip.git
         opam pin add -y mirage-qubes https://github.com/talex5/mirage-qubes.git
         opam pin add -y mirage-nat 'https://github.com/talex5/mirage-nat.git#simplify-checksum'
