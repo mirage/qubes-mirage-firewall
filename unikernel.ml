@@ -41,6 +41,19 @@ module Main (Clock : V1.CLOCK) = struct
       Uplink.listen uplink router
     ]
 
+  (* We don't use the GUI, but it's interesting to keep an eye on it.
+     If the other end dies, don't let it take us with it (can happen on log out). *)
+  let watch_gui gui =
+    Lwt.async (fun () ->
+      Lwt.try_bind
+        (fun () -> GUI.listen gui)
+        (fun `Cant_happen -> assert false)
+        (fun ex ->
+          Log.warn (fun f -> f "GUI thread failed: %s" (Printexc.to_string ex));
+          return ()
+        )
+    )
+
   (* Control which of the messages that reach the reporter are logged to the console.
      The rest will be displayed only if an error occurs.
      Note: use the regular [Logs] configuration settings to determine which messages
@@ -59,7 +72,7 @@ module Main (Clock : V1.CLOCK) = struct
     qrexec >>= fun qrexec ->
     let agent_listener = RExec.listen qrexec Command.handler in
     gui >>= fun gui ->
-    Lwt.async (fun () -> GUI.listen gui);
+    watch_gui gui;
     qubesDB >>= fun qubesDB ->
     Log.info (fun f -> f "agents connected in %.3f s (CPU time used since boot: %.3f s)"
       (Clock.time () -. start_time) (Sys.time ()));
