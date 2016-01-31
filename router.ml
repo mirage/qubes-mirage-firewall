@@ -43,5 +43,11 @@ let resolve t = function
   | `NetVM -> Ipaddr.V4 t.uplink#other_ip
   | #Client_eth.host as host -> Client_eth.resolve t.client_eth host
 
+(* To avoid needing to allocate a new NAT table when we've run out of
+   memory, pre-allocate the new one ahead of time. *)
+let next_nat = ref (Nat_lookup.empty ())
 let reset t =
-  t.nat <- Nat_lookup.empty ()
+  t.nat <- !next_nat;
+  (* (at this point, the big old NAT table can be GC'd, so allocating
+     a new one should be OK) *)
+  next_nat := Nat_lookup.empty ()
