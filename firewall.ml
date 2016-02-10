@@ -101,7 +101,7 @@ let rec add_nat_rule_and_transmit ?(retries=100) t frame fn logf =
       Log.warn (fun f -> f "Failed to add NAT rule: Unparseable");
       return ()
   | Nat_rewrite.Ok _ ->
-      Log.info (logf xl_port);
+      Log.debug (logf xl_port);
       match translate t frame with
       | Some frame -> forward_ipv4 t frame
       | None ->
