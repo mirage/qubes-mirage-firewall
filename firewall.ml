@@ -112,7 +112,8 @@ let rec add_nat_rule_and_transmit ?(retries=100) t frame fn logf =
 let add_nat_and_forward_ipv4 t ~frame =
   let xl_host = Ipaddr.V4 t.Router.uplink#my_ip in
   add_nat_rule_and_transmit t frame
-    (Nat_rewrite.make_nat_entry t.Router.nat frame xl_host)
+    (* Note: DO NOT partially apply; [t.nat] may change between calls *)
+    (fun xl_port -> Nat_rewrite.make_nat_entry t.Router.nat frame xl_host xl_port)
     (fun xl_port f ->
       match Nat_rewrite.layers frame with
       | None -> assert false
