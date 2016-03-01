@@ -22,6 +22,7 @@ To build (tested by creating a fresh Fedora 23 AppVM in Qubes):
         opam pin add -y mirage-xen 'https://github.com/talex5/mirage-platform.git#mm'
         opam pin add -y tcpip https://github.com/mirage/mirage-tcpip.git
         opam pin add -y mirage-nat 'https://github.com/talex5/mirage-nat.git#simplify-checksum'
+	opam pin add -y mirage-bootvar-xen 'https://github.com/talex5/mirage-bootvar-xen.git#qubes'
         opam install mirage
 
 3. Build mirage-firewall:
