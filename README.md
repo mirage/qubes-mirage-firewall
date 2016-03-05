@@ -11,7 +11,7 @@ To build (tested by creating a fresh Fedora 23 AppVM in Qubes):
 
 1. Install build tools:
 
-        sudo yum install git gcc m4 0install patch
+        sudo yum install git gcc m4 0install patch ncurses-devel
         mkdir ~/bin
         0install add opam http://tools.ocaml.org/opam.xml
         opam init --comp=4.02.3
