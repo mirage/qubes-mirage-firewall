@@ -19,11 +19,11 @@ To build (tested by creating a fresh Fedora 23 AppVM in Qubes):
 
 2. Install mirage, pinning a few unreleased features we need:
 
-        opam pin add -y mirage-xen 'https://github.com/talex5/mirage-platform.git#mm'
-        opam pin add -y tcpip https://github.com/mirage/mirage-tcpip.git
-        opam pin add -y mirage-nat 'https://github.com/talex5/mirage-nat.git#simplify-checksum'
-	opam pin add -y mirage-bootvar-xen 'https://github.com/talex5/mirage-bootvar-xen.git#qubes'
-        opam install mirage
+        opam pin add -n -y mirage-xen 'https://github.com/talex5/mirage-platform.git#mm'
+        opam pin add -n -y tcpip https://github.com/mirage/mirage-tcpip.git
+        opam pin add -n -y mirage-nat 'https://github.com/talex5/mirage-nat.git#simplify-checksum'
+        opam pin add -n -y mirage-bootvar-xen 'https://github.com/talex5/mirage-bootvar-xen.git#qubes'
+        opam install mirage mirage-xen tcpip mirage-nat mirage-bootvar-xen
 
 3. Build mirage-firewall:
 
