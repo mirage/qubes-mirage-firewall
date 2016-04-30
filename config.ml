@@ -13,3 +13,4 @@ let main =
 
 let () =
   register "qubes-firewall" [main $ default_clock]
+    ~argv:no_argv

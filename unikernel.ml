@@ -7,14 +7,7 @@ open Qubes
 let src = Logs.Src.create "unikernel" ~doc:"Main unikernel code"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-(* Configure logging *)
-let () =
-  let open Logs in
-  (* Set default log level *)
-  set_level (Some Logs.Info)
-
 module Main (Clock : V1.CLOCK) = struct
-  module Logs_reporter = Mirage_logs.Make(Clock)
   module Uplink = Uplink.Make(Clock)
 
   (* Set up networking and listen for incoming packets. *)
@@ -54,16 +47,9 @@ module Main (Clock : V1.CLOCK) = struct
         )
     )
 
-  (* Control which of the messages that reach the reporter are logged to the console.
-     The rest will be displayed only if an error occurs.
-     Note: use the regular [Logs] configuration settings to determine which messages
-     reach the reporter in the first place. *)
-  let console_threshold _ = Logs.Info
-
   (* Main unikernel entry point (called from auto-generated main.ml). *)
   let start () =
     let start_time = Clock.time () in
-    Logs_reporter.(create ~ring_size:20 ~console_threshold () |> run) @@ fun () ->
     (* Start qrexec agent, GUI agent and QubesDB agent in parallel *)
     let qrexec = RExec.connect ~domid:0 () in
     let gui = GUI.connect ~domid:0 () in

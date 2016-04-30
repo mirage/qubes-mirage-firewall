@@ -20,4 +20,4 @@ addons:
     - time
     - libxen-dev
 env:
-  - FORK_USER=talex5 FORK_BRANCH=unikernel OCAML_VERSION=4.02 MIRAGE_BACKEND=xen PINS="mirage-nat:https://github.com/talex5/mirage-nat.git#simplify-checksum mirage-bootvar-xen:https://github.com/talex5/mirage-bootvar-xen.git#qubes"
+  - FORK_USER=talex5 FORK_BRANCH=unikernel OCAML_VERSION=4.02 MIRAGE_BACKEND=xen PINS="mirage-nat:https://github.com/talex5/mirage-nat.git#simplify-checksum"
