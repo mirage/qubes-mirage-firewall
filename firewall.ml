@@ -16,7 +16,14 @@ let transmit ~frame iface =
      cases. *)
   let frame = fixup_checksums frame |> Cstruct.concat in
   let packet = Cstruct.shift frame Wire_structs.sizeof_ethernet in
-  iface#writev [packet]
+  Lwt.catch
+    (fun () -> iface#writev [packet])
+    (fun ex ->
+       Log.warn (fun f -> f "Failed to write packet to %a: %s"
+                    Ipaddr.V4.pp_hum iface#other_ip
+                    (Printexc.to_string ex));
+       Lwt.return ()
+    )
 
 let forward_ipv4 t frame =
   let packet = Cstruct.shift frame Wire_structs.sizeof_ethernet in
