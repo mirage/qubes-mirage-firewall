@@ -22,7 +22,6 @@ type network_config = {
   uplink_netvm_ip : Ipaddr.V4.t;      (* The IP address of NetVM (our gateway) *)
   uplink_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
 
-  clients_prefix : Ipaddr.V4.Prefix.t; (* The network connecting our client VMs to us *)
   clients_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to our client VMs (their gateway) *)
 }
 

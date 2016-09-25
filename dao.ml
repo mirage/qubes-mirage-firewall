@@ -44,7 +44,6 @@ type network_config = {
   uplink_netvm_ip : Ipaddr.V4.t;      (* The IP address of NetVM (our gateway) *)
   uplink_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
 
-  clients_prefix : Ipaddr.V4.Prefix.t; (* The network connecting our client VMs to us *)
   clients_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to our client VMs (their gateway) *)
 }
 
@@ -56,12 +55,7 @@ let read_network_config qubesDB =
     | Some value -> value in
   let uplink_our_ip = get "/qubes-ip" |> Ipaddr.V4.of_string_exn in
   let uplink_netvm_ip = get "/qubes-gateway" |> Ipaddr.V4.of_string_exn in
-  let clients_prefix =
-    (* This is oddly named: seems to be the network we provide to our clients *)
-    let client_network = get "/qubes-netvm-network" |> Ipaddr.V4.of_string_exn in
-    let client_netmask = get "/qubes-netvm-netmask" |> Ipaddr.V4.of_string_exn in
-    Ipaddr.V4.Prefix.of_netmask client_netmask client_network in
   let clients_our_ip = get "/qubes-netvm-gateway" |> Ipaddr.V4.of_string_exn in
-  { uplink_netvm_ip; uplink_our_ip; clients_prefix; clients_our_ip }
+  { uplink_netvm_ip; uplink_our_ip; clients_our_ip }
 
 let set_iptables_error db = Qubes.DB.write db "/qubes-iptables-error"

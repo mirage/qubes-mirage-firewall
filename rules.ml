@@ -32,7 +32,6 @@ let from_client = function
   | { dst = `Client_gateway; proto = `UDP { dport = 53 } } -> `NAT_to (`NetVM, 53)
   | { dst = (`Client_gateway | `Firewall_uplink) } -> `Drop "packet addressed to firewall itself"
   | { dst = `Client _ } -> `Drop "prevent communication between client VMs"
-  | { dst = `Unknown_client _ } -> `Drop "target client not running"
 
 (** Decide what to do with a packet received from the outside world.
     Note: If the packet matched an existing NAT rule then this isn't called. *)

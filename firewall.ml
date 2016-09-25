@@ -155,9 +155,6 @@ let apply_rules t rules info =
   match rules info, info.dst with
   | `Accept, `Client client_link -> transmit ~frame client_link
   | `Accept, (`External _ | `NetVM) -> transmit ~frame t.Router.uplink
-  | `Accept, `Unknown_client _ ->
-      Log.warn (fun f -> f "Dropping packet to unknown client %a" pp_packet info);
-      return ()
   | `Accept, (`Firewall_uplink | `Client_gateway) ->
       Log.warn (fun f -> f "Bad rule: firewall can't accept packets %a" pp_packet info);
       return ()
@@ -196,7 +193,7 @@ let ipv4_from_netvm t frame =
   | None -> return ()
   | Some info ->
   match info.src with
-  | `Client _ | `Unknown_client _ | `Firewall_uplink | `Client_gateway ->
+  | `Client _ | `Firewall_uplink | `Client_gateway ->
     Log.warn (fun f -> f "Frame from NetVM has internal source IP address! %a" pp_packet info);
     return ()
   | `External _ | `NetVM ->

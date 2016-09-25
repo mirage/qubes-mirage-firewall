@@ -14,16 +14,13 @@ module Main (Clock : V1.CLOCK) = struct
   let network qubesDB =
     (* Read configuration from QubesDB *)
     let config = Dao.read_network_config qubesDB in
-    Logs.info (fun f -> f "Client (internal) network is %a"
-      Ipaddr.V4.Prefix.pp_hum config.Dao.clients_prefix);
     (* Initialise connection to NetVM *)
     Uplink.connect config >>= fun uplink ->
     (* Report success *)
     Dao.set_iptables_error qubesDB "" >>= fun () ->
     (* Set up client-side networking *)
     let client_eth = Client_eth.create
-      ~client_gw:config.Dao.clients_our_ip
-      ~prefix:config.Dao.clients_prefix in
+      ~client_gw:config.Dao.clients_our_ip in
     (* Set up routing between networks and hosts *)
     let router = Router.create
       ~client_eth

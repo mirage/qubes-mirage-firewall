@@ -11,7 +11,7 @@ type ports = {
 }
 
 type host = 
-  [ `Client of client_link | `Unknown_client of Ipaddr.t | `Client_gateway | `Firewall_uplink | `NetVM | `External of Ipaddr.t ]
+  [ `Client of client_link | `Client_gateway | `Firewall_uplink | `NetVM | `External of Ipaddr.t ]
 
 type info = {
   frame : Cstruct.t;

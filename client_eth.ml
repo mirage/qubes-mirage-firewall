@@ -1,32 +1,28 @@
-(* Copyright (C) 2015, Thomas Leonard <thomas.leonard@unikernel.com>
+(* Copyright (C) 2016, Thomas Leonard <thomas.leonard@unikernel.com>
    See the README file for details. *)
 
 open Utils
 
-let src = Logs.Src.create "client_eth" ~doc:"Ethernet for NetVM clients"
+let src = Logs.Src.create "client_eth" ~doc:"Ethernet networks for NetVM clients"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 type t = {
   mutable iface_of_ip : client_link IpMap.t;
-  prefix : Ipaddr.V4.Prefix.t;
   client_gw : Ipaddr.V4.t;  (* The IP that clients are given as their default gateway. *)
 }
 
 type host =
   [ `Client of client_link
-  | `Unknown_client of Ipaddr.t
   | `Client_gateway
   | `External of Ipaddr.t ]
 
-let create ~prefix ~client_gw =
-  { iface_of_ip = IpMap.empty; client_gw; prefix }
+let create ~client_gw =
+  { iface_of_ip = IpMap.empty; client_gw }
 
-let prefix t = t.prefix
 let client_gw t = t.client_gw
 
 let add_client t iface =
   let ip = iface#other_ip in
-  assert (Ipaddr.V4.Prefix.mem ip t.prefix);
   (* TODO: Should probably wait for the previous client to disappear. *)
   (* assert (not (IpMap.mem ip t.iface_of_ip)); *)
   t.iface_of_ip <- t.iface_of_ip |> IpMap.add ip iface
@@ -45,13 +41,11 @@ let classify t ip =
   if ip4 = t.client_gw then `Client_gateway
   else match lookup t ip4 with
   | Some client_link -> `Client client_link
-  | None when Ipaddr.V4.Prefix.mem ip4 t.prefix -> `Unknown_client ip
   | None -> `External ip
 
 let resolve t : host -> Ipaddr.t = function
   | `Client client_link -> Ipaddr.V4 client_link#other_ip
   | `Client_gateway -> Ipaddr.V4 t.client_gw
-  | `Unknown_client addr
   | `External addr -> addr
 
 module ARP = struct
@@ -62,9 +56,14 @@ module ARP = struct
 
   let lookup t ip =
     if ip = t.net.client_gw then Some t.client_link#my_mac
+    else None
+    (* We're now treating client networks as point-to-point links,
+       so we no longer respond on behalf of other clients. *)
+    (*
     else match IpMap.find ip t.net.iface_of_ip with
     | Some client_iface -> Some client_iface#other_mac
     | None -> None
+     *)
 
   let create ~net client_link = {net; client_link}
 
