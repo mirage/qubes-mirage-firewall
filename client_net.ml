@@ -50,7 +50,7 @@ let add_vif { Dao.domid; device_id; client_ip } ~router ~cleanup_tasks =
   let client_eth = router.Router.client_eth in
   let gateway_ip = Client_eth.client_gw client_eth in
   let iface = new client_iface eth ~gateway_ip ~client_ip client_mac in
-  Router.add_client router iface;
+  Router.add_client router iface >>= fun () ->
   Cleanup.on_cleanup cleanup_tasks (fun () -> Router.remove_client router iface);
   let fixed_arp = Client_eth.ARP.create ~net:client_eth iface in
   Netback.listen backend (fun frame ->

@@ -22,9 +22,8 @@ val create :
 val target : t -> Cstruct.t -> interface option
 (** [target t packet] is the interface to which [packet] (an IP packet) should be routed. *)
 
-val add_client : t -> client_link -> unit
-(** [add_client t iface] adds a rule for routing packets addressed to [iface].
-    The client's IP address must be within the [client_eth] passed to [create]. *)
+val add_client : t -> client_link -> unit Lwt.t
+(** [add_client t iface] adds a rule for routing packets addressed to [iface]. *)
 
 val remove_client : t -> client_link -> unit
 

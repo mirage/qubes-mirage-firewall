@@ -2,12 +2,14 @@
    See the README file for details. *)
 
 open Utils
+open Lwt.Infix
 
 let src = Logs.Src.create "client_eth" ~doc:"Ethernet networks for NetVM clients"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 type t = {
   mutable iface_of_ip : client_link IpMap.t;
+  changed : unit Lwt_condition.t;   (* Fires when [iface_of_ip] changes. *)
   client_gw : Ipaddr.V4.t;  (* The IP that clients are given as their default gateway. *)
 }
 
@@ -17,20 +19,32 @@ type host =
   | `External of Ipaddr.t ]
 
 let create ~client_gw =
-  { iface_of_ip = IpMap.empty; client_gw }
+  let changed = Lwt_condition.create () in
+  { iface_of_ip = IpMap.empty; client_gw; changed }
 
 let client_gw t = t.client_gw
 
 let add_client t iface =
   let ip = iface#other_ip in
-  (* TODO: Should probably wait for the previous client to disappear. *)
-  (* assert (not (IpMap.mem ip t.iface_of_ip)); *)
-  t.iface_of_ip <- t.iface_of_ip |> IpMap.add ip iface
+  let rec aux () =
+    if IpMap.mem ip t.iface_of_ip then (
+      (* Wait for old client to disappear before adding one with the same IP address.
+         Otherwise, its [remove_client] call will remove the new client instead. *)
+      Log.info (fun f -> f "Waiting for old client %a to go away before accepting new one" Ipaddr.V4.pp_hum ip);
+      Lwt_condition.wait t.changed >>= aux
+    ) else (
+      t.iface_of_ip <- t.iface_of_ip |> IpMap.add ip iface;
+      Lwt_condition.broadcast t.changed ();
+      Lwt.return_unit
+    )
+  in
+  aux ()
 
 let remove_client t iface =
   let ip = iface#other_ip in
   assert (IpMap.mem ip t.iface_of_ip);
-  t.iface_of_ip <- t.iface_of_ip |> IpMap.remove ip
+  t.iface_of_ip <- t.iface_of_ip |> IpMap.remove ip;
+  Lwt_condition.broadcast t.changed ()
 
 let lookup t ip = IpMap.find ip t.iface_of_ip
 

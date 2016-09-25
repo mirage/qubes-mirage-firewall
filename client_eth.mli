@@ -21,7 +21,10 @@ val create : client_gw:Ipaddr.V4.t -> t
 (** [create ~client_gw] is a network of client machines.
     Qubes will have configured the client machines to use [client_gw] as their default gateway. *)
 
-val add_client : t -> client_link -> unit
+val add_client : t -> client_link -> unit Lwt.t
+(** [add_client t client] registers a new client. If a client with this IP address is already registered,
+    it waits for [remove_client] to be called on that before adding the new client and returning. *)
+
 val remove_client : t -> client_link -> unit
 
 val client_gw : t -> Ipaddr.V4.t
