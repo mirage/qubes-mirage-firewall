@@ -7,8 +7,18 @@ open Utils
 module Netback = Netchannel.Backend.Make(Netchannel.Xenstore.Make(OS.Xs))
 module ClientEth = Ethif.Make(Netback)
 
-let src = Logs.Src.create "net" ~doc:"Client networking"
+let src = Logs.Src.create "client_net" ~doc:"Client networking"
 module Log = (val Logs.src_log src : Logs.LOG)
+
+let writev eth data =
+  Lwt.catch
+    (fun () -> ClientEth.writev eth data)
+    (fun ex ->
+       (* Usually Netback_shutdown, because the client disconnected *)
+       Log.err (fun f -> f "uncaught exception trying to send to client:@\n@[<v2>  %a@]@\nException: @[%s@]"
+                   Cstruct.hexdump_pp (Cstruct.concat data) (Printexc.to_string ex));
+       Lwt.return ()
+    )
 
 class client_iface eth ~gateway_ip ~client_ip client_mac : client_link = object
   val queue = FrameQ.create (Ipaddr.V4.to_string client_ip)
@@ -19,7 +29,7 @@ class client_iface eth ~gateway_ip ~client_ip client_mac : client_link = object
   method writev ip =
     FrameQ.send queue (fun () ->
       let eth_hdr = eth_header_ipv4 ~src:(ClientEth.mac eth) ~dst:client_mac in
-      ClientEth.writev eth (fixup_checksums (Cstruct.concat (eth_hdr :: ip)))
+      writev eth (fixup_checksums (Cstruct.concat (eth_hdr :: ip)))
     )
 end
 
@@ -29,7 +39,7 @@ let clients : Cleanup.t IntMap.t ref = ref IntMap.empty
 let input_arp ~fixed_arp ~eth request =
   match Client_eth.ARP.input fixed_arp request with
   | None -> return ()
-  | Some response -> ClientEth.write eth response
+  | Some response -> writev eth [response]
 
 (** Handle an IPv4 packet from the client. *)
 let input_ipv4 ~client_ip ~router frame packet =
