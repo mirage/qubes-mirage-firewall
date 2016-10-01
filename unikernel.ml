@@ -26,7 +26,7 @@ module Main (Clock : V1.CLOCK) = struct
       ~client_eth
       ~uplink:(Uplink.interface uplink) in
     (* Handle packets from both networks *)
-    Lwt.join [
+    Lwt.choose [
       Client_net.listen router;
       Uplink.listen uplink router
     ]
