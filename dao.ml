@@ -4,38 +4,75 @@
 open Lwt.Infix
 open Utils
 open Qubes
+open Astring
 
-type client_vif = {
-  domid : int;
-  device_id : int;
-  client_ip : Ipaddr.V4.t;
-}
+let src = Logs.Src.create "dao" ~doc:"QubesDB data access"
+module Log = (val Logs.src_log src : Logs.LOG)
 
-let client_vifs domid =
-  let path = Printf.sprintf "backend/vif/%d" domid in
-  OS.Xs.make () >>= fun xs ->
-  OS.Xs.immediate xs (fun h ->
-    OS.Xs.directory h path >>=
-    Lwt_list.map_p (fun device_id ->
-      let device_id = int_of_string device_id in
-      OS.Xs.read h (Printf.sprintf "%s/%d/ip" path device_id) >|= fun client_ip ->
-      let client_ip = Ipaddr.V4.of_string_exn client_ip in
-      { domid; device_id; client_ip }
-    )
-  )
+module ClientVif = struct
+  type t = {
+    domid : int;
+    device_id : int;
+  }
+
+  let pp f { domid; device_id } = Fmt.pf f "{domid=%d;device_id=%d}" domid device_id
+
+  let compare = compare
+end
+module VifMap = struct
+  include Map.Make(ClientVif)
+  let rec of_list = function
+    | [] -> empty
+    | (k, v) :: rest -> add k v (of_list rest)
+  let find key t =
+    try Some (find key t)
+    with Not_found -> None
+end
+
+let directory ~handle dir =
+  OS.Xs.directory handle dir >|= function
+  | [""] -> []      (* XenStore client bug *)
+  | items -> items
+
+let vifs ~handle domid =
+  match String.to_int domid with
+  | None -> Log.err (fun f -> f "Invalid domid %S" domid); Lwt.return []
+  | Some domid ->
+    let path = Printf.sprintf "backend/vif/%d" domid in
+    directory ~handle path >>=
+    Lwt_list.filter_map_p (fun device_id ->
+        match String.to_int device_id with
+        | None -> Log.err (fun f -> f "Invalid device ID %S for domid %d" device_id domid); Lwt.return_none
+        | Some device_id ->
+        let vif = { ClientVif.domid; device_id } in
+        Lwt.try_bind
+          (fun () -> OS.Xs.read handle (Printf.sprintf "%s/%d/ip" path device_id))
+          (fun client_ip ->
+             let client_ip = Ipaddr.V4.of_string_exn client_ip in
+             Lwt.return (Some (vif, client_ip))
+          )
+          (function
+            | Xs_protocol.Enoent _ -> Lwt.return None
+            | ex ->
+              Log.err (fun f -> f "Error getting IP address of %a: %s"
+                          ClientVif.pp vif (Printexc.to_string ex));
+              Lwt.return None
+          )
+      )
 
 let watch_clients fn =
   OS.Xs.make () >>= fun xs ->
   let backend_vifs = "backend/vif" in
+  Log.info (fun f -> f "Watching %s" backend_vifs);
   OS.Xs.wait xs (fun handle ->
     begin Lwt.catch
-      (fun () -> OS.Xs.directory handle backend_vifs)
+      (fun () -> directory ~handle backend_vifs)
       (function
         | Xs_protocol.Enoent _ -> return []
         | ex -> fail ex)
     end >>= fun items ->
-    let items = items |> List.fold_left (fun acc key -> IntSet.add (int_of_string key) acc) IntSet.empty in
-    fn items;
+    Lwt_list.map_p (vifs ~handle) items >>= fun items ->
+    fn (List.concat items |> VifMap.of_list);
     (* Wait for further updates *)
     fail Xs_protocol.Eagain
   )

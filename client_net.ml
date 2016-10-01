@@ -33,7 +33,7 @@ class client_iface eth ~gateway_ip ~client_ip client_mac : client_link = object
     )
 end
 
-let clients : Cleanup.t IntMap.t ref = ref IntMap.empty
+let clients : Cleanup.t Dao.VifMap.t ref = ref Dao.VifMap.empty
 
 (** Handle an ARP message from the client. *)
 let input_arp ~fixed_arp ~eth request =
@@ -52,7 +52,7 @@ let input_ipv4 ~client_ip ~router frame packet =
   )
 
 (** Connect to a new client's interface and listen for incoming frames. *)
-let add_vif { Dao.domid; device_id; client_ip } ~router ~cleanup_tasks =
+let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks =
   Netback.make ~domid ~device_id >>= fun backend ->
   Log.info (fun f -> f "Client %d (IP: %s) ready" domid (Ipaddr.V4.to_string client_ip));
   ClientEth.connect backend >>= or_fail "Can't make Ethernet device" >>= fun eth ->
@@ -75,45 +75,37 @@ let add_vif { Dao.domid; device_id; client_ip } ~router ~cleanup_tasks =
   )
 
 (** A new client VM has been found in XenStore. Find its interface and connect to it. *)
-let add_client ~router domid =
+let add_client ~router vif client_ip =
   let cleanup_tasks = Cleanup.create () in
-  Log.info (fun f -> f "add client domain %d" domid);
+  Log.info (fun f -> f "add client vif %a" Dao.ClientVif.pp vif);
   Lwt.async (fun () ->
-    Lwt.catch (fun () ->
-      Dao.client_vifs domid >>= function
-      | [] ->
-          Log.warn (fun f -> f "Client has no interfaces");
-          return ()
-      | vif :: others ->
-          if others <> [] then Log.warn (fun f -> f "Client has multiple interfaces; using first");
-          add_vif vif ~router ~cleanup_tasks
-    )
-    (fun ex ->
-      Log.warn (fun f -> f "Error connecting client domain %d: %s"
-        domid (Printexc.to_string ex));
-      return ()
-    )
-  );
+      Lwt.catch (fun () ->
+          add_vif vif ~client_ip ~router ~cleanup_tasks
+        )
+        (fun ex ->
+           Log.warn (fun f -> f "Error connecting client %a: %s"
+                        Dao.ClientVif.pp vif (Printexc.to_string ex));
+           return ()
+        )
+    );
   cleanup_tasks
 
 (** Watch XenStore for notifications of new clients. *)
 let listen router =
-  let backend_vifs = "backend/vif" in
-  Log.info (fun f -> f "Watching %s" backend_vifs);
   Dao.watch_clients (fun new_set ->
     (* Check for removed clients *)
-    !clients |> IntMap.iter (fun key cleanup ->
-      if not (IntSet.mem key new_set) then (
-        clients := !clients |> IntMap.remove key;
-        Log.info (fun f -> f "client %d has gone" key);
+    !clients |> Dao.VifMap.iter (fun key cleanup ->
+      if not (Dao.VifMap.mem key new_set) then (
+        clients := !clients |> Dao.VifMap.remove key;
+        Log.info (fun f -> f "client %a has gone" Dao.ClientVif.pp key);
         Cleanup.cleanup cleanup
       )
     );
     (* Check for added clients *)
-    new_set |> IntSet.iter (fun key ->
-      if not (IntMap.mem key !clients) then (
-        let cleanup = add_client ~router key in
-        clients := !clients |> IntMap.add key cleanup
+    new_set |> Dao.VifMap.iter (fun key ip_addr ->
+      if not (Dao.VifMap.mem key !clients) then (
+        let cleanup = add_client ~router key ip_addr in
+        clients := !clients |> Dao.VifMap.add key cleanup
       )
     )
   )

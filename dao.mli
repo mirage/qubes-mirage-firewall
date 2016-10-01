@@ -3,20 +3,21 @@
 
 (** Wrapper for XenStore and QubesDB databases. *)
 
-open Utils
+module ClientVif : sig
+  type t = {
+    domid : int;
+    device_id : int;
+  }
+  val pp : t Fmt.t
+end
+module VifMap : sig
+  include Map.S with type key = ClientVif.t
+  val find : key -> 'a t -> 'a option
+end
 
-type client_vif = {
-  domid : int;
-  device_id : int;
-  client_ip : Ipaddr.V4.t;
-}
-
-val watch_clients : (IntSet.t -> unit) -> 'a Lwt.t
-(** [watch_clients fn] calls [fn clients] with the current set of backend client domain IDs
-    in XenStore, and again each time the set changes. *)
-
-val client_vifs : int -> client_vif list Lwt.t
-(** [client_vif domid] is the list of network interfaces to the client VM [domid]. *)
+val watch_clients : (Ipaddr.V4.t VifMap.t -> unit) -> 'a Lwt.t
+(** [watch_clients fn] calls [fn clients] with the list of backend clients
+    in XenStore, and again each time XenStore updates. *)
 
 type network_config = {
   uplink_netvm_ip : Ipaddr.V4.t;      (* The IP address of NetVM (our gateway) *)
