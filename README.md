@@ -7,11 +7,25 @@ Note: This firewall *ignores the rules set in the Qubes GUI*. See `rules.ml` for
 
 See [A Unikernel Firewall for QubesOS][] for more details.
 
+## Build (with Docker)
+
+Clone this Git repository and run the `build-with-docker.sh` script:
+
+    sudo yum install docker
+    sudo systemctl start docker
+    git clone https://github.com/talex5/qubes-mirage-firewall.git
+    cd qubes-mirage-firewall
+    ./build-with-docker.sh
+
+This took about 10 minutes on my laptop (it will be much quicker if you run it again).
+
+## Build (without Docker)
+
 To build (tested by creating a fresh Fedora 23 AppVM in Qubes):
 
 1. Install build tools:
 
-        sudo yum install git gcc m4 0install patch ncurses-devel
+        sudo yum install git gcc m4 0install patch ncurses-devel tar bzip2 unzip make which findutils xen-devel
         mkdir ~/bin
         0install add opam http://tools.ocaml.org/opam.xml
         opam init --comp=4.02.3
@@ -28,6 +42,8 @@ To build (tested by creating a fresh Fedora 23 AppVM in Qubes):
         cd qubes-mirage-firewall
         mirage configure --xen
         make
+
+## Deploy
 
 If you want to deploy manually, use `make tar` to create `mirage-firewall.tar.bz2` and unpack this in dom0, inside `/var/lib/qubes/vm-kernels/`. e.g. (if `dev` is the AppVM where you built it):
 
