@@ -15,7 +15,7 @@ Clone this Git repository and run the `build-with-docker.sh` script:
     sudo systemctl start docker
     git clone https://github.com/talex5/qubes-mirage-firewall.git
     cd qubes-mirage-firewall
-    ./build-with-docker.sh
+    sudo ./build-with-docker.sh
 
 This took about 10 minutes on my laptop (it will be much quicker if you run it again).
 
