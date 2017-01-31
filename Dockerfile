@@ -1,7 +1,12 @@
-FROM ocaml/opam:debian-8_ocaml-4.03.0
+# Pin the base image to a specific hash for maximum reproducibility.
+# It will probably still work on newer images, though, unless Debian 8
+# changes some compiler optimisations (unlikely).
+#FROM ocaml/opam:debian-8_ocaml-4.03.0
+FROM ocaml/opam@sha256:28efab6a5535a517aa719ba5ac6d2e6fddd4831afaeabf5eee6470717eda9cca
 
 # Pin last known-good version for reproducible builds.
-# Remove this line if you want to test with the latest versions.
+# Remove this line (and the base image pin above) if you want to test with the
+# latest versions.
 RUN cd opam-repository && git reset --hard 0f17b354206c97e729700ce60ddce3789ccb1d52 && opam update
 
 RUN sudo apt-get install -y m4 libxen-dev
