@@ -7,10 +7,17 @@ open Mirage
 
 let main =
   foreign
-    ~libraries:["mirage-net-xen"; "tcpip.stack-direct"; "tcpip.xen"; "mirage-qubes"; "mirage-nat"; "mirage-logs"]
-    ~packages:["vchan"; "cstruct"; "tcpip"; "mirage-net-xen"; "mirage-qubes"; "mirage-nat"; "mirage-logs"]
-    "Unikernel.Main" (clock @-> job)
+    ~packages:[
+      package "vchan";
+      package "cstruct";
+      package "tcpip" ~sublibs:["stack-direct"; "xen"];
+      package "mirage-net-xen";
+      package "mirage-qubes";
+      package "mirage-nat" ~sublibs:["hashtable"];
+      package "mirage-logs";
+    ]
+    "Unikernel.Main" (mclock @-> job)
 
 let () =
-  register "qubes-firewall" [main $ default_clock]
+  register "qubes-firewall" [main $ default_monotonic_clock]
     ~argv:no_argv

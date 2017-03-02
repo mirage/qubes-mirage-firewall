@@ -3,12 +3,12 @@
 
 (** The link from us to NetVM (and, through that, to the outside world). *)
 
-open Utils
+open Fw_utils
 
-module Make(Clock : V1.CLOCK) : sig
+module Make(Clock : Mirage_clock_lwt.MCLOCK) : sig
   type t
 
-  val connect : Dao.network_config -> t Lwt.t
+  val connect : clock:Clock.t -> Dao.network_config -> t Lwt.t
   (** Connect to our NetVM (gateway). *)
 
   val interface : t -> interface
