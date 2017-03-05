@@ -14,7 +14,7 @@ type host =
   [ `Client of client_link | `Client_gateway | `Firewall_uplink | `NetVM | `External of Ipaddr.t ]
 
 type info = {
-  packet : Ipv4_packet.t * Cstruct.t;
+  packet : Nat_packet.t;
   src : host;
   dst : host;
   proto : [ `UDP of ports | `TCP of ports | `ICMP | `Unknown ];

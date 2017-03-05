@@ -34,17 +34,20 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
 
   let listen t router =
     Netif.listen t.net (fun frame ->
-      (* Handle one Ethernet frame from NetVM *)
-      Eth.input t.eth
-        ~arpv4:(Arp.input t.arp)
-        ~ipv4:(fun ip ->
-            match Ipv4_packet.Unmarshal.of_cstruct ip with
-            | Error e -> Log.warn (fun f -> f "Bad IPv4 packet from uplink: %s" e); Lwt.return ()
-            | Ok packet -> Firewall.ipv4_from_netvm router packet
-          )
-        ~ipv6:(fun _ip -> return ())
-        frame
-    ) >|= or_raise "Uplink listen loop" Netif.pp_error
+        (* Handle one Ethernet frame from NetVM *)
+        Eth.input t.eth
+          ~arpv4:(Arp.input t.arp)
+          ~ipv4:(fun ip ->
+              match Nat_packet.of_ipv4_packet ip with
+              | Error e ->
+                Log.warn (fun f -> f "Ignored unknown IPv4 message from uplink: %a" Nat_packet.pp_error e);
+                Lwt.return ()
+              | Ok packet ->
+                Firewall.ipv4_from_netvm router packet
+            )
+          ~ipv6:(fun _ip -> return ())
+          frame
+      ) >|= or_raise "Uplink listen loop" Netif.pp_error
 
   let interface t = t.interface
 

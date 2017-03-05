@@ -11,8 +11,6 @@ type action = [
   | `Redirect of Ipaddr.t * int
 ]
 
-type packet = Ipv4_packet.t * Cstruct.t
-
 (* To avoid needing to allocate a new NAT table when we've run out of
    memory, pre-allocate the new one ahead of time. *)
 type 'a with_standby = {
@@ -35,21 +33,10 @@ let fake_ipv4_eth =
   let dontcare = Macaddr.broadcast in
   Fw_utils.eth_header Ethif_wire.IPv4 ~src:dontcare ~dst:dontcare
 
-let translate (Nat ((module Nat), _, table)) (ip, payload) =
-  (* XXX: change Nat.translate API *)
-  let packet = Ipv4_packet.Marshal.make_cstruct ~payload ip in
-  let frame = Cstruct.concat [
-      fake_ipv4_eth;
-      packet;
-      payload;
-    ] in
-  Nat.translate table.current frame >|= function
+let translate (Nat ((module Nat), _, table)) packet =
+  Nat.translate table.current packet >|= function
   | Mirage_nat.Untranslated -> None
-  | Mirage_nat.Translated _ ->  (* XXX: translate mutates frame *)
-    let packet = Cstruct.shift frame Ethif_wire.sizeof_ethernet in
-    match Ipv4_packet.Unmarshal.of_cstruct packet with
-    | Error e -> Log.err (fun f -> f "Translation failed: %s" e); None
-    | Ok packet -> Some packet
+  | Mirage_nat.Translated packet -> Some packet
 
 let random_user_port () =
   1024 + Random.int (0xffff - 1024)
@@ -62,20 +49,13 @@ let reset (Nat ((module Nat), c, table)) =
   table.next <- next
 
 let add_nat_rule_and_translate ((Nat ((module Nat), c, table)) as t) ~xl_host action packet =
-  let frame =
-    let (ip, payload) = packet in
-    Cstruct.concat [
-      fake_ipv4_eth;
-      Ipv4_packet.Marshal.make_cstruct ~payload ip;
-      payload;
-    ] in
   let apply_action xl_port =
     Lwt.try_bind (fun () ->
       match action with
       | `Rewrite ->
-        Nat.add_nat table.current frame (xl_host, xl_port)
+        Nat.add_nat table.current packet (xl_host, xl_port)
       | `Redirect target ->
-        Nat.add_redirect table.current frame (xl_host, xl_port) target
+        Nat.add_redirect table.current packet (xl_host, xl_port) target
       )
       (function
         | Nat.Ok -> Lwt.return (Ok ())

@@ -45,7 +45,7 @@ let clients : Cleanup.t Dao.VifMap.t ref = ref Dao.VifMap.empty
 let input_arp ~fixed_arp ~iface request =
   match Arpv4_packet.Unmarshal.of_cstruct request with
   | Error e ->
-    Log.warn (fun f -> f "ignored unknown ARP message: %a" Arpv4_packet.Unmarshal.pp_error e);
+    Log.warn (fun f -> f "Ignored unknown ARP message: %a" Arpv4_packet.Unmarshal.pp_error e);
     Lwt.return ()
   | Ok arp ->
     match Client_eth.ARP.input fixed_arp arp with
@@ -55,13 +55,14 @@ let input_arp ~fixed_arp ~iface request =
 
 (** Handle an IPv4 packet from the client. *)
 let input_ipv4 ~client_ip ~router packet =
-  match Ipv4_packet.Unmarshal.of_cstruct packet with
+  match Nat_packet.of_ipv4_packet packet with
   | Error e ->
-    Log.warn (fun f -> f "ignored unknown IPv4 message: %s" e);
+    Log.warn (fun f -> f "Ignored unknown IPv4 message: %a" Nat_packet.pp_error e);
     Lwt.return ()
-  | Ok (ip, payload) ->
+  | Ok packet ->
+    let `IPv4 (ip, _) = packet in
     let src = ip.Ipv4_packet.src in
-    if src = client_ip then Firewall.ipv4_from_client router (ip, payload)
+    if src = client_ip then Firewall.ipv4_from_client router packet
     else (
       Log.warn (fun f -> f "Incorrect source IP %a in IP packet from %a (dropping)"
                    Ipaddr.V4.pp_hum src Ipaddr.V4.pp_hum client_ip);

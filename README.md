@@ -31,7 +31,8 @@ This took about 10 minutes on my laptop (it will be much quicker if you run it a
 
 2. Install mirage, pinning a few unreleased features we need:
 
-        opam pin add -y mirage-nat 'https://github.com/talex5/mirage-nat.git#mirage3'
+        opam pin add -n -y tcpip 'https://github.com/talex5/mirage-tcpip.git#fix-length-checks'
+        opam pin add -y mirage-nat 'https://github.com/talex5/mirage-nat.git#cleanup'
         opam install mirage
 
 3. Build mirage-firewall:
