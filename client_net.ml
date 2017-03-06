@@ -83,6 +83,11 @@ let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks
   let fixed_arp = Client_eth.ARP.create ~net:client_eth iface in
   Netback.listen backend (fun frame ->
     match Ethif_packet.Unmarshal.of_cstruct frame with
+    | exception ex ->
+      Log.err (fun f -> f "Error unmarshalling ethernet frame from client: %s@.%a" (Printexc.to_string ex)
+                  Cstruct.hexdump_pp frame
+              );
+      Lwt.return_unit
     | Error err -> Log.warn (fun f -> f "Invalid Ethernet frame: %s" err); return ()
     | Ok (eth, payload) ->
         match eth.Ethif_packet.ethertype with

@@ -39,6 +39,11 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
           ~arpv4:(Arp.input t.arp)
           ~ipv4:(fun ip ->
               match Nat_packet.of_ipv4_packet ip with
+              | exception ex ->
+                Log.err (fun f -> f "Error unmarshalling ethernet frame from uplink: %s@.%a" (Printexc.to_string ex)
+                            Cstruct.hexdump_pp frame
+                        );
+                Lwt.return_unit
               | Error e ->
                 Log.warn (fun f -> f "Ignored unknown IPv4 message from uplink: %a" Nat_packet.pp_error e);
                 Lwt.return ()

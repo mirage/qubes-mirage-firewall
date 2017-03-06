@@ -11,13 +11,23 @@ module Log = (val Logs.src_log src : Logs.LOG)
 (* Transmission *)
 
 let transmit_ipv4 packet iface =
-  let headers, payload = Nat_packet.make_headers_cstruct packet in
   Lwt.catch
-    (fun () -> iface#writev Ethif_wire.IPv4 [headers; payload])
+    (fun () ->
+       let transport = Nat_packet.to_cstruct packet in
+       Lwt.catch
+         (fun () -> iface#writev Ethif_wire.IPv4 transport)
+         (fun ex ->
+            Log.warn (fun f -> f "Failed to write packet to %a: %s"
+                         Ipaddr.V4.pp_hum iface#other_ip
+                         (Printexc.to_string ex));
+            Lwt.return ()
+         )
+    )
     (fun ex ->
-       Log.warn (fun f -> f "Failed to write packet to %a: %s"
-                    Ipaddr.V4.pp_hum iface#other_ip
-                    (Printexc.to_string ex));
+       Log.err (fun f -> f "Exception in transmit_ipv4: %s for:@.%a"
+                   (Printexc.to_string ex)
+                   Nat_packet.pp packet
+               );
        Lwt.return ()
     )
 

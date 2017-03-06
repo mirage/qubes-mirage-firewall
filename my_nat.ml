@@ -27,12 +27,6 @@ let create (type c t) (nat:(module Mirage_nat.S with type config = c and type t 
   let table = { current; next } in
   Lwt.return (Nat (nat, c, table))
 
-(* Ideally, mirage-nat wouldn't ask us for an ethernet header, since it only
-   cares about the IP layer anyway. *)
-let fake_ipv4_eth =
-  let dontcare = Macaddr.broadcast in
-  Fw_utils.eth_header Ethif_wire.IPv4 ~src:dontcare ~dst:dontcare
-
 let translate (Nat ((module Nat), _, table)) packet =
   Nat.translate table.current packet >|= function
   | Mirage_nat.Untranslated -> None
