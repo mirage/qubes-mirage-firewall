@@ -29,8 +29,8 @@ let create (type c t) (nat:(module Mirage_nat.S with type config = c and type t 
 
 let translate (Nat ((module Nat), _, table)) packet =
   Nat.translate table.current packet >|= function
-  | Mirage_nat.Untranslated -> None
-  | Mirage_nat.Translated packet -> Some packet
+  | Error `Untranslated -> None
+  | Ok packet -> Some packet
 
 let random_user_port () =
   1024 + Random.int (0xffff - 1024)
@@ -44,17 +44,12 @@ let reset (Nat ((module Nat), c, table)) =
 
 let add_nat_rule_and_translate ((Nat ((module Nat), c, table)) as t) ~xl_host action packet =
   let apply_action xl_port =
-    Lwt.try_bind (fun () ->
-      match action with
-      | `Rewrite ->
-        Nat.add_nat table.current packet (xl_host, xl_port)
-      | `Redirect target ->
-        Nat.add_redirect table.current packet (xl_host, xl_port) target
-      )
-      (function
-        | Nat.Ok -> Lwt.return (Ok ())
-        | Nat.Overlap -> Lwt.return (Error `Overlap)
-        | Nat.Unparseable -> Lwt.return (Error `Unparseable)
+    Lwt.catch (fun () ->
+        match action with
+        | `Rewrite ->
+          Nat.add_nat table.current packet (xl_host, xl_port)
+        | `Redirect target ->
+          Nat.add_redirect table.current packet (xl_host, xl_port) target
       )
       (function
         | Out_of_memory -> Lwt.return (Error `Out_of_memory)
@@ -86,8 +81,8 @@ let add_nat_rule_and_translate ((Nat ((module Nat), c, table)) as t) ~xl_host ac
         ) else (
           aux ~retries:(retries - 1)
         )
-    | Error `Unparseable ->
-        Lwt.return (Error "Unparseable by mirage-nat")
+    | Error `Cannot_NAT ->
+        Lwt.return (Error "Cannot NAT this packet")
     | Ok () ->
         translate t packet >|= function
         | None -> Error "No NAT entry, even after adding one!"

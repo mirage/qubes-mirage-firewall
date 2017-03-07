@@ -45,6 +45,7 @@ let classify t packet =
     match transport with
     | `TCP ({Tcp.Tcp_packet.src_port; dst_port; _}, _) -> `TCP {sport = src_port; dport = dst_port}
     | `UDP ({Udp_packet.src_port; dst_port; _}, _)     -> `UDP {sport = src_port; dport = dst_port}
+    | `ICMP _                                          -> `ICMP
   in
   Some {
     packet;
