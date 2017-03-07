@@ -72,7 +72,7 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
       OS.Lifecycle.await_shutdown_request () >>= fun (`Poweroff | `Reboot) ->
       return () in
     (* Set up networking *)
-    My_nat.create (module Nat) clock >>= fun nat ->
+    Nat.empty clock >|= My_nat.create (module Nat) >>= fun nat ->
     let net_listener = network ~clock nat qubesDB in
     (* Report memory usage to XenStore *)
     Memory_pressure.init ();
