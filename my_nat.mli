@@ -6,12 +6,12 @@
 type t
 
 type action = [
-  | `Rewrite
-  | `Redirect of Ipaddr.t * int
+  | `NAT
+  | `Redirect of Mirage_nat.endpoint
 ]
 
-val create : (module Mirage_nat.S with type t = 'a) -> 'a -> t
+val create : get_time:(unit -> Mirage_nat.time) -> t Lwt.t
 val reset : t -> unit Lwt.t
 val translate : t -> Nat_packet.t -> Nat_packet.t option Lwt.t
-val add_nat_rule_and_translate : t -> xl_host:Ipaddr.t ->
+val add_nat_rule_and_translate : t -> xl_host:Ipaddr.V4.t ->
   action -> Nat_packet.t -> (Nat_packet.t, string) result Lwt.t

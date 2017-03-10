@@ -9,7 +9,6 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
   module Uplink = Uplink.Make(Clock)
-  module Nat = Mirage_nat_hashtable.Make(Clock)(OS.Time)
 
   (* Set up networking and listen for incoming packets. *)
   let network ~clock nat qubesDB =
@@ -72,7 +71,8 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
       OS.Lifecycle.await_shutdown_request () >>= fun (`Poweroff | `Reboot) ->
       return () in
     (* Set up networking *)
-    Nat.empty clock >|= My_nat.create (module Nat) >>= fun nat ->
+    let get_time () = Clock.elapsed_ns clock in
+    My_nat.create ~get_time >>= fun nat ->
     let net_listener = network ~clock nat qubesDB in
     (* Report memory usage to XenStore *)
     Memory_pressure.init ();
