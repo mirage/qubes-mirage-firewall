@@ -72,7 +72,8 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
       return () in
     (* Set up networking *)
     let get_time () = Clock.elapsed_ns clock in
-    My_nat.create ~get_time >>= fun nat ->
+    let max_entries = Key_gen.nat_table_size () in
+    My_nat.create ~get_time ~max_entries >>= fun nat ->
     let net_listener = network ~clock nat qubesDB in
     (* Report memory usage to XenStore *)
     Memory_pressure.init ();

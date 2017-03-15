@@ -18,8 +18,10 @@ type t = {
   get_time : unit -> Mirage_nat.time;
 }
 
-let create ~get_time =
-  Nat.empty () >|= fun table ->
+let create ~get_time ~max_entries =
+  let tcp_size = 7 * max_entries / 8 in
+  let udp_size = max_entries - tcp_size in
+  Nat.empty ~tcp_size ~udp_size ~icmp_size:100 >|= fun table ->
   { get_time; table }
 
 let translate t packet =
@@ -53,26 +55,27 @@ let add_nat_rule_and_translate t ~xl_host action packet =
     let xl_port = random_user_port () in
     apply_action xl_port >>= function
     | Error `Out_of_memory ->
-        (* Because hash tables resize in big steps, this can happen even if we have a fair
-           chunk of free memory. *)
-        Log.warn (fun f -> f "Out_of_memory adding NAT rule. Dropping NAT table...");
-        Nat.reset t.table >>= fun () ->
-        aux ~retries:(retries - 1)
+      (* Because hash tables resize in big steps, this can happen even if we have a fair
+         chunk of free memory. *)
+      Log.warn (fun f -> f "Out_of_memory adding NAT rule. Dropping NAT table...");
+      Nat.reset t.table >>= fun () ->
+      aux ~retries:(retries - 1)
     | Error `Overlap when retries < 0 -> Lwt.return (Error "Too many retries")
     | Error `Overlap ->
-        if retries = 0 then (
-          Log.warn (fun f -> f "Failed to find a free port; resetting NAT table");
-          Nat.reset t.table >>= fun () ->
-          aux ~retries:(retries - 1)
-        ) else (
-          aux ~retries:(retries - 1)
-        )
+      if retries = 0 then (
+        Log.warn (fun f -> f "Failed to find a free port; resetting NAT table");
+        Nat.reset t.table >>= fun () ->
+        aux ~retries:(retries - 1)
+      ) else (
+        aux ~retries:(retries - 1)
+      )
     | Error `Cannot_NAT ->
-        Lwt.return (Error "Cannot NAT this packet")
+      Lwt.return (Error "Cannot NAT this packet")
     | Ok () ->
-        translate t packet >|= function
-        | None -> Error "No NAT entry, even after adding one!"
-        | Some packet ->
-          Ok packet
+      Log.debug (fun f -> f "Updated NAT table: %a" Nat.pp_summary t.table);
+      translate t packet >|= function
+      | None -> Error "No NAT entry, even after adding one!"
+      | Some packet ->
+        Ok packet
   in
   aux ~retries:100
