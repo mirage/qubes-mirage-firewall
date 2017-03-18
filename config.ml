@@ -1,4 +1,4 @@
-(* Copyright (C) 2015, Thomas Leonard <thomas.leonard@unikernel.com>
+(* Copyright (C) 2017, Thomas Leonard <thomas.leonard@unikernel.com>
    See the README file for details. *)
 
 (** Configuration for the "mirage" tool. *)
@@ -20,7 +20,7 @@ let main =
     ~packages:[
       package "vchan";
       package "cstruct";
-      package "tcpip" ~sublibs:["stack-direct"; "xen"];
+      package "tcpip" ~sublibs:["stack-direct"; "xen"] ~min:"3.1.0";
       package "mirage-net-xen";
       package "mirage-qubes";
       package "mirage-nat" ~sublibs:["hashtable"];
