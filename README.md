@@ -7,7 +7,7 @@ Note: This firewall *ignores the rules set in the Qubes GUI*. See `rules.ml` for
 
 See [A Unikernel Firewall for QubesOS][] for more details.
 
-## Build (with Docker)
+## Build
 
 Clone this Git repository and run the `build-with-docker.sh` script:
 
@@ -19,27 +19,8 @@ Clone this Git repository and run the `build-with-docker.sh` script:
 
 This took about 10 minutes on my laptop (it will be much quicker if you run it again).
 
-## Build (without Docker)
-
-1. Install build tools:
-
-        sudo yum install git gcc m4 0install patch ncurses-devel tar bzip2 unzip make which findutils xen-devel
-        mkdir ~/bin
-        0install add opam http://tools.ocaml.org/opam.xml
-        opam init --comp=4.04.0
-        eval `opam config env`
-
-2. Install mirage, pinning a few unreleased features we need:
-
-        opam pin add -y mirage-nat 'https://github.com/talex5/mirage-nat.git#lru'
-        opam install mirage
-
-3. Build mirage-firewall:
-
-        git clone https://github.com/talex5/qubes-mirage-firewall.git
-        cd qubes-mirage-firewall
-        mirage configure -t xen
-        make
+You can also build without Docker, as for any normal Mirage unikernel;
+see [the Mirage installation instructions](https://mirage.io/wiki/install) for details.
 
 ## Deploy
 
