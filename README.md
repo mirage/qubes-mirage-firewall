@@ -31,7 +31,6 @@ This took about 10 minutes on my laptop (it will be much quicker if you run it a
 
 2. Install mirage, pinning a few unreleased features we need:
 
-        opam pin add -n -y tcpip.3.0.0 'https://github.com/talex5/mirage-tcpip.git#fix-length-checks'
         opam pin add -y mirage-nat 'https://github.com/talex5/mirage-nat.git#lru'
         opam install mirage
 
@@ -39,7 +38,7 @@ This took about 10 minutes on my laptop (it will be much quicker if you run it a
 
         git clone https://github.com/talex5/qubes-mirage-firewall.git
         cd qubes-mirage-firewall
-        mirage configure --xen
+        mirage configure -t xen
         make
 
 ## Deploy
@@ -53,9 +52,9 @@ The tarball contains `vmlinuz`, which is the unikernel itself, plus a couple of 
 
 For development, use the [test-mirage][] scripts to deploy the unikernel (`mir-qubes-firewall.xen`) from your development AppVM. e.g.
 
-    $ test-mirage mir-firewall.xen mirage-firewall
+    $ test-mirage qubes_firewall.xen mirage-firewall
     Waiting for 'Ready'... OK
-    Uploading 'mir-qubes-firewall.xen' (4843304 bytes) to "mirage-firewall"
+    Uploading 'qubes_firewall.xen' (5901080 bytes) to "mirage-firewall"
     Waiting for 'Booting'... OK
     --> Loading the VM (type = ProxyVM)...
     --> Starting Qubes DB...
@@ -72,38 +71,31 @@ For development, use the [test-mirage][] scripts to deploy the unikernel (`mir-q
     MirageOS booting...
     Initialising timer interface
     Initialising console ... done.
-    Netif: add resume hook
     gnttab_stubs.c: initialised mini-os gntmap
-    2015-12-30 10:04.42: INF [qubes.rexec] waiting for client...
-    2015-12-30 10:04.42: INF [qubes.gui] waiting for client...
-    2015-12-30 10:04.42: INF [qubes.db] connecting to server...
-    2015-12-30 10:04.42: INF [qubes.db] connected
-    2015-12-30 10:04.42: INF [qubes.rexec] client connected, using protocol version 2
-    2015-12-30 10:04.42: INF [qubes.db] got update: "/qubes-keyboard" = "xkb_keymap {\n\txkb_keycodes  { include \"evdev+aliases(qwerty)\"\t};\n\txkb_types     { include \"complete\"\t};\n\txkb_compat    { include \"complete\"\t};\n\txkb_symbols   { include \"pc+gb+inet(evdev)\"\t};\n\txkb_geometry  { include \"pc(pc104)\"\t};\n};"
-    2015-12-30 10:04.42: INF [qubes.gui] client connected (screen size: 6720x2160)
-    2015-12-30 10:04.42: INF [unikernel] agents connected in 0.052 s (CPU time used since boot: 0.007 s)
-    Netif.connect 0
-    Netfront.create: id=0 domid=1
-     sg:true gso_tcpv4:true rx_copy:true rx_flip:false smart_poll:false
-    MAC: 00:16:3e:5e:6c:0b
-    ARP: sending gratuitous from 10.137.1.13
-    2015-12-30 10:04.42: INF [application] Client (internal) network is 10.137.3.0/24
-    ARP: transmitting probe -> 10.137.1.1
-    2015-12-30 10:04.42: INF [net] Watching backend/vif
-    2015-12-30 10:04.42: INF [qubes.rexec] Execute "user:QUBESRPC qubes.SetMonitorLayout dom0\000"
-    2015-12-30 10:04.42: WRN [command] << Unknown command "QUBESRPC qubes.SetMonitorLayout dom0"
-    2015-12-30 10:04.42: INF [qubes.rexec] Execute "root:QUBESRPC qubes.WaitForSession none\000"
-    2015-12-30 10:04.42: WRN [command] << Unknown command "QUBESRPC qubes.WaitForSession none"
-    2015-12-30 10:04.42: INF [qubes.db] got update: "/qubes-netvm-domid" = "1"
-    ARP: retrying 10.137.1.1 (n=1)
-    ARP: transmitting probe -> 10.137.1.1
-    ARP: updating 10.137.1.1 -> fe:ff:ff:ff:ff:ff
-
+    2017-03-18 11:32:37 -00:00: INF [qubes.rexec] waiting for client...
+    2017-03-18 11:32:37 -00:00: INF [qubes.gui] waiting for client...
+    2017-03-18 11:32:37 -00:00: INF [qubes.db] connecting to server...
+    2017-03-18 11:32:37 -00:00: INF [qubes.db] connected
+    2017-03-18 11:32:37 -00:00: INF [qubes.rexec] client connected, using protocol version 2
+    2017-03-18 11:32:37 -00:00: INF [qubes.db] got update: "/qubes-keyboard" = "xkb_keymap {\n\txkb_keycodes  { include \"evdev+aliases(qwerty)\"\t};\n\txkb_types     { include \"complete\"\t};\n\txkb_compat    { include \"complete\"\t};\n\txkb_symbols   { include \"pc+gb+inet(evdev)\"\t};\n\txkb_geometry  { include \"pc(pc105)\"\t};\n};"
+    2017-03-18 11:32:37 -00:00: INF [qubes.gui] client connected (screen size: 6720x2160)
+    2017-03-18 11:32:37 -00:00: INF [unikernel] Qubes agents connected in 0.095 s (CPU time used since boot: 0.008 s)
+    2017-03-18 11:32:37 -00:00: INF [net-xen:frontend] connect 0
+    2017-03-18 11:32:37 -00:00: INF [memory_pressure] Writing meminfo: free 6584 / 17504 kB (37.61 %)
+    Note: cannot write Xen 'control' directory
+    2017-03-18 11:32:37 -00:00: INF [net-xen:frontend] create: id=0 domid=1
+    2017-03-18 11:32:37 -00:00: INF [net-xen:frontend]  sg:true gso_tcpv4:true rx_copy:true rx_flip:false smart_poll:false
+    2017-03-18 11:32:37 -00:00: INF [net-xen:frontend] MAC: 00:16:3e:5e:6c:11
+    2017-03-18 11:32:37 -00:00: WRN [command] << Unknown command "QUBESRPC qubes.SetMonitorLayout dom0"
+    2017-03-18 11:32:38 -00:00: INF [ethif] Connected Ethernet interface 00:16:3e:5e:6c:11
+    2017-03-18 11:32:38 -00:00: INF [arpv4] Connected arpv4 device on 00:16:3e:5e:6c:11
+    2017-03-18 11:32:38 -00:00: INF [dao] Watching backend/vif
+    2017-03-18 11:32:38 -00:00: INF [qubes.db] got update: "/qubes-netvm-domid" = "1"
 
 
 # LICENSE
 
-Copyright (c) 2015, Thomas Leonard
+Copyright (c) 2017, Thomas Leonard
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
