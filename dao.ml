@@ -2,8 +2,8 @@
    See the README file for details. *)
 
 open Lwt.Infix
-open Utils
 open Qubes
+open Fw_utils
 open Astring
 
 let src = Logs.Src.create "dao" ~doc:"QubesDB data access"

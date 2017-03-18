@@ -21,19 +21,18 @@ This took about 10 minutes on my laptop (it will be much quicker if you run it a
 
 ## Build (without Docker)
 
-To build (tested by creating a fresh Fedora 23 AppVM in Qubes):
-
 1. Install build tools:
 
         sudo yum install git gcc m4 0install patch ncurses-devel tar bzip2 unzip make which findutils xen-devel
         mkdir ~/bin
         0install add opam http://tools.ocaml.org/opam.xml
-        opam init --comp=4.02.3
+        opam init --comp=4.04.0
         eval `opam config env`
 
 2. Install mirage, pinning a few unreleased features we need:
 
-        opam pin add -y mirage-nat 'https://github.com/talex5/mirage-nat.git#simplify-checksum'
+        opam pin add -n -y tcpip.3.0.0 'https://github.com/talex5/mirage-tcpip.git#fix-length-checks'
+        opam pin add -y mirage-nat 'https://github.com/talex5/mirage-nat.git#lru'
         opam install mirage
 
 3. Build mirage-firewall:

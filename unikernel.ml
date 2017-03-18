@@ -7,15 +7,15 @@ open Qubes
 let src = Logs.Src.create "unikernel" ~doc:"Main unikernel code"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Main (Clock : V1.CLOCK) = struct
+module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
   module Uplink = Uplink.Make(Clock)
 
   (* Set up networking and listen for incoming packets. *)
-  let network qubesDB =
+  let network ~clock nat qubesDB =
     (* Read configuration from QubesDB *)
     let config = Dao.read_network_config qubesDB in
     (* Initialise connection to NetVM *)
-    Uplink.connect config >>= fun uplink ->
+    Uplink.connect ~clock config >>= fun uplink ->
     (* Report success *)
     Dao.set_iptables_error qubesDB "" >>= fun () ->
     (* Set up client-side networking *)
@@ -24,7 +24,9 @@ module Main (Clock : V1.CLOCK) = struct
     (* Set up routing between networks and hosts *)
     let router = Router.create
       ~client_eth
-      ~uplink:(Uplink.interface uplink) in
+      ~uplink:(Uplink.interface uplink)
+      ~nat
+    in
     (* Handle packets from both networks *)
     Lwt.choose [
       Client_net.listen router;
@@ -45,8 +47,8 @@ module Main (Clock : V1.CLOCK) = struct
     )
 
   (* Main unikernel entry point (called from auto-generated main.ml). *)
-  let start () =
-    let start_time = Clock.time () in
+  let start clock =
+    let start_time = Clock.elapsed_ns clock in
     (* Start qrexec agent, GUI agent and QubesDB agent in parallel *)
     let qrexec = RExec.connect ~domid:0 () in
     let gui = GUI.connect ~domid:0 () in
@@ -57,18 +59,26 @@ module Main (Clock : V1.CLOCK) = struct
     gui >>= fun gui ->
     watch_gui gui;
     qubesDB >>= fun qubesDB ->
-    Log.info (fun f -> f "agents connected in %.3f s (CPU time used since boot: %.3f s)"
-      (Clock.time () -. start_time) (Sys.time ()));
+    let startup_time = 
+      let (-) = Int64.sub in
+      let time_in_ns = Clock.elapsed_ns clock - start_time in
+      Int64.to_float time_in_ns /. 1e9
+    in
+    Log.info (fun f -> f "Qubes agents connected in %.3f s (CPU time used since boot: %.3f s)"
+       startup_time (Sys.time ()));
     (* Watch for shutdown requests from Qubes *)
     let shutdown_rq =
       OS.Lifecycle.await_shutdown_request () >>= fun (`Poweroff | `Reboot) ->
       return () in
     (* Set up networking *)
-    let net_listener = network qubesDB in
+    let get_time () = Clock.elapsed_ns clock in
+    let max_entries = Key_gen.nat_table_size () in
+    My_nat.create ~get_time ~max_entries >>= fun nat ->
+    let net_listener = network ~clock nat qubesDB in
     (* Report memory usage to XenStore *)
     Memory_pressure.init ();
     (* Run until something fails or we get a shutdown request. *)
     Lwt.choose [agent_listener; net_listener; shutdown_rq] >>= fun () ->
     (* Give the console daemon time to show any final log messages. *)
-    OS.Time.sleep 1.0
+    OS.Time.sleep_ns (1.0 *. 1e9 |> Int64.of_float)
 end

@@ -3,11 +3,11 @@
 
 (** Routing packets to the right network interface. *)
 
-open Utils
+open Fw_utils
 
 type t = private {
   client_eth : Client_eth.t;
-  mutable nat : Nat_lookup.t;
+  nat : My_nat.t;
   uplink : interface;
 }
 (** A routing table. *)
@@ -15,12 +15,13 @@ type t = private {
 val create :
   client_eth:Client_eth.t ->
   uplink:interface ->
+  nat:My_nat.t ->
   t
 (** [create ~client_eth ~uplink] is a new routing table
     that routes packets outside of [client_eth] via [uplink]. *)
 
-val target : t -> Cstruct.t -> interface option
-(** [target t packet] is the interface to which [packet] (an IP packet) should be routed. *)
+val target : t -> Ipv4_packet.t -> interface option
+(** [target t packet] is the interface to which [packet] should be routed. *)
 
 val add_client : t -> client_link -> unit Lwt.t
 (** [add_client t iface] adds a rule for routing packets addressed to [iface]. *)
@@ -29,6 +30,3 @@ val remove_client : t -> client_link -> unit
 
 val classify : t -> Ipaddr.t -> Packet.host
 val resolve : t -> Packet.host -> Ipaddr.t
-
-val reset : t -> unit
-(** Clear the NAT table (to free memory). *)
