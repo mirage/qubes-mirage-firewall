@@ -24,7 +24,7 @@ see [the Mirage installation instructions](https://mirage.io/wiki/install) for d
 
 ## Deploy
 
-If you want to deploy manually, use `make tar` to create `mirage-firewall.tar.bz2` and unpack this in dom0, inside `/var/lib/qubes/vm-kernels/`. e.g. (if `dev` is the AppVM where you built it):
+If you want to deploy manually, unpack `mirage-firewall.tar.bz2` in dom0, inside `/var/lib/qubes/vm-kernels/`. e.g. (if `dev` is the AppVM where you built it):
 
         [tal@dom0 ~]$ cd /var/lib/qubes/vm-kernels/
         [tal@dom0 vm-kernels]$ qvm-run -p dev 'cat qubes-mirage-firewall/mirage-firewall.tar.bz2' | tar xjf -
