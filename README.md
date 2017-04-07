@@ -26,10 +26,24 @@ see [the Mirage installation instructions](https://mirage.io/wiki/install) for d
 
 If you want to deploy manually, unpack `mirage-firewall.tar.bz2` in dom0, inside `/var/lib/qubes/vm-kernels/`. e.g. (if `dev` is the AppVM where you built it):
 
-        [tal@dom0 ~]$ cd /var/lib/qubes/vm-kernels/
-        [tal@dom0 vm-kernels]$ qvm-run -p dev 'cat qubes-mirage-firewall/mirage-firewall.tar.bz2' | tar xjf -
+    [tal@dom0 ~]$ cd /var/lib/qubes/vm-kernels/
+    [tal@dom0 vm-kernels]$ qvm-run -p dev 'cat qubes-mirage-firewall/mirage-firewall.tar.bz2' | tar xjf -
 
 The tarball contains `vmlinuz`, which is the unikernel itself, plus a couple of dummy files that Qubes requires.
+To configure your new firewall using the Qubes Manager GUI:
+
+- Create a new ProxyVM named `mirage-firewall` to run the unikernel.
+- You can use any template, and make it standalone or not. It doesn’t matter, since we don’t use the hard disk.
+- Set the type to `ProxyVM`.
+- Select `sys-net` for networking (not `sys-firewall`).
+- Click `OK` to create the VM.
+- Go to the VM settings, and look in the `Advanced` tab:
+  - Set the kernel to `mirage-firewall`.
+  - Turn off memory balancing and set the memory to 20 MB or so (you might have to fight a bit with the Qubes GUI to get it this low).
+  - Set VCPUs (number of virtual CPUs) to 1.
+
+You can run `mirage-firewall` alongside your existing `sys-firewall` and you can choose which AppVMs use which firewall using the GUI.
+To configure an AppVM to use it, go to the app VM's settings in the GUI and change its `NetVM` from `default (sys-firewall)` to `mirage-firewall`. Alternatively, you can configure `mirage-firewall` to be your default firewall VM.
 
 For development, use the [test-mirage][] scripts to deploy the unikernel (`mir-qubes-firewall.xen`) from your development AppVM. e.g.
 
