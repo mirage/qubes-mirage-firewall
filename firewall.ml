@@ -77,6 +77,17 @@ let pp_packet fmt {src; dst; proto; packet = _} =
     pp_host dst
     pp_proto proto
 
+let pp_transport_headers f = function
+  | `ICMP (h, _) -> Icmpv4_packet.pp f h
+  | `TCP (h, _)  -> Tcp.Tcp_packet.pp f h
+  | `UDP (h, _)  -> Udp_packet.pp f h
+
+let pp_header f = function
+  | `IPv4 (ip, transport) ->
+    Fmt.pf f "%a %a"
+      Ipv4_packet.pp ip
+      pp_transport_headers transport
+
 (* NAT *)
 
 let translate t packet =
@@ -88,7 +99,7 @@ let add_nat_and_forward_ipv4 t packet =
   My_nat.add_nat_rule_and_translate t.Router.nat ~xl_host `NAT packet >>= function
   | Ok packet -> forward_ipv4 t packet
   | Error e ->
-    Log.warn (fun f -> f "Failed to add NAT rewrite rule: %s" e);
+    Log.warn (fun f -> f "Failed to add NAT rewrite rule: %s (%a)" e pp_header packet);
     Lwt.return ()
 
 (* Add a NAT rule to redirect this conversation to [host:port] instead of us. *)
@@ -100,7 +111,7 @@ let nat_to t ~host ~port packet =
     My_nat.add_nat_rule_and_translate t.Router.nat ~xl_host (`Redirect (target, port)) packet >>= function
     | Ok packet -> forward_ipv4 t packet
     | Error e ->
-      Log.warn (fun f -> f "Failed to add NAT redirect rule: %s" e);
+      Log.warn (fun f -> f "Failed to add NAT redirect rule: %s (%a)" e pp_header packet);
       Lwt.return ()
 
 (* Handle incoming packets *)
