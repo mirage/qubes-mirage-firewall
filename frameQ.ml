@@ -10,16 +10,23 @@ type t = {
 }
 
 let create name = { name; items = 0 }
-  
+
+(* Note: the queue is only used if we already filled the transmit buffer. *)
+let max_qlen = 10
+
 let send q fn =
-  (* TODO: drop if queue too long *)
-  let sent = fn () in
-  if Lwt.state sent = Lwt.Sleep then (
-    q.items <- q.items + 1;
-    Log.info (fun f -> f "Queue length for %s: incr to %d" q.name q.items);
-    Lwt.on_termination sent (fun () ->
-      q.items <- q.items - 1;
-      Log.info (fun f -> f "Queue length for %s: decr to %d" q.name q.items);
-    )
-  );
-  sent
+  if q.items = max_qlen then (
+    Log.warn (fun f -> f "Maximim queue length exceeded for %s: dropping frame" q.name);
+    Lwt.return_unit
+  ) else (
+    let sent = fn () in
+    if Lwt.state sent = Lwt.Sleep then (
+      q.items <- q.items + 1;
+      Log.info (fun f -> f "Queue length for %s: incr to %d" q.name q.items);
+      Lwt.on_termination sent (fun () ->
+        q.items <- q.items - 1;
+        Log.info (fun f -> f "Queue length for %s: decr to %d" q.name q.items);
+      )
+    );
+    sent
+  )

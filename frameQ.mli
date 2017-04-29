@@ -8,7 +8,7 @@ type t
 val create : string -> t
 (** [create name] is a new empty queue. [name] is used in log messages. *)
 
-val send : t -> (unit -> 'a Lwt.t) -> 'a Lwt.t
+val send : t -> (unit -> unit Lwt.t) -> unit Lwt.t
 (** [send t fn] checks that the queue isn't overloaded and calls [fn ()] if it's OK.
     The item is considered to be queued until the result of [fn] has resolved.
     In the case of mirage-net-xen's [writev], this happens when the frame has been
