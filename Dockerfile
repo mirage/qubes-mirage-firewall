@@ -2,7 +2,7 @@
 # It will probably still work on newer images, though, unless Debian 8
 # changes some compiler optimisations (unlikely).
 #FROM ocaml/opam:debian-8_ocaml-4.03.0
-FROM ocaml/opam@sha256:48c025a4ec2e6ff6dcb4c14f8cae0f332a090fa1ed677170912c4a48627778ab
+FROM ocaml/opam@sha256:66f9d402ab6dc00c47d2ee3195ab247f9c1c8e7e774197f4fa6ea2a290a3ebbc
 
 # Pin last known-good version for reproducible builds.
 # Remove this line (and the base image pin above) if you want to test with the

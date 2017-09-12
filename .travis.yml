@@ -1,5 +1,5 @@
 language: c
-install: wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/master/.travis-mirage.sh
+install: wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-mirage.sh
 script: bash -ex .travis-mirage.sh
 sudo: required
 dist: trusty
@@ -20,4 +20,4 @@ addons:
     - time
     - libxen-dev
 env:
-  - FORK_USER=talex5 FORK_BRANCH=unikernel OCAML_VERSION=4.04 MIRAGE_BACKEND=xen PINS="mirage-nat:https://github.com/talex5/mirage-nat.git#lru"
+  - OCAML_VERSION=4.04 MIRAGE_BACKEND=xen PINS="mirage-nat:https://github.com/talex5/mirage-nat.git#lru"
