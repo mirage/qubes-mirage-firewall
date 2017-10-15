@@ -20,4 +20,4 @@ addons:
     - time
     - libxen-dev
 env:
-  - OCAML_VERSION=4.04 MIRAGE_BACKEND=xen PINS="mirage-nat:https://github.com/talex5/mirage-nat.git#lru"
+  - OCAML_VERSION=4.04 MIRAGE_BACKEND=xen
