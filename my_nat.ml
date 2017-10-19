@@ -11,7 +11,7 @@ type action = [
   | `Redirect of Mirage_nat.endpoint
 ]
 
-module Nat = Mirage_nat_hashtable
+module Nat = Mirage_nat_lru
 
 type t = {
   table : Nat.t;

@@ -20,10 +20,10 @@ let main =
     ~packages:[
       package "vchan";
       package "cstruct";
-      package "tcpip" ~sublibs:["stack-direct"; "xen"] ~min:"3.1.0";
+      package "tcpip" ~sublibs:["stack-direct"; "xen"; "arpv4"] ~min:"3.1.0";
       package "mirage-net-xen";
       package "mirage-qubes";
-      package "mirage-nat" ~sublibs:["hashtable"];
+      package "mirage-nat";
       package "mirage-logs";
     ]
     "Unikernel.Main" (mclock @-> job)
