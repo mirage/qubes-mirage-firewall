@@ -1,23 +1,8 @@
 language: c
-install: wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-mirage.sh
-script: bash -ex .travis-mirage.sh
+script:
+  - echo 'ADD . /home/opam/qubes-mirage-firewall' >> Dockerfile
+  - echo 'RUN sudo chown -R opam /home/opam/qubes-mirage-firewall' >> Dockerfile
+  - docker build -t qubes-mirage-firewall .
+  - docker run --rm -i qubes-mirage-firewall
 sudo: required
 dist: trusty
-addons:
-  apt:
-    sources:
-    - avsm
-    packages:
-    - ocaml
-    - ocaml-base
-    - ocaml-native-compilers
-    - ocaml-compiler-libs
-    - ocaml-interp
-    - ocaml-base-nox
-    - ocaml-nox
-    - camlp4
-    - camlp4-extra
-    - time
-    - libxen-dev
-env:
-  - OCAML_VERSION=4.04 MIRAGE_BACKEND=xen
