@@ -106,7 +106,7 @@ let add_client ~router vif client_ip =
           add_vif vif ~client_ip ~router ~cleanup_tasks
         )
         (fun ex ->
-           Log.warn (fun f -> f "Error connecting client %a: %s"
+           Log.warn (fun f -> f "Error with client %a: %s"
                         Dao.ClientVif.pp vif (Printexc.to_string ex));
            return ()
         )
