@@ -39,7 +39,7 @@ To configure your new firewall using the Qubes Manager GUI:
 - Click `OK` to create the VM.
 - Go to the VM settings, and look in the `Advanced` tab:
   - Set the kernel to `mirage-firewall`.
-  - Turn off memory balancing and set the memory to 20 MB or so (you might have to fight a bit with the Qubes GUI to get it this low).
+  - Turn off memory balancing and set the memory to 32 MB or so (you might have to fight a bit with the Qubes GUI to get it this low).
   - Set VCPUs (number of virtual CPUs) to 1.
 
 You can run `mirage-firewall` alongside your existing `sys-firewall` and you can choose which AppVMs use which firewall using the GUI.
