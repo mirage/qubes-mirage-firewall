@@ -21,6 +21,7 @@ let main =
       package "vchan";
       package "cstruct";
       package "tcpip" ~sublibs:["stack-direct"; "xen"; "arpv4"] ~min:"3.1.0";
+      package "shared-memory-ring" ~min:"3.0.0";
       package "mirage-net-xen";
       package "mirage-qubes";
       package "mirage-nat";
