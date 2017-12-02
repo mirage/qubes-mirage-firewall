@@ -9,6 +9,8 @@ See [A Unikernel Firewall for QubesOS][] for more details.
 
 ## Build
 
+### with docker
+
 Clone this Git repository and run the `build-with-docker.sh` script:
 
     sudo yum install docker
@@ -19,8 +21,24 @@ Clone this Git repository and run the `build-with-docker.sh` script:
 
 This took about 10 minutes on my laptop (it will be much quicker if you run it again).
 
+### general build instructions
+
 You can also build without Docker, as for any normal Mirage unikernel;
 see [the Mirage installation instructions](https://mirage.io/wiki/install) for details.
+
+### with Debian stretch/stable
+
+    sudo apt install git ocaml-native-compilers camlp4-extra opam aspcud curl debianutils m4 ncurses-dev perl pkg-config time
+    git clone https://github.com/talex5/qubes-mirage-firewall
+    cd qubes-mirage-firewall/
+    opam init
+    opam switch 4.04.2
+    eval `opam config env`
+    ## in there:
+    opam install -y vchan xen-gnt mirage-xen-ocaml mirage-xen-minios io-page mirage-xen mirage mirage-nat mirage-qubes netchannel
+    opam config exec -- mirage configure -t xen
+    make depend
+    opam config exec -- make tar
 
 ## Deploy
 
