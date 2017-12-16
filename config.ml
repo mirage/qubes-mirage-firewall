@@ -22,7 +22,8 @@ let main =
       package "cstruct";
       package "tcpip" ~sublibs:["stack-direct"; "xen"; "arpv4"] ~min:"3.1.0";
       package "shared-memory-ring" ~min:"3.0.0";
-      package "mirage-net-xen";
+      package "netchannel" ~min:"1.8.0";
+      package "mirage-net-xen" ~min:"1.7.1";
       package "mirage-qubes";
       package "mirage-nat";
       package "mirage-logs";
