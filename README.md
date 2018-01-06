@@ -32,18 +32,18 @@ If you want to deploy manually, unpack `mirage-firewall.tar.bz2` in dom0, inside
 The tarball contains `vmlinuz`, which is the unikernel itself, plus a couple of dummy files that Qubes requires.
 To configure your new firewall using the Qubes Manager GUI:
 
-- Create a new ProxyVM named `mirage-firewall` to run the unikernel.
+- Create a new ProxyVM named `mirage-firewall` to run the unikernel. (In Qubes 4, do this via the `qubes-vm-create` GUI.  Check "Provides Network" and uncheck "HVM".)
 - You can use any template, and make it standalone or not. It doesn’t matter, since we don’t use the hard disk.
 - Set the type to `ProxyVM`.
 - Select `sys-net` for networking (not `sys-firewall`).
 - Click `OK` to create the VM.
 - Go to the VM settings, and look in the `Advanced` tab:
-  - Set the kernel to `mirage-firewall`.
-  - Turn off memory balancing and set the memory to 32 MB or so (you might have to fight a bit with the Qubes GUI to get it this low).
-  - Set VCPUs (number of virtual CPUs) to 1.
+  - Set the kernel to `mirage-firewall`. (In Qubes 4, qvm-prefs --set vmname kernel mirage-firewall)
+  - Turn off memory balancing and set the memory to 32 MB or so (you might have to fight a bit with the Qubes GUI to get it this low). (Qubes 4: qvm-prefs --set vmname memory 20, qvm-prefs --set vmname maxmem 20)
+  - Set VCPUs (number of virtual CPUs) to 1. (Qubes 4: qvm-prefs --set vmname vcpus 1)
 
 You can run `mirage-firewall` alongside your existing `sys-firewall` and you can choose which AppVMs use which firewall using the GUI.
-To configure an AppVM to use it, go to the app VM's settings in the GUI and change its `NetVM` from `default (sys-firewall)` to `mirage-firewall`. Alternatively, you can configure `mirage-firewall` to be your default firewall VM.
+To configure an AppVM to use it, go to the app VM's settings in the GUI and change its `NetVM` from `default (sys-firewall)` to `mirage-firewall`. Alternatively, you can configure `mirage-firewall` to be your default firewall VM. (Qubes 4: qvm-prefs --set mirageos netvm mirage-firewall)
 
 For development, use the [test-mirage][] scripts to deploy the unikernel (`mir-qubes-firewall.xen`) from your development AppVM. e.g.
 
