@@ -7,7 +7,12 @@ Note: This firewall *ignores the rules set in the Qubes GUI*. See `rules.ml` for
 
 See [A Unikernel Firewall for QubesOS][] for more details.
 
-## Build
+
+## Binary releases
+
+Pre-built binaries are available from the [releases page][].
+
+## Build from source
 
 Clone this Git repository and run the `build-with-docker.sh` script:
 
@@ -30,7 +35,10 @@ If you want to deploy manually, unpack `mirage-firewall.tar.bz2` in dom0, inside
     [tal@dom0 vm-kernels]$ qvm-run -p dev 'cat qubes-mirage-firewall/mirage-firewall.tar.bz2' | tar xjf -
 
 The tarball contains `vmlinuz`, which is the unikernel itself, plus a couple of dummy files that Qubes requires.
-To configure your new firewall using the Qubes Manager GUI:
+
+### Qubes 3
+
+To configure your new firewall using the Qubes 3 Manager GUI:
 
 - Create a new ProxyVM named `mirage-firewall` to run the unikernel.
 - You can use any template, and make it standalone or not. It doesn’t matter, since we don’t use the hard disk.
@@ -42,10 +50,42 @@ To configure your new firewall using the Qubes Manager GUI:
   - Turn off memory balancing and set the memory to 32 MB or so (you might have to fight a bit with the Qubes GUI to get it this low).
   - Set VCPUs (number of virtual CPUs) to 1.
 
-You can run `mirage-firewall` alongside your existing `sys-firewall` and you can choose which AppVMs use which firewall using the GUI.
-To configure an AppVM to use it, go to the app VM's settings in the GUI and change its `NetVM` from `default (sys-firewall)` to `mirage-firewall`. Alternatively, you can configure `mirage-firewall` to be your default firewall VM.
+### Qubes 4
 
-For development, use the [test-mirage][] scripts to deploy the unikernel (`mir-qubes-firewall.xen`) from your development AppVM. e.g.
+Run this command in dom0 to create a `mirage-firewall` VM using the `mirage-firewall` kernel you added above:
+
+```
+qvm-create \
+  --property kernel=mirage-firewall \
+  --property kernelopts=None \
+  --property memory=32 \
+  --property maxmem=32 \
+  --property netvm=sys-net \
+  --property provides_network=True \
+  --property vcpus=1 \
+  --property virt_mode=pv \
+  --label=green \
+  --class StandaloneVM \
+  mirage-firewall
+```
+
+### Configure AppVMs to use it
+
+You can run `mirage-firewall` alongside your existing `sys-firewall` and you can choose which AppVMs use which firewall using the GUI.
+To configure an AppVM to use it, go to the app VM's settings in the GUI and change its `NetVM` from `default (sys-firewall)` to `mirage-firewall`.
+
+You can also configure it by running this command in dom0 (replace `my-app-vm` with the AppVM's name):
+
+```
+qvm-prefs --set my-app-vm netvm mirage-firewall
+```
+
+Alternatively, you can configure `mirage-firewall` to be your default firewall VM.
+
+### Easy deployment for developers
+
+For development, use the [test-mirage][] scripts to deploy the unikernel (`qubes_firewall.xen`) from your development AppVM.
+This takes a little more setting up the first time, but will be much quicker after that. e.g.
 
     $ test-mirage qubes_firewall.xen mirage-firewall
     Waiting for 'Ready'... OK
@@ -90,7 +130,7 @@ For development, use the [test-mirage][] scripts to deploy the unikernel (`mir-q
 
 # LICENSE
 
-Copyright (c) 2017, Thomas Leonard
+Copyright (c) 2018, Thomas Leonard
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
@@ -105,3 +145,4 @@ gg
 [test-mirage]: https://github.com/talex5/qubes-test-mirage
 [mirage-qubes]: https://github.com/talex5/mirage-qubes
 [A Unikernel Firewall for QubesOS]: http://roscidus.com/blog/blog/2016/01/01/a-unikernel-firewall-for-qubesos/
+[releases page]: https://github.com/talex5/qubes-mirage-firewall/releases
