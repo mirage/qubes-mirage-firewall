@@ -13,7 +13,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let set_date_time flow =
   Flow.read_line flow >|= function
   | `Eof -> Log.warn (fun f -> f "EOF reading time from dom0"); 1
-  | `Ok line -> Log.info (fun f -> f "TODO: set time to %S" line); 0
+  | `Ok line -> 0 (* TODO: set time to "%S" line *)
 
 let handler ~user:_ cmd flow =
   (* Write a message to the client and return an exit status of 1. *)
