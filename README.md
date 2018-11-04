@@ -16,13 +16,16 @@ Pre-built binaries are available from the [releases page][].
 
 Clone this Git repository and run the `build-with-docker.sh` script:
 
-    sudo yum install docker
+    sudo ln -s /var/lib/docker /home/user/docker
+    sudo dnf install docker
     sudo systemctl start docker
     git clone https://github.com/talex5/qubes-mirage-firewall.git
     cd qubes-mirage-firewall
     sudo ./build-with-docker.sh
 
 This took about 10 minutes on my laptop (it will be much quicker if you run it again).
+The symlink step at the start isn't needed if your build VM is standalone.
+It gives Docker more disk space and avoids losing the Docker image cache when you reboot the Qube.
 
 You can also build without Docker, as for any normal Mirage unikernel;
 see [the Mirage installation instructions](https://mirage.io/wiki/install) for details.
