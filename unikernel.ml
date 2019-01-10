@@ -34,11 +34,15 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
     ]
 
   (* We don't use the GUI, but it's interesting to keep an eye on it.
-     If the other end dies, don't let it take us with it (can happen on log out). *)
+     If the other end dies, don't let it take us with it (can happen on logout). *)
   let watch_gui gui =
     Lwt.async (fun () ->
       Lwt.try_bind
-        (fun () -> GUI.listen gui)
+        (fun () ->
+           gui >>= fun gui ->
+           Log.info (fun f -> f "GUI agent connected");
+           GUI.listen gui
+        )
         (fun `Cant_happen -> assert false)
         (fun ex ->
           Log.warn (fun f -> f "GUI thread failed: %s" (Printexc.to_string ex));
@@ -51,21 +55,18 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
     let start_time = Clock.elapsed_ns clock in
     (* Start qrexec agent, GUI agent and QubesDB agent in parallel *)
     let qrexec = RExec.connect ~domid:0 () in
-    let gui = GUI.connect ~domid:0 () in
+    GUI.connect ~domid:0 () |> watch_gui;
     let qubesDB = DB.connect ~domid:0 () in
     (* Wait for clients to connect *)
     qrexec >>= fun qrexec ->
     let agent_listener = RExec.listen qrexec Command.handler in
-    gui >>= fun gui ->
-    watch_gui gui;
     qubesDB >>= fun qubesDB ->
     let startup_time = 
       let (-) = Int64.sub in
       let time_in_ns = Clock.elapsed_ns clock - start_time in
       Int64.to_float time_in_ns /. 1e9
     in
-    Log.info (fun f -> f "Qubes agents connected in %.3f s (CPU time used since boot: %.3f s)"
-       startup_time (Sys.time ()));
+    Log.info (fun f -> f "QubesDB and qrexec agents connected in %.3f s" startup_time);
     (* Watch for shutdown requests from Qubes *)
     let shutdown_rq =
       OS.Lifecycle.await_shutdown_request () >>= fun (`Poweroff | `Reboot) ->
