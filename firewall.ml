@@ -18,7 +18,7 @@ let transmit_ipv4 packet iface =
          (fun () -> iface#writev Ethif_wire.IPv4 transport)
          (fun ex ->
             Log.warn (fun f -> f "Failed to write packet to %a: %s"
-                         Ipaddr.V4.pp_hum iface#other_ip
+                         Ipaddr.V4.pp iface#other_ip
                          (Printexc.to_string ex));
             Lwt.return ()
          )
@@ -58,10 +58,10 @@ let pp_ports fmt {sport; dport} =
   Format.fprintf fmt "sport=%d dport=%d" sport dport
 
 let pp_host fmt = function
-  | `Client c -> Ipaddr.V4.pp_hum fmt (c#other_ip)
-  | `Unknown_client ip -> Format.fprintf fmt "unknown-client(%a)" Ipaddr.pp_hum ip
+  | `Client c -> Ipaddr.V4.pp fmt (c#other_ip)
+  | `Unknown_client ip -> Format.fprintf fmt "unknown-client(%a)" Ipaddr.pp ip
   | `NetVM -> Format.pp_print_string fmt "net-vm"
-  | `External ip -> Format.fprintf fmt "external(%a)" Ipaddr.pp_hum ip
+  | `External ip -> Format.fprintf fmt "external(%a)" Ipaddr.pp ip
   | `Firewall_uplink -> Format.pp_print_string fmt "firewall(uplink)"
   | `Client_gateway -> Format.pp_print_string fmt "firewall(client-gw)"
 

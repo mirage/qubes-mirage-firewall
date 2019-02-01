@@ -27,6 +27,9 @@ This took about 10 minutes on my laptop (it will be much quicker if you run it a
 The symlink step at the start isn't needed if your build VM is standalone.
 It gives Docker more disk space and avoids losing the Docker image cache when you reboot the Qube.
 
+Note: the object files are stored in the `_build` directory to speed up incremental builds.
+If you change the dependencies, you will need to delete this directory before rebuilding.
+
 You can also build without Docker, as for any normal Mirage unikernel;
 see [the Mirage installation instructions](https://mirage.io/wiki/install) for details.
 

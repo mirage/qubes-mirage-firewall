@@ -65,7 +65,7 @@ let input_ipv4 ~client_ip ~router packet =
     if src = client_ip then Firewall.ipv4_from_client router packet
     else (
       Log.warn (fun f -> f "Incorrect source IP %a in IP packet from %a (dropping)"
-                   Ipaddr.V4.pp_hum src Ipaddr.V4.pp_hum client_ip);
+                   Ipaddr.V4.pp src Ipaddr.V4.pp client_ip);
       return ()
     )
 

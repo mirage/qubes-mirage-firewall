@@ -20,10 +20,12 @@ let main =
     ~packages:[
       package "vchan";
       package "cstruct";
+      package "astring";
       package "tcpip" ~sublibs:["stack-direct"; "xen"; "arpv4"] ~min:"3.1.0";
       package "shared-memory-ring" ~min:"3.0.0";
       package "netchannel" ~min:"1.8.0";
       package "mirage-net-xen" ~min:"1.7.1";
+      package "ipaddr" ~min:"3.0.0";
       package "mirage-qubes";
       package "mirage-nat";
       package "mirage-logs";

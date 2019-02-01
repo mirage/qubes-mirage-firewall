@@ -30,7 +30,7 @@ let add_client t iface =
     if IpMap.mem ip t.iface_of_ip then (
       (* Wait for old client to disappear before adding one with the same IP address.
          Otherwise, its [remove_client] call will remove the new client instead. *)
-      Log.info (fun f -> f "Waiting for old client %a to go away before accepting new one" Ipaddr.V4.pp_hum ip);
+      Log.info (fun f -> f "Waiting for old client %a to go away before accepting new one" Ipaddr.V4.pp ip);
       Lwt_condition.wait t.changed >>= aux
     ) else (
       t.iface_of_ip <- t.iface_of_ip |> IpMap.add ip iface;
