@@ -42,12 +42,13 @@ let classify_client_packet (info : ([`Client of _], _) Packet.info) rules : Pack
   let matches_port dstports (port : int) =
     List.exists (fun (Q.Range_inclusive (min, max)) -> (min <= port && port <= max)) dstports
   in
-  let matches_proto rule info = match rule.Pf_qubes.Parse_qubes.proto with
+  let matches_proto rule packet = match rule.Pf_qubes.Parse_qubes.proto with
     | None -> true
-    | Some p -> match p, info.proto with
-      | `tcp, `TCP ports -> matches_port rule.Q.dstports ports.dport 
-      | `udp, `UDP ports -> matches_port rule.Q.dstports ports.dport 
-      | `icmp, `ICMP -> true (* TODO *)
+    | Some p ->
+      match p, packet.transport_header with
+      | `tcp, `TCP header -> matches_port rule.Q.dstports header.dst_port
+      | `udp, `UDP header -> matches_port rule.Q.dstports header.dst_port
+      | `icmp, `ICMP header -> true (* TODO *)
       | _, _ -> false 
   in
   let matches_dest rule info = match rule.Pf_qubes.Parse_qubes.dst with

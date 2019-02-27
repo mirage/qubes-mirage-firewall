@@ -13,11 +13,14 @@ type ports = {
 type host = 
   [ `Client of client_link | `Client_gateway | `Firewall_uplink | `NetVM | `External of Ipaddr.t ]
 
-type ('src, 'dst) info = {
-  packet : Nat_packet.t;
+type ('src, 'dst) packet = {
+  ipv4_header : Ipv4_packet.t;
+  transport_header : [`TCP of Tcp.Tcp_packet.t
+                     |`UDP of Udp_packet.t
+                     |`ICMP of Icmpv4_packet.t];
+  transport_payload : Cstruct.t; 
   src : 'src;
   dst : 'dst;
-  proto : [ `UDP of ports | `TCP of ports | `ICMP | `Unknown ];
 }
 
 (* The first message in a TCP connection has SYN set and ACK clear. *)
