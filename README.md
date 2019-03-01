@@ -19,7 +19,7 @@ Clone this Git repository and run the `build-with-docker.sh` script:
     sudo ln -s /var/lib/docker /home/user/docker
     sudo dnf install docker
     sudo systemctl start docker
-    git clone https://github.com/talex5/qubes-mirage-firewall.git
+    git clone https://github.com/mirage/qubes-mirage-firewall.git
     cd qubes-mirage-firewall
     sudo ./build-with-docker.sh
 
@@ -149,6 +149,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 gg
 
 [test-mirage]: https://github.com/talex5/qubes-test-mirage
-[mirage-qubes]: https://github.com/talex5/mirage-qubes
+[mirage-qubes]: https://github.com/mirage/mirage-qubes
 [A Unikernel Firewall for QubesOS]: http://roscidus.com/blog/blog/2016/01/01/a-unikernel-firewall-for-qubesos/
-[releases page]: https://github.com/talex5/qubes-mirage-firewall/releases
+[releases page]: https://github.com/mirage/qubes-mirage-firewall/releases
