@@ -47,7 +47,7 @@ module ARP : sig
   (** [create ~net client_link] is an ARP responder for [client_link].
       It answers only for the client's gateway address. *)
 
-  val input : arp -> Arpv4_packet.t -> Arpv4_packet.t option
+  val input : arp -> Arp_packet.t -> Arp_packet.t option
   (** Process one ethernet frame containing an ARP message.
       Returns a response frame, if one is needed. *)
 end

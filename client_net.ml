@@ -5,24 +5,24 @@ open Lwt.Infix
 open Fw_utils
 
 module Netback = Netchannel.Backend.Make(Netchannel.Xenstore.Make(OS.Xs))
-module ClientEth = Ethif.Make(Netback)
+module ClientEth = Ethernet.Make(Netback)
 
 let src = Logs.Src.create "client_net" ~doc:"Client networking"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let writev eth data =
+let writev eth dst proto fillfn =
   Lwt.catch
     (fun () ->
-       ClientEth.writev eth data >|= function
+       ClientEth.write eth dst proto fillfn >|= function
        | Ok () -> ()
        | Error e ->
-         Log.err (fun f -> f "error trying to send to client:@\n@[<v2>  %a@]@\nError: @[%a@]"
-                     Cstruct.hexdump_pp (Cstruct.concat data) ClientEth.pp_error e);
+         Log.err (fun f -> f "error trying to send to client: @[%a@]"
+                     ClientEth.pp_error e);
     )
     (fun ex ->
        (* Usually Netback_shutdown, because the client disconnected *)
-       Log.err (fun f -> f "uncaught exception trying to send to client:@\n@[<v2>  %a@]@\nException: @[%s@]"
-                   Cstruct.hexdump_pp (Cstruct.concat data) (Printexc.to_string ex));
+       Log.err (fun f -> f "uncaught exception trying to send to client: @[%s@]"
+                   (Printexc.to_string ex));
        Lwt.return ()
     )
 
@@ -32,10 +32,9 @@ class client_iface eth ~gateway_ip ~client_ip client_mac : client_link = object
   method other_mac = client_mac
   method my_ip = gateway_ip
   method other_ip = client_ip
-  method writev proto ip =
+  method writev proto fillfn =
     FrameQ.send queue (fun () ->
-      let eth_hdr = eth_header proto ~src:(ClientEth.mac eth) ~dst:client_mac in
-      writev eth (eth_hdr :: ip)
+        writev eth client_mac proto fillfn
     )
 end
 
@@ -43,15 +42,15 @@ let clients : Cleanup.t Dao.VifMap.t ref = ref Dao.VifMap.empty
 
 (** Handle an ARP message from the client. *)
 let input_arp ~fixed_arp ~iface request =
-  match Arpv4_packet.Unmarshal.of_cstruct request with
+  match Arp_packet.decode request with
   | Error e ->
-    Log.warn (fun f -> f "Ignored unknown ARP message: %a" Arpv4_packet.Unmarshal.pp_error e);
+    Log.warn (fun f -> f "Ignored unknown ARP message: %a" Arp_packet.pp_error e);
     Lwt.return ()
   | Ok arp ->
     match Client_eth.ARP.input fixed_arp arp with
     | None -> return ()
     | Some response ->
-      iface#writev Ethif_wire.ARP [Arpv4_packet.Marshal.make_cstruct response]
+      iface#writev `ARP (fun b -> Arp_packet.encode_into response b; Arp_packet.size)
 
 (** Handle an IPv4 packet from the client. *)
 let input_ipv4 ~client_ip ~router packet =
@@ -81,8 +80,8 @@ let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks
   Router.add_client router iface >>= fun () ->
   Cleanup.on_cleanup cleanup_tasks (fun () -> Router.remove_client router iface);
   let fixed_arp = Client_eth.ARP.create ~net:client_eth iface in
-  Netback.listen backend (fun frame ->
-    match Ethif_packet.Unmarshal.of_cstruct frame with
+  Netback.listen backend ~header_size:14 (fun frame ->
+    match Ethernet_packet.Unmarshal.of_cstruct frame with
     | exception ex ->
       Log.err (fun f -> f "Error unmarshalling ethernet frame from client: %s@.%a" (Printexc.to_string ex)
                   Cstruct.hexdump_pp frame
@@ -90,10 +89,10 @@ let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks
       Lwt.return_unit
     | Error err -> Log.warn (fun f -> f "Invalid Ethernet frame: %s" err); return ()
     | Ok (eth, payload) ->
-        match eth.Ethif_packet.ethertype with
-        | Ethif_wire.ARP -> input_arp ~fixed_arp ~iface payload
-        | Ethif_wire.IPv4 -> input_ipv4 ~client_ip ~router payload
-        | Ethif_wire.IPv6 -> return ()
+        match eth.Ethernet_packet.ethertype with
+        | `ARP -> input_arp ~fixed_arp ~iface payload
+        | `IPv4 -> input_ipv4 ~client_ip ~router payload
+        | `IPv6 -> return () (* TODO: oh no! *)
   )
   >|= or_raise "Listen on client interface" Netback.pp_error
 

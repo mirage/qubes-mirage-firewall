@@ -21,7 +21,7 @@ module IntMap = Map.Make(Int)
 (** An Ethernet interface. *)
 class type interface = object
   method my_mac : Macaddr.t
-  method writev : Ethif_wire.ethertype -> Cstruct.t list -> unit Lwt.t
+  method writev : Mirage_protocols.Ethernet.proto -> (Cstruct.t -> int) -> unit Lwt.t
   method my_ip : Ipaddr.V4.t
   method other_ip : Ipaddr.V4.t
 end
@@ -34,7 +34,7 @@ end
 
 (** An Ethernet header from [src]'s MAC address to [dst]'s with an IPv4 payload. *)
 let eth_header ethertype ~src ~dst =
-  Ethif_packet.Marshal.make_cstruct { Ethif_packet.source = src; destination = dst; ethertype }
+  Ethernet_packet.Marshal.make_cstruct { Ethernet_packet.source = src; destination = dst; ethertype }
 
 let error fmt =
   let err s = Failure s in
