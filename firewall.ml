@@ -13,9 +13,18 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let transmit_ipv4 packet iface =
   Lwt.catch
     (fun () ->
-       let transport = Nat_packet.to_cstruct packet in
        Lwt.catch
-         (fun () -> iface#writev Ethif_wire.IPv4 transport)
+         (fun () ->
+            iface#writev `IPv4 (fun b ->
+                match Nat_packet.into_cstruct packet b with
+                | Error e ->
+                  Log.warn (fun f -> f "Failed to write packet to %a: %a"
+                               Ipaddr.V4.pp iface#other_ip
+                               Nat_packet.pp_error e);
+                  0
+                | Ok n -> n
+              )
+         )
          (fun ex ->
             Log.warn (fun f -> f "Failed to write packet to %a: %s"
                          Ipaddr.V4.pp iface#other_ip
@@ -35,7 +44,7 @@ let forward_ipv4 t packet =
   let `IPv4 (ip, _) = packet in
   match Router.target t ip with
   | Some iface -> transmit_ipv4 packet iface
-  | None -> return ()
+  | None -> Lwt.return_unit
 
 (* Packet classification *)
 

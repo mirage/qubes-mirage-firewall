@@ -4,13 +4,13 @@
 open Lwt.Infix
 open Fw_utils
 
-module Eth = Ethif.Make(Netif)
+module Eth = Ethernet.Make(Netif)
 
 let src = Logs.Src.create "uplink" ~doc:"Network connection to NetVM"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
-  module Arp = Arpv4.Make(Eth)(Clock)(OS.Time)
+  module Arp = Arp.Make(Eth)(OS.Time)
 
   type t = {
     net : Netif.t;
@@ -24,16 +24,15 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
     method my_mac = Eth.mac eth
     method my_ip = my_ip
     method other_ip = other_ip
-    method writev ethertype payload =
+    method writev ethertype fillfn =
       FrameQ.send queue (fun () ->
         mac >>= fun dst ->
-        let eth_hdr = eth_header ethertype ~src:(Eth.mac eth) ~dst in
-        Eth.writev eth (eth_hdr :: payload) >|= or_raise "Write to uplink" Eth.pp_error
+        Eth.write eth dst ethertype fillfn >|= or_raise "Write to uplink" Eth.pp_error
       )
   end
 
   let listen t router =
-    Netif.listen t.net (fun frame ->
+    Netif.listen t.net ~header_size:14 (fun frame ->
         (* Handle one Ethernet frame from NetVM *)
         Eth.input t.eth
           ~arpv4:(Arp.input t.arp)
@@ -56,11 +55,11 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
 
   let interface t = t.interface
 
-  let connect ~clock config =
+  let connect ~clock:_ config =
     let ip = config.Dao.uplink_our_ip in
     Netif.connect "0" >>= fun net ->
     Eth.connect net >>= fun eth ->
-    Arp.connect eth clock >>= fun arp ->
+    Arp.connect eth >>= fun arp ->
     Arp.add_ip arp ip >>= fun () ->
     let netvm_mac =
       Arp.query arp config.Dao.uplink_netvm_ip

@@ -82,7 +82,7 @@ module ARP = struct
   let create ~net client_link = {net; client_link}
 
   let input_query t arp =
-    let req_ipv4 = arp.Arpv4_packet.tpa in
+    let req_ipv4 = arp.Arp_packet.target_ip in
     Log.info (fun f -> f "who-has %s?" (Ipaddr.V4.to_string req_ipv4));
     if req_ipv4 = t.client_link#other_ip then (
       Log.info (fun f -> f "ignoring request for client's own IP");
@@ -93,34 +93,32 @@ module ARP = struct
         None
       | Some req_mac ->
         Log.info (fun f -> f "responding to: who-has %s?" (Ipaddr.V4.to_string req_ipv4));
-        let req_spa = arp.Arpv4_packet.spa in
-        let req_sha = arp.Arpv4_packet.sha in
-        Some { Arpv4_packet.
-               op = Arpv4_wire.Reply;
+        Some { Arp_packet.
+               operation = Arp_packet.Reply;
                (* The Target Hardware Address and IP are copied from the request *)
-               tha = req_sha;
-               tpa = req_spa;
-               sha = req_mac;
-               spa = req_ipv4;
+               target_ip = arp.Arp_packet.source_ip;
+               target_mac = arp.Arp_packet.source_mac;
+               source_ip = req_ipv4;
+               source_mac = req_mac;
              }
 
   let input_gratuitous t arp =
-    let spa = arp.Arpv4_packet.spa in
-    let sha = arp.Arpv4_packet.sha in
-    match lookup t spa with
-    | Some real_mac when Macaddr.compare sha real_mac = 0 ->
+    let source_ip = arp.Arp_packet.source_ip in
+    let source_mac = arp.Arp_packet.source_mac in
+    match lookup t source_ip with
+    | Some real_mac when Macaddr.compare source_mac real_mac = 0 ->
       Log.info (fun f -> f "client suggests updating %s -> %s (as expected)"
-                   (Ipaddr.V4.to_string spa) (Macaddr.to_string sha));
+                   (Ipaddr.V4.to_string source_ip) (Macaddr.to_string source_mac));
     | Some other_mac ->
       Log.warn (fun f -> f "client suggests incorrect update %s -> %s (should be %s)"
-                   (Ipaddr.V4.to_string spa) (Macaddr.to_string sha) (Macaddr.to_string other_mac));
+                   (Ipaddr.V4.to_string source_ip) (Macaddr.to_string source_mac) (Macaddr.to_string other_mac));
     | None ->
       Log.warn (fun f -> f "client suggests incorrect update %s -> %s (unexpected IP)"
-                   (Ipaddr.V4.to_string spa) (Macaddr.to_string sha))
+                   (Ipaddr.V4.to_string source_ip) (Macaddr.to_string source_mac))
 
   let input t arp =
-    let op = arp.Arpv4_packet.op in
+    let op = arp.Arp_packet.operation in
     match op with
-    | Arpv4_wire.Request -> input_query t arp
-    | Arpv4_wire.Reply -> input_gratuitous t arp; None
+    | Arp_packet.Request -> input_query t arp
+    | Arp_packet.Reply -> input_gratuitous t arp; None
 end

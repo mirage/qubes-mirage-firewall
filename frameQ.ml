@@ -16,7 +16,7 @@ let max_qlen = 10
 
 let send q fn =
   if q.items = max_qlen then (
-    Log.warn (fun f -> f "Maximim queue length exceeded for %s: dropping frame" q.name);
+    Log.warn (fun f -> f "Maximum queue length exceeded for %s: dropping frame" q.name);
     Lwt.return_unit
   ) else (
     let sent = fn () in

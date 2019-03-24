@@ -21,13 +21,17 @@ let main =
       package "vchan";
       package "cstruct";
       package "astring";
-      package "tcpip" ~sublibs:["stack-direct"; "xen"; "arpv4"] ~min:"3.1.0";
+      package "tcpip" ~min:"3.7.0";
+      package "arp";
+      package "arp-mirage";
+      package "ethernet";
+      package "mirage-protocols";
       package "shared-memory-ring" ~min:"3.0.0";
       package "netchannel" ~min:"1.8.0";
       package "mirage-net-xen" ~min:"1.7.1";
       package "ipaddr" ~min:"3.0.0";
       package "mirage-qubes";
-      package "mirage-nat";
+      package "mirage-nat" ~min:"1.1.0";
       package "mirage-logs";
     ]
     "Unikernel.Main" (mclock @-> job)
