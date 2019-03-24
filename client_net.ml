@@ -80,7 +80,7 @@ let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks
   Router.add_client router iface >>= fun () ->
   Cleanup.on_cleanup cleanup_tasks (fun () -> Router.remove_client router iface);
   let fixed_arp = Client_eth.ARP.create ~net:client_eth iface in
-  Netback.listen backend ~header_size:14 (fun frame ->
+  Netback.listen backend ~header_size:Ethernet_wire.sizeof_ethernet (fun frame ->
     match Ethernet_packet.Unmarshal.of_cstruct frame with
     | exception ex ->
       Log.err (fun f -> f "Error unmarshalling ethernet frame from client: %s@.%a" (Printexc.to_string ex)
