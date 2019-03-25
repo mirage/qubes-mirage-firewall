@@ -32,7 +32,7 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
   end
 
   let listen t router =
-    Netif.listen t.net ~header_size:14 (fun frame ->
+    Netif.listen t.net ~header_size:Ethernet_wire.sizeof_ethernet (fun frame ->
         (* Handle one Ethernet frame from NetVM *)
         Eth.input t.eth
           ~arpv4:(Arp.input t.arp)
