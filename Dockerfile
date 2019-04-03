@@ -7,7 +7,7 @@ FROM ocaml/opam2@sha256:f7125924dd6632099ff98b2505536fe5f5c36bf0beb24779431bb62b
 # Pin last known-good version for reproducible builds.
 # Remove this line (and the base image pin above) if you want to test with the
 # latest versions.
-RUN git fetch origin && git reset --hard 55e835f197d5a6961ff9b22eb5bbcb5a17f13e65 && opam update
+RUN git fetch origin && git reset --hard c261c4ee9c1ef032af93483913b60f674d4acdb2 && opam update
 
 RUN sudo apt-get install -y m4 libxen-dev pkg-config
 RUN opam install -y vchan xen-gnt mirage-xen-ocaml mirage-xen-minios io-page mirage-xen mirage mirage-nat mirage-qubes
