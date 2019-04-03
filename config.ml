@@ -18,7 +18,7 @@ let main =
   foreign
     ~keys:[Functoria_key.abstract table_size]
     ~packages:[
-      package "vchan";
+      package "vchan" ~min:"4.0.2";
       package "cstruct";
       package "astring";
       package "tcpip" ~min:"3.7.0";
@@ -27,8 +27,8 @@ let main =
       package "ethernet";
       package "mirage-protocols";
       package "shared-memory-ring" ~min:"3.0.0";
-      package "netchannel" ~min:"1.8.0";
-      package "mirage-net-xen" ~min:"1.7.1";
+      package "netchannel" ~min:"1.10.2";
+      package "mirage-net-xen";
       package "ipaddr" ~min:"3.0.0";
       package "mirage-qubes";
       package "mirage-nat" ~min:"1.1.0";
