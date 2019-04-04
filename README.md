@@ -42,22 +42,6 @@ If you want to deploy manually, unpack `mirage-firewall.tar.bz2` in dom0, inside
 
 The tarball contains `vmlinuz`, which is the unikernel itself, plus a couple of dummy files that Qubes requires.
 
-### Qubes 3
-
-To configure your new firewall using the Qubes 3 Manager GUI:
-
-- Create a new ProxyVM named `mirage-firewall` to run the unikernel.
-- You can use any template, and make it standalone or not. It doesn’t matter, since we don’t use the hard disk.
-- Set the type to `ProxyVM`.
-- Select `sys-net` for networking (not `sys-firewall`).
-- Click `OK` to create the VM.
-- Go to the VM settings, and look in the `Advanced` tab:
-  - Set the kernel to `mirage-firewall`.
-  - Turn off memory balancing and set the memory to 32 MB or so (you might have to fight a bit with the Qubes GUI to get it this low).
-  - Set VCPUs (number of virtual CPUs) to 1.
-
-### Qubes 4
-
 Run this command in dom0 to create a `mirage-firewall` VM using the `mirage-firewall` kernel you added above:
 
 ```
@@ -74,6 +58,8 @@ qvm-create \
   --class StandaloneVM \
   mirage-firewall
 ```
+
+To upgrade from an earlier release, just overwrite `/var/lib/qubes/vm-kernels/mirage-firewall/vmlinuz` with the new version and restart the firewall VM.
 
 ### Configure AppVMs to use it
 
