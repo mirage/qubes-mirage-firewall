@@ -3,5 +3,5 @@ tar: build
 	mkdir _build/mirage-firewall
 	cp qubes_firewall.xen _build/mirage-firewall/vmlinuz
 	touch _build/mirage-firewall/modules.img
-	cat /dev/null | gzip > _build/mirage-firewall/initramfs
-	tar cjf mirage-firewall.tar.bz2 -C _build mirage-firewall
+	cat /dev/null | gzip -n > _build/mirage-firewall/initramfs
+	tar cjf mirage-firewall.tar.bz2 -C _build --mtime=./build-with-docker.sh mirage-firewall
