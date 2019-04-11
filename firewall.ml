@@ -125,9 +125,21 @@ let nat_to t ~host ~port packet =
 
 (* Handle incoming packets *)
 
+let parse_ips ips = List.map (fun (ip_str, id) -> (Ipaddr.of_string_exn ip_str, id)) ips
+
+let clients = parse_ips Rules.clients
+let externals = parse_ips Rules.externals
+
+let resolve_host = function
+  | `Client c -> `Client (try List.assoc (Ipaddr.V4 c#other_ip) clients with Not_found -> `Unknown)
+  | `External ip -> `External (try List.assoc ip externals with Not_found -> `Unknown)
+  | (`Client_gateway | `Firewall_uplink | `NetVM) as x -> x
+
 let apply_rules t rules info =
   let packet = info.packet in
-  match rules info, info.dst with
+  let resolved_info = { info with src = resolve_host info.src;
+                                  dst = resolve_host info.dst } in
+  match rules resolved_info, info.dst with
   | `Accept, `Client client_link -> transmit_ipv4 packet client_link
   | `Accept, (`External _ | `NetVM) -> transmit_ipv4 packet t.Router.uplink
   | `Accept, (`Firewall_uplink | `Client_gateway) ->

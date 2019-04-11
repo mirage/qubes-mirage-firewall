@@ -13,9 +13,15 @@ type ports = {
 type host = 
   [ `Client of client_link | `Client_gateway | `Firewall_uplink | `NetVM | `External of Ipaddr.t ]
 
-type info = {
+(* Note: 'a is either [host], or the result of applying [Rules.clients] and [Rules.externals] to a host. *)
+type 'a info = {
   packet : Nat_packet.t;
-  src : host;
-  dst : host;
+  src : 'a;
+  dst : 'a;
   proto : [ `UDP of ports | `TCP of ports | `ICMP | `Unknown ];
 }
+
+(* The first message in a TCP connection has SYN set and ACK clear. *)
+let is_tcp_start = function
+  | `IPv4 (_ip, `TCP (hdr, _body)) -> Tcp.Tcp_packet.(hdr.syn && not hdr.ack)
+  | _ -> false
