@@ -14,6 +14,7 @@ Pre-built binaries are available from the [releases page][].
 
 ## Build from source
 
+Create a new Fedora-29 AppVM (or reuse an existing one). Open a terminal.
 Clone this Git repository and run the `build-with-docker.sh` script:
 
     sudo ln -s /var/lib/docker /home/user/docker
@@ -30,8 +31,18 @@ It gives Docker more disk space and avoids losing the Docker image cache when yo
 Note: the object files are stored in the `_build` directory to speed up incremental builds.
 If you change the dependencies, you will need to delete this directory before rebuilding.
 
+If you want to build on Debian, follow the instructions at [docker.com][debian-docker] to get Docker and then run `sudo ./build-with-docker.sh` as above.
+
+It's OK to install the Docker package in a template VM if you want it to remain
+after a reboot, but the build of the firewall itself should be done in a regular AppVM.
+
 You can also build without Docker, as for any normal Mirage unikernel;
 see [the Mirage installation instructions](https://mirage.io/wiki/install) for details.
+
+The Docker build fixes the versions of the libraries it uses, ensuring that you will get
+exactly the same binary that is in the release. If you build without Docker, it will build
+against the latest versions instead (and the hash will therefore probably not match).
+However, it should still work fine.
 
 ## Deploy
 
@@ -122,7 +133,7 @@ This takes a little more setting up the first time, but will be much quicker aft
 
 # LICENSE
 
-Copyright (c) 2018, Thomas Leonard
+Copyright (c) 2019, Thomas Leonard
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
@@ -138,3 +149,4 @@ gg
 [mirage-qubes]: https://github.com/mirage/mirage-qubes
 [A Unikernel Firewall for QubesOS]: http://roscidus.com/blog/blog/2016/01/01/a-unikernel-firewall-for-qubesos/
 [releases page]: https://github.com/mirage/qubes-mirage-firewall/releases
+[debian-docker]: https://docs.docker.com/install/linux/docker-ce/debian/#install-using-the-repository
