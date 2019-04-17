@@ -25,3 +25,14 @@ type 'a info = {
 let is_tcp_start = function
   | `IPv4 (_ip, `TCP (hdr, _body)) -> Tcp.Tcp_packet.(hdr.syn && not hdr.ack)
   | _ -> false
+
+(* The possible actions we can take for a packet: *)
+type action = [
+  | `Accept (* Send the packet to its destination. *)
+  | `NAT    (* Rewrite the packet's source field so packet appears to
+               have come from the firewall, via an unused port.
+               Also, add NAT rules so related packets will be translated accordingly. *)
+  | `NAT_to of host * port (* As for [`NAT], but also rewrite the packet's
+                              destination fields so it will be sent to [host:port]. *)
+  | `Drop of string (* Drop the packet and log the given reason. *)
+]

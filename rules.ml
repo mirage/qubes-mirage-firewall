@@ -8,23 +8,6 @@ open Packet
 (* OCaml normally warns if you don't match all fields, but that's OK here. *)
 [@@@ocaml.warning "-9"]
 
-(** {2 Actions}
-
-  The possible actions are:
-
-    - [`Accept] : Send the packet to its destination.
-
-    - [`NAT] : Rewrite the packet's source field so packet appears to
-      have come from the firewall, via an unused port.
-      Also, add NAT rules so related packets will be translated accordingly.
-
-    - [`NAT_to (host, port)] :
-      As for [`NAT], but also rewrite the packet's destination fields so it
-      will be sent to [host:port].
-
-    - [`Drop reason] drop the packet and log the reason.
-*)
-
 (* List your AppVM IP addresses here if you want to match on them in the rules below.
    Any client not listed here will appear as [`Client `Unknown]. *)
 let clients = [
@@ -44,7 +27,8 @@ let externals = [
 
 (** Decide what to do with a packet from a client VM.
     Note: If the packet matched an existing NAT rule then this isn't called. *)
-let from_client = function
+let from_client (info : _ info) : action =
+  match info with
   (* Examples (add your own rules here): *)
   (*
   | { src = `Client `Dev; dst = `Client `Untrusted; proto = `TCP { dport = 22 } } -> `Accept
@@ -59,5 +43,6 @@ let from_client = function
 
 (** Decide what to do with a packet received from the outside world.
     Note: If the packet matched an existing NAT rule then this isn't called. *)
-let from_netvm = function
+let from_netvm (info : _ info) : action =
+  match info with
   | _ -> `Drop "drop by default"
