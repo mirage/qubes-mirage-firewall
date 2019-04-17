@@ -13,11 +13,10 @@ type ports = {
 type host = 
   [ `Client of client_link | `Client_gateway | `Firewall_uplink | `NetVM | `External of Ipaddr.t ]
 
-(* Note: 'a is either [host], or the result of applying [Rules.clients] and [Rules.externals] to a host. *)
-type 'a info = {
+type ('src, 'dst) info = {
   packet : Nat_packet.t;
-  src : 'a;
-  dst : 'a;
+  src : 'src;
+  dst : 'dst;
   proto : [ `UDP of ports | `TCP of ports | `ICMP | `Unknown ];
 }
 

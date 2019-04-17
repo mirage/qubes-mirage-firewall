@@ -48,8 +48,21 @@ let forward_ipv4 t packet =
 
 (* Packet classification *)
 
-let classify t packet =
-  let `IPv4 (ip, transport) = packet in
+let parse_ips ips = List.map (fun (ip_str, id) -> (Ipaddr.of_string_exn ip_str, id)) ips
+
+let clients = parse_ips Rules.clients
+let externals = parse_ips Rules.externals
+
+let resolve_client client =
+  `Client (try List.assoc (Ipaddr.V4 client#other_ip) clients with Not_found -> `Unknown)
+
+let resolve_host = function
+  | `Client c -> resolve_client c
+  | `External ip -> `External (try List.assoc ip externals with Not_found -> `Unknown)
+  | (`Client_gateway | `Firewall_uplink | `NetVM) as x -> x
+
+let classify ~src ~dst packet =
+  let `IPv4 (_ip, transport) = packet in
   let proto =
     match transport with
     | `TCP ({Tcp.Tcp_packet.src_port; dst_port; _}, _) -> `TCP {sport = src_port; dport = dst_port}
@@ -58,8 +71,8 @@ let classify t packet =
   in
   Some {
     packet;
-    src = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.src);
-    dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst);
+    src;
+    dst;
     proto;
   }
 
@@ -80,7 +93,10 @@ let pp_proto fmt = function
   | `ICMP -> Format.pp_print_string fmt "ICMP"
   | `Unknown -> Format.pp_print_string fmt "UnknownProtocol"
 
-let pp_packet fmt {src; dst; proto; packet = _} =
+let pp_packet t fmt {src = _; dst = _; proto; packet} =
+  let `IPv4 (ip, _transport) = packet in
+  let src = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.src) in
+  let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
   Format.fprintf fmt "[src=%a dst=%a proto=%a]"
     pp_host src
     pp_host dst
@@ -125,30 +141,18 @@ let nat_to t ~host ~port packet =
 
 (* Handle incoming packets *)
 
-let parse_ips ips = List.map (fun (ip_str, id) -> (Ipaddr.of_string_exn ip_str, id)) ips
-
-let clients = parse_ips Rules.clients
-let externals = parse_ips Rules.externals
-
-let resolve_host = function
-  | `Client c -> `Client (try List.assoc (Ipaddr.V4 c#other_ip) clients with Not_found -> `Unknown)
-  | `External ip -> `External (try List.assoc ip externals with Not_found -> `Unknown)
-  | (`Client_gateway | `Firewall_uplink | `NetVM) as x -> x
-
-let apply_rules t rules info =
+let apply_rules t rules ~dst info =
   let packet = info.packet in
-  let resolved_info = { info with src = resolve_host info.src;
-                                  dst = resolve_host info.dst } in
-  match rules resolved_info, info.dst with
+  match rules info, dst with
   | `Accept, `Client client_link -> transmit_ipv4 packet client_link
   | `Accept, (`External _ | `NetVM) -> transmit_ipv4 packet t.Router.uplink
   | `Accept, (`Firewall_uplink | `Client_gateway) ->
-      Log.warn (fun f -> f "Bad rule: firewall can't accept packets %a" pp_packet info);
+      Log.warn (fun f -> f "Bad rule: firewall can't accept packets %a" (pp_packet t) info);
       return ()
   | `NAT, _ -> add_nat_and_forward_ipv4 t packet
   | `NAT_to (host, port), _ -> nat_to t packet ~host ~port
   | `Drop reason, _ ->
-      Log.info (fun f -> f "Dropped packet (%s) %a" reason pp_packet info);
+      Log.info (fun f -> f "Dropped packet (%s) %a" reason (pp_packet t) info);
       return ()
 
 let handle_low_memory t =
@@ -159,7 +163,7 @@ let handle_low_memory t =
       `Memory_critical
   | `Ok -> Lwt.return `Ok
 
-let ipv4_from_client t packet =
+let ipv4_from_client t ~src packet =
   handle_low_memory t >>= function
   | `Memory_critical -> return ()
   | `Ok ->
@@ -168,23 +172,28 @@ let ipv4_from_client t packet =
   | Some frame -> forward_ipv4 t frame  (* Some existing connection or redirect *)
   | None ->
   (* No existing NAT entry. Check the firewall rules. *)
-  match classify t packet with
+  let `IPv4 (ip, _transport) = packet in
+  let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
+  match classify ~src:(resolve_client src) ~dst:(resolve_host dst) packet with
   | None -> return ()
-  | Some info -> apply_rules t Rules.from_client info
+  | Some info -> apply_rules t Rules.from_client ~dst info
 
 let ipv4_from_netvm t packet =
   handle_low_memory t >>= function
   | `Memory_critical -> return ()
   | `Ok ->
-  match classify t packet with
+  let `IPv4 (ip, _transport) = packet in
+  let src = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.src) in
+  let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
+  match classify ~src ~dst:(resolve_host dst) packet with
   | None -> return ()
   | Some info ->
-  match info.src with
+  match src with
   | `Client _ | `Firewall_uplink | `Client_gateway ->
-    Log.warn (fun f -> f "Frame from NetVM has internal source IP address! %a" pp_packet info);
+    Log.warn (fun f -> f "Frame from NetVM has internal source IP address! %a" (pp_packet t) info);
     return ()
-  | `External _ | `NetVM ->
+  | `External _ | `NetVM as src ->
   translate t packet >>= function
   | Some frame -> forward_ipv4 t frame
   | None ->
-  apply_rules t Rules.from_netvm info
+    apply_rules t Rules.from_netvm ~dst { info with src }
