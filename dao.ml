@@ -84,15 +84,33 @@ type network_config = {
   clients_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to our client VMs (their gateway) *)
 }
 
+exception Missing_key of string
+
 (* TODO: /qubes-secondary-dns *)
-let read_network_config qubesDB =
+let try_read_network_config db =
   let get name =
-    match DB.read qubesDB name with
-    | None -> raise (error "QubesDB key %S not present" name)
+    match DB.KeyMap.find_opt name db with
+    | None -> raise (Missing_key name)
     | Some value -> value in
   let uplink_our_ip = get "/qubes-ip" |> Ipaddr.V4.of_string_exn in
   let uplink_netvm_ip = get "/qubes-gateway" |> Ipaddr.V4.of_string_exn in
   let clients_our_ip = get "/qubes-netvm-gateway" |> Ipaddr.V4.of_string_exn in
+  Log.info (fun f -> f "@[<v2>Got network configuration from QubesDB:@,\
+                        NetVM IP on uplink network: %a@,\
+                        Our IP on uplink network:   %a@,\
+                        Our IP on client networks:  %a@]"
+               Ipaddr.V4.pp uplink_netvm_ip
+               Ipaddr.V4.pp uplink_our_ip
+               Ipaddr.V4.pp clients_our_ip);
   { uplink_netvm_ip; uplink_our_ip; clients_our_ip }
+
+let read_network_config qubesDB =
+  let rec aux bindings =
+    try Lwt.return (try_read_network_config bindings)
+    with Missing_key key ->
+      Log.warn (fun f -> f "QubesDB key %S not (yet) present; waiting for QubesDB to change..." key);
+      DB.after qubesDB bindings >>= aux
+  in
+  aux (DB.bindings qubesDB)
 
 let set_iptables_error db = Qubes.DB.write db "/qubes-iptables-error"

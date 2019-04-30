@@ -31,7 +31,7 @@ let main =
       package "mirage-net-xen";
       package "ipaddr" ~min:"3.0.0";
       package "mirage-qubes";
-      package "mirage-nat" ~min:"1.1.0";
+      package "mirage-nat" ~min:"1.2.0";
       package "mirage-logs";
     ]
     "Unikernel.Main" (mclock @-> job)

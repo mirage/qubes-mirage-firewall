@@ -26,6 +26,8 @@ type network_config = {
   clients_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to our client VMs (their gateway) *)
 }
 
-val read_network_config : Qubes.DB.t -> network_config
+val read_network_config : Qubes.DB.t -> network_config Lwt.t
+(** [read_network_config db] fetches the configuration from QubesDB.
+    If it isn't there yet, it waits until it is. *)
 
 val set_iptables_error : Qubes.DB.t -> string -> unit Lwt.t

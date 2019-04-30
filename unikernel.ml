@@ -13,7 +13,7 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
   (* Set up networking and listen for incoming packets. *)
   let network ~clock nat qubesDB =
     (* Read configuration from QubesDB *)
-    let config = Dao.read_network_config qubesDB in
+    Dao.read_network_config qubesDB >>= fun config ->
     (* Initialise connection to NetVM *)
     Uplink.connect ~clock config >>= fun uplink ->
     (* Report success *)
