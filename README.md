@@ -11,6 +11,7 @@ See [A Unikernel Firewall for QubesOS][] for more details.
 ## Binary releases
 
 Pre-built binaries are available from the [releases page][].
+See the [Deploy](#deploy) section below for installation instructions.
 
 ## Build from source
 
@@ -130,6 +131,9 @@ This takes a little more setting up the first time, but will be much quicker aft
     2017-03-18 11:32:38 -00:00: INF [dao] Watching backend/vif
     2017-03-18 11:32:38 -00:00: INF [qubes.db] got update: "/qubes-netvm-domid" = "1"
 
+# Security advisories
+
+See [issues tagged "security"](https://github.com/mirage/qubes-mirage-firewall/issues?utf8=%E2%9C%93&q=label%3Asecurity+) for security advisories affecting the firewall.
 
 # LICENSE
 
