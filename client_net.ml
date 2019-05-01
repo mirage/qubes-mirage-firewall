@@ -73,7 +73,7 @@ let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks
   Netback.make ~domid ~device_id >>= fun backend ->
   Log.info (fun f -> f "Client %d (IP: %s) ready" domid (Ipaddr.V4.to_string client_ip));
   ClientEth.connect backend >>= fun eth ->
-  let client_mac = Netback.mac backend in
+  let client_mac = Netback.frontend_mac backend in
   let client_eth = router.Router.client_eth in
   let gateway_ip = Client_eth.client_gw client_eth in
   let iface = new client_iface eth ~gateway_ip ~client_ip client_mac in
