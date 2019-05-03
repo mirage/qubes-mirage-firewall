@@ -39,15 +39,14 @@ let from_client (info : ([`Client of _], _) Packet.info) : Packet.action =
 
      1. Allows Dev to send SSH packets to Untrusted.
         Note: responses are not covered by this!
-     2. Allows clients to continue existing TCP connections with other clients.
-        This allows responses to SSH packets from the previous rule.
+     2. Allows Untrusted to reply to Dev.
      3. Blocks an external site.
 
      In all cases, make sure you've added the VM name to [clients] or [externals] above, or it won't
      match anything! *)
   (*
   | { src = `Client `Dev; dst = `Client `Untrusted; proto = `TCP { dport = 22 } } -> `Accept
-  | { src = `Client _; dst = `Client _; proto = `TCP _; packet }
+  | { src = `Client `Untrusted; dst = `Client `Dev; proto = `TCP _; packet }
                                         when not (is_tcp_start packet) -> `Accept
   | { dst = `External `GoogleDNS } -> `Drop "block Google DNS"
   *)
