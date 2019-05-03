@@ -1,4 +1,4 @@
-Makefile
+/Makefile
 _build/
 log
 key_gen.ml
