@@ -70,7 +70,11 @@ module ARP = struct
 
   let lookup t ip =
     if ip = t.net.client_gw then Some t.client_link#my_mac
-    else None
+    else if (Ipaddr.V4.to_bytes ip).[3] = '\x01' then (
+      Log.info (fun f -> f ~header:t.client_link#log_header
+                   "Request for %a is invalid, but pretending it's me (see Qubes issue #5022)" Ipaddr.V4.pp ip);
+      Some t.client_link#my_mac
+    ) else None
   (* We're now treating client networks as point-to-point links,
      so we no longer respond on behalf of other clients. *)
     (*
