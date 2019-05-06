@@ -27,16 +27,16 @@ let client_gw t = t.client_gw
 let add_client t iface =
   let ip = iface#other_ip in
   let rec aux () =
-    if IpMap.mem ip t.iface_of_ip then (
+    match IpMap.find ip t.iface_of_ip with
+    | Some old ->
       (* Wait for old client to disappear before adding one with the same IP address.
          Otherwise, its [remove_client] call will remove the new client instead. *)
-      Log.info (fun f -> f "Waiting for old client %a to go away before accepting new one" Ipaddr.V4.pp ip);
+      Log.info (fun f -> f ~header:iface#log_header "Waiting for old client %s to go away before accepting new one" old#log_header);
       Lwt_condition.wait t.changed >>= aux
-    ) else (
+    | None ->
       t.iface_of_ip <- t.iface_of_ip |> IpMap.add ip iface;
       Lwt_condition.broadcast t.changed ();
       Lwt.return_unit
-    )
   in
   aux ()
 
@@ -83,16 +83,18 @@ module ARP = struct
 
   let input_query t arp =
     let req_ipv4 = arp.Arp_packet.target_ip in
-    Log.info (fun f -> f "who-has %s?" (Ipaddr.V4.to_string req_ipv4));
+    let pf (f : ?header:string -> ?tags:_ -> _) fmt =
+      f ~header:t.client_link#log_header ("who-has %a? " ^^ fmt) Ipaddr.V4.pp req_ipv4
+    in
     if req_ipv4 = t.client_link#other_ip then (
-      Log.info (fun f -> f "ignoring request for client's own IP");
+      Log.info (fun f -> pf f "ignoring request for client's own IP");
       None
     ) else match lookup t req_ipv4 with
       | None ->
-        Log.info (fun f -> f "unknown address; not responding");
+        Log.info (fun f -> pf f "unknown address; not responding");
         None
       | Some req_mac ->
-        Log.info (fun f -> f "responding to: who-has %s?" (Ipaddr.V4.to_string req_ipv4));
+        Log.info (fun f -> pf f "responding with %a" Macaddr.pp req_mac);
         Some { Arp_packet.
                operation = Arp_packet.Reply;
                (* The Target Hardware Address and IP are copied from the request *)
@@ -105,15 +107,16 @@ module ARP = struct
   let input_gratuitous t arp =
     let source_ip = arp.Arp_packet.source_ip in
     let source_mac = arp.Arp_packet.source_mac in
+    let header = t.client_link#log_header in
     match lookup t source_ip with
     | Some real_mac when Macaddr.compare source_mac real_mac = 0 ->
-      Log.info (fun f -> f "client suggests updating %s -> %s (as expected)"
+      Log.info (fun f -> f ~header "client suggests updating %s -> %s (as expected)"
                    (Ipaddr.V4.to_string source_ip) (Macaddr.to_string source_mac));
     | Some other_mac ->
-      Log.warn (fun f -> f "client suggests incorrect update %s -> %s (should be %s)"
+      Log.warn (fun f -> f ~header "client suggests incorrect update %s -> %s (should be %s)"
                    (Ipaddr.V4.to_string source_ip) (Macaddr.to_string source_mac) (Macaddr.to_string other_mac));
     | None ->
-      Log.warn (fun f -> f "client suggests incorrect update %s -> %s (unexpected IP)"
+      Log.warn (fun f -> f ~header "client suggests incorrect update %s -> %s (unexpected IP)"
                    (Ipaddr.V4.to_string source_ip) (Macaddr.to_string source_mac))
 
   let input t arp =

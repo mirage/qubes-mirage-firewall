@@ -26,17 +26,20 @@ let writev eth dst proto fillfn =
        Lwt.return ()
     )
 
-class client_iface eth ~gateway_ip ~client_ip client_mac : client_link = object
-  val queue = FrameQ.create (Ipaddr.V4.to_string client_ip)
-  method my_mac = ClientEth.mac eth
-  method other_mac = client_mac
-  method my_ip = gateway_ip
-  method other_ip = client_ip
-  method writev proto fillfn =
-    FrameQ.send queue (fun () ->
-        writev eth client_mac proto fillfn
-    )
-end
+class client_iface eth ~domid ~gateway_ip ~client_ip client_mac : client_link =
+  let log_header = Fmt.strf "dom%d:%a" domid Ipaddr.V4.pp client_ip in
+  object
+    val queue = FrameQ.create (Ipaddr.V4.to_string client_ip)
+    method my_mac = ClientEth.mac eth
+    method other_mac = client_mac
+    method my_ip = gateway_ip
+    method other_ip = client_ip
+    method writev proto fillfn =
+      FrameQ.send queue (fun () ->
+          writev eth client_mac proto fillfn
+        )
+    method log_header = log_header
+  end
 
 let clients : Cleanup.t Dao.VifMap.t ref = ref Dao.VifMap.empty
 
@@ -76,7 +79,7 @@ let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks
   let client_mac = Netback.frontend_mac backend in
   let client_eth = router.Router.client_eth in
   let gateway_ip = Client_eth.client_gw client_eth in
-  let iface = new client_iface eth ~gateway_ip ~client_ip client_mac in
+  let iface = new client_iface eth ~domid ~gateway_ip ~client_ip client_mac in
   Router.add_client router iface >>= fun () ->
   Cleanup.on_cleanup cleanup_tasks (fun () -> Router.remove_client router iface);
   let fixed_arp = Client_eth.ARP.create ~net:client_eth iface in
@@ -99,7 +102,7 @@ let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks
 (** A new client VM has been found in XenStore. Find its interface and connect to it. *)
 let add_client ~router vif client_ip =
   let cleanup_tasks = Cleanup.create () in
-  Log.info (fun f -> f "add client vif %a" Dao.ClientVif.pp vif);
+  Log.info (fun f -> f "add client vif %a with IP %a" Dao.ClientVif.pp vif Ipaddr.V4.pp client_ip);
   Lwt.async (fun () ->
       Lwt.catch (fun () ->
           add_vif vif ~client_ip ~router ~cleanup_tasks
