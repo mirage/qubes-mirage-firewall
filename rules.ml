@@ -1,39 +1,62 @@
 (* Copyright (C) 2015, Thomas Leonard <thomas.leonard@unikernel.com>
    See the README file for details. *)
 
-(** Put your firewall rules here. *)
+(** Put your firewall rules in this file. *)
 
-open Packet
+open Packet   (* Allow us to use definitions in packet.ml *)
+
+(* List your AppVM IP addresses here if you want to match on them in the rules below.
+   Any client not listed here will appear as [`Client `Unknown]. *)
+let clients = [
+  (*
+  "10.137.0.12", `Dev;
+  "10.137.0.14", `Untrusted;
+  *)
+]
+
+(* List your external (non-AppVM) IP addresses here if you want to match on them in the rules below.
+   Any external machine not listed here will appear as [`External `Unknown]. *)
+let externals = [
+  (*
+  "8.8.8.8", `GoogleDNS;
+  *)
+]
 
 (* OCaml normally warns if you don't match all fields, but that's OK here. *)
 [@@@ocaml.warning "-9"]
 
-(** {2 Actions}
+(** This function decides what to do with a packet from a client VM.
 
-  The possible actions are:
+    It takes as input an argument [info] (of type [Packet.info]) describing the
+    packet, and returns an action (of type [Packet.action]) to perform.
 
-    - [`Accept] : Send the packet to its destination.
+    See packet.ml for the definitions of [info] and [action].
 
-    - [`NAT] : Rewrite the packet's source field so packet appears to
-      have come from the firewall, via an unused port.
-      Also, add NAT rules so related packets will be translated accordingly.
-
-    - [`NAT_to (host, port)] :
-      As for [`NAT], but also rewrite the packet's destination fields so it
-      will be sent to [host:port].
-
-    - [`Drop reason] drop the packet and log the reason.
-*)
-
-(** Decide what to do with a packet from a client VM.
     Note: If the packet matched an existing NAT rule then this isn't called. *)
-let from_client = function
+let from_client (info : ([`Client of _], _) Packet.info) : Packet.action =
+  match info with
+  (* Examples (add your own rules here):
+
+     1. Allows Dev to send SSH packets to Untrusted.
+        Note: responses are not covered by this!
+     2. Allows Untrusted to reply to Dev.
+     3. Blocks an external site.
+
+     In all cases, make sure you've added the VM name to [clients] or [externals] above, or it won't
+     match anything! *)
+  (*
+  | { src = `Client `Dev; dst = `Client `Untrusted; proto = `TCP { dport = 22 } } -> `Accept
+  | { src = `Client `Untrusted; dst = `Client `Dev; proto = `TCP _; packet }
+                                        when not (is_tcp_start packet) -> `Accept
+  | { dst = `External `GoogleDNS } -> `Drop "block Google DNS"
+  *)
   | { dst = (`External _ | `NetVM) } -> `NAT
   | { dst = `Client_gateway; proto = `UDP { dport = 53 } } -> `NAT_to (`NetVM, 53)
   | { dst = (`Client_gateway | `Firewall_uplink) } -> `Drop "packet addressed to firewall itself"
-  | { dst = `Client _ } -> `Drop "prevent communication between client VMs"
+  | { dst = `Client _ } -> `Drop "prevent communication between client VMs by default"
 
 (** Decide what to do with a packet received from the outside world.
     Note: If the packet matched an existing NAT rule then this isn't called. *)
-let from_netvm = function
+let from_netvm (info : ([`NetVM | `External of _], _) Packet.info) : Packet.action =
+  match info with
   | _ -> `Drop "drop by default"

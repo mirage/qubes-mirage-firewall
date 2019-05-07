@@ -56,7 +56,7 @@ let input_arp ~fixed_arp ~iface request =
       iface#writev `ARP (fun b -> Arp_packet.encode_into response b; Arp_packet.size)
 
 (** Handle an IPv4 packet from the client. *)
-let input_ipv4 ~client_ip ~router packet =
+let input_ipv4 ~iface ~router packet =
   match Nat_packet.of_ipv4_packet packet with
   | Error e ->
     Log.warn (fun f -> f "Ignored unknown IPv4 message: %a" Nat_packet.pp_error e);
@@ -64,10 +64,10 @@ let input_ipv4 ~client_ip ~router packet =
   | Ok packet ->
     let `IPv4 (ip, _) = packet in
     let src = ip.Ipv4_packet.src in
-    if src = client_ip then Firewall.ipv4_from_client router packet
+    if src = iface#other_ip then Firewall.ipv4_from_client router ~src:iface packet
     else (
       Log.warn (fun f -> f "Incorrect source IP %a in IP packet from %a (dropping)"
-                   Ipaddr.V4.pp src Ipaddr.V4.pp client_ip);
+                   Ipaddr.V4.pp src Ipaddr.V4.pp iface#other_ip);
       return ()
     )
 
@@ -94,7 +94,7 @@ let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks
     | Ok (eth, payload) ->
         match eth.Ethernet_packet.ethertype with
         | `ARP -> input_arp ~fixed_arp ~iface payload
-        | `IPv4 -> input_ipv4 ~client_ip ~router payload
+        | `IPv4 -> input_ipv4 ~iface ~router payload
         | `IPv6 -> return () (* TODO: oh no! *)
   )
   >|= or_raise "Listen on client interface" Netback.pp_error

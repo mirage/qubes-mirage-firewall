@@ -86,6 +86,29 @@ qvm-prefs --set my-app-vm netvm mirage-firewall
 
 Alternatively, you can configure `mirage-firewall` to be your default firewall VM.
 
+### Components
+
+This diagram show the main components (each box corresponds to a source `.ml` file with the same name):
+
+<p align='center'>
+  <img src="./diagrams/components.svg"/>
+</p>
+
+Ethernet frames arrives from client qubes (such as `work` or `personal`) or from `sys-net`.
+Internet (IP) packets are sent to `firewall`, which consults `rules` to decide what to do with the packet.
+If it should be sent on, it uses `router` to send it to the chosen destination.
+`client_net` watches the XenStore database provided by dom0
+to find out when clients need to be added or removed.
+
+The boot process:
+
+- `config.ml` describes the libraries used and static configuration settings (NAT table size).
+  The `mirage` tool uses this to generate `main.ml`.
+- `main.ml` initialises the drivers selected by `config.ml`
+  and calls the `start` function in `unikernel.ml`.
+- `unikernel.ml` connects the Qubes agents, sets up the networking components,
+  and then waits for a shutdown request.
+
 ### Easy deployment for developers
 
 For development, use the [test-mirage][] scripts to deploy the unikernel (`qubes_firewall.xen`) from your development AppVM.
