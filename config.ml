@@ -33,6 +33,7 @@ let main =
       package "mirage-qubes";
       package "mirage-nat" ~min:"1.2.0";
       package "mirage-logs";
+      package "pf" ~pin:"git+https://github.com/yomimono/ocaml-pf.git#just-qubes";
     ]
     "Unikernel.Main" (mclock @-> job)
 
