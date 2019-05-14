@@ -25,6 +25,47 @@ let externals = [
 (* OCaml normally warns if you don't match all fields, but that's OK here. *)
 [@@@ocaml.warning "-9"]
 
+module Q = Pf_qubes.Parse_qubes
+
+let dummy_rules =
+  Pf_qubes.Parse_qubes.([{ action = Drop ;
+    proto = None ;
+    specialtarget = None ;
+    dst = `any ;
+    dstports = [] ;
+    icmp_type = None ;
+    number = 0 ;
+   }])
+
+(* Does the packet match our rules? *)
+let classify_client_packet (info : ([`Client of _], _) Packet.info) rules : Packet.action =
+  let matches_port dstports (port : int) =
+    List.exists (fun (Q.Range_inclusive (min, max)) -> (min <= port && port <= max)) dstports
+  in
+  let matches_proto rule info = match rule.Pf_qubes.Parse_qubes.proto with
+    | None -> true
+    | Some p -> match p, info.proto with
+      | `tcp, `TCP ports -> matches_port rule.Q.dstports ports.dport 
+      | `udp, `UDP ports -> matches_port rule.Q.dstports ports.dport 
+      | `icmp, `ICMP -> true (* TODO *)
+      | _, _ -> false 
+  in
+  let matches_dest rule info = match rule.Pf_qubes.Parse_qubes.dst with
+    | `any -> true
+    | `hosts subnet -> 
+      let (`IPv4 (header, _ )) = info.Packet.packet in
+      Ipaddr.Prefix.mem (V4 header.Ipv4_packet.dst) subnet
+  in
+  let action = List.fold_left (fun found rule -> match found with 
+      | Some action -> Some action 
+      | None -> if matches_proto rule info && matches_dest rule info then Some rule.action else None) None rules
+  in
+  match action with
+  | None -> `Drop "No matching rule"
+  | Some Accept -> `Accept
+  | Some Drop -> `Drop "Drop rule matched"
+
+
 (** This function decides what to do with a packet from a client VM.
 
     It takes as input an argument [info] (of type [Packet.info]) describing the
@@ -50,10 +91,15 @@ let from_client (info : ([`Client of _], _) Packet.info) : Packet.action =
                                         when not (is_tcp_start packet) -> `Accept
   | { dst = `External `GoogleDNS } -> `Drop "block Google DNS"
   *)
-  | { dst = (`External _ | `NetVM) } -> `NAT
+  | { dst = (`External _ | `NetVM) } -> 
+    begin
+    match classify_client_packet info dummy_rules with
+    | `Accept -> `NAT
+    | `Drop s -> `Drop s
+    end
   | { dst = `Client_gateway; proto = `UDP { dport = 53 } } -> `NAT_to (`NetVM, 53)
   | { dst = (`Client_gateway | `Firewall_uplink) } -> `Drop "packet addressed to firewall itself"
-  | { dst = `Client _ } -> `Drop "prevent communication between client VMs by default"
+  | { dst = `Client _ } -> classify_client_packet info dummy_rules
 
 (** Decide what to do with a packet received from the outside world.
     Note: If the packet matched an existing NAT rule then this isn't called. *)
