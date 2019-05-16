@@ -5,6 +5,8 @@
 
 open Packet   (* Allow us to use definitions in packet.ml *)
 
+let dns_port = 53
+
 (* List your AppVM IP addresses here if you want to match on them in the rules below.
    Any client not listed here will appear as [`Client `Unknown]. *)
 let clients = [
@@ -38,12 +40,12 @@ let dummy_rules =
    }])
 
 (* Does the packet match our rules? *)
-let classify_client_packet (info : ([`Client of _], _) Packet.info) rules : Packet.action =
+let classify_client_packet (packet : ([`Client of _], _) Packet.t) rules : Packet.action =
   let matches_port dstports (port : int) =
     List.exists (fun (Q.Range_inclusive (min, max)) -> (min <= port && port <= max)) dstports
   in
   let matches_proto rule packet = match rule.Pf_qubes.Parse_qubes.proto with
-    | Some rule_proto -> match rule_proto, packet.proto with
+    | Some rule_proto -> match rule_proto, packet.transport_header with
       | `tcp, `TCP header -> matches_port rule.Q.dstports header.dst_port
       | `udp, `UDP header -> matches_port rule.Q.dstports header.dst_port
       | `icmp, `ICMP header -> 
@@ -55,15 +57,14 @@ let classify_client_packet (info : ([`Client of _], _) Packet.info) rules : Pack
       end
       | _, _ -> false 
   in
-  let matches_dest rule info = match rule.Pf_qubes.Parse_qubes.dst with
+  let matches_dest rule packet = match rule.Pf_qubes.Parse_qubes.dst with
     | `any -> true
     | `hosts subnet -> 
-      let (`IPv4 (header, _ )) = info.Packet.packet in
-      Ipaddr.Prefix.mem (V4 header.Ipv4_packet.dst) subnet
+      Ipaddr.Prefix.mem (V4 packet.ipv4_header.Ipv4_packet.dst) subnet
   in
   let action = List.fold_left (fun found rule -> match found with 
       | Some action -> Some action 
-      | None -> if matches_proto rule info && matches_dest rule info then Some rule.action else None) None rules
+      | None -> if matches_proto rule packet && matches_dest rule packet then Some rule.action else None) None rules
   in
   match action with
   | None -> `Drop "No matching rule"
@@ -79,8 +80,8 @@ let classify_client_packet (info : ([`Client of _], _) Packet.info) rules : Pack
     See packet.ml for the definitions of [info] and [action].
 
     Note: If the packet matched an existing NAT rule then this isn't called. *)
-let from_client (info : ([`Client of _], _) Packet.info) : Packet.action =
-  match info with
+let from_client (packet : ([`Client of _], _) Packet.t) : Packet.action =
+  match packet with
   (* Examples (add your own rules here):
 
      1. Allows Dev to send SSH packets to Untrusted.
@@ -98,16 +99,19 @@ let from_client (info : ([`Client of _], _) Packet.info) : Packet.action =
   *)
   | { dst = (`External _ | `NetVM) } -> 
     begin
-    match classify_client_packet info dummy_rules with
+    match classify_client_packet packet dummy_rules with
     | `Accept -> `NAT
     | `Drop s -> `Drop s
     end
-  | { dst = `Client_gateway; proto = `UDP { dport = 53 } } -> `NAT_to (`NetVM, 53)
+  | { dst = `Client_gateway; transport_header = `UDP header; _ } ->
+    if header.dst_port = dns_port
+    then `NAT_to (`NetVM, dns_port)
+    else `Drop "packet addressed to client gateway"
   | { dst = (`Client_gateway | `Firewall_uplink) } -> `Drop "packet addressed to firewall itself"
-  | { dst = `Client _ } -> classify_client_packet info dummy_rules
+  | { dst = `Client _ } -> classify_client_packet packet dummy_rules
 
 (** Decide what to do with a packet received from the outside world.
     Note: If the packet matched an existing NAT rule then this isn't called. *)
-let from_netvm (info : ([`NetVM | `External of _], _) Packet.info) : Packet.action =
-  match info with
+let from_netvm (packet : ([`NetVM | `External of _], _) Packet.t) : Packet.action =
+  match packet with
   | _ -> `Drop "drop by default"
