@@ -51,8 +51,8 @@ let from_client (info : ([`Client of _], _) Packet.info) : Packet.action =
   | { dst = `External `GoogleDNS } -> `Drop "block Google DNS"
   *)
   | { dst = (`External _ | `NetVM) } -> `NAT
-  | { dst = `Client_gateway; proto = `UDP { dport = 53 } } -> `NAT_to (`NetVM, 53)
-  | { dst = (`Client_gateway | `Firewall_uplink) } -> `Drop "packet addressed to firewall itself"
+  | { dst = `Firewall; proto = `UDP { dport = 53 } } -> `NAT_to (`NetVM, 53)
+  | { dst = `Firewall } -> `Drop "packet addressed to firewall itself"
   | { dst = `Client _ } -> `Drop "prevent communication between client VMs by default"
 
 (** Decide what to do with a packet received from the outside world.

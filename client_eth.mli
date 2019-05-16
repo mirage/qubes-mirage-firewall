@@ -11,7 +11,7 @@ type t
 
 type host =
   [ `Client of client_link
-  | `Client_gateway
+  | `Firewall
   | `External of Ipaddr.t ]
 (* Note: Qubes does not allow us to distinguish between an external address and a
    disconnected client.

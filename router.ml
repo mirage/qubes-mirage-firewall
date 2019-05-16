@@ -24,11 +24,11 @@ let add_client t = Client_eth.add_client t.client_eth
 let remove_client t = Client_eth.remove_client t.client_eth
 
 let classify t ip =
-  if ip = Ipaddr.V4 t.uplink#my_ip then `Firewall_uplink
+  if ip = Ipaddr.V4 t.uplink#my_ip then `Firewall
   else if ip = Ipaddr.V4 t.uplink#other_ip then `NetVM
   else (Client_eth.classify t.client_eth ip :> Packet.host)
 
 let resolve t = function
-  | `Firewall_uplink -> Ipaddr.V4 t.uplink#my_ip
+  | `Firewall -> Ipaddr.V4 t.uplink#my_ip
   | `NetVM -> Ipaddr.V4 t.uplink#other_ip
   | #Client_eth.host as host -> Client_eth.resolve t.client_eth host

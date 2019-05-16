@@ -15,7 +15,7 @@ type t = {
 
 type host =
   [ `Client of client_link
-  | `Client_gateway
+  | `Firewall
   | `External of Ipaddr.t ]
 
 let create ~client_gw =
@@ -52,14 +52,14 @@ let classify t ip =
   match ip with
   | Ipaddr.V6 _ -> `External ip
   | Ipaddr.V4 ip4 ->
-    if ip4 = t.client_gw then `Client_gateway
+    if ip4 = t.client_gw then `Firewall
     else match lookup t ip4 with
       | Some client_link -> `Client client_link
       | None -> `External ip
 
 let resolve t : host -> Ipaddr.t = function
   | `Client client_link -> Ipaddr.V4 client_link#other_ip
-  | `Client_gateway -> Ipaddr.V4 t.client_gw
+  | `Firewall -> Ipaddr.V4 t.client_gw
   | `External addr -> addr
 
 module ARP = struct
