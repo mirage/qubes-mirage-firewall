@@ -67,7 +67,7 @@ let classify ~src ~dst packet =
     match transport with
     | `TCP ({Tcp.Tcp_packet.src_port; dst_port; _}, _) -> `TCP {sport = src_port; dport = dst_port}
     | `UDP ({Udp_packet.src_port; dst_port; _}, _)     -> `UDP {sport = src_port; dport = dst_port}
-    | `ICMP _                                          -> `ICMP
+    | `ICMP ({Icmpv4_packet.ty; _}, _)                   -> `ICMP ty 
   in
   Some {
     packet;
@@ -90,7 +90,7 @@ let pp_host fmt = function
 let pp_proto fmt = function
   | `UDP ports -> Format.fprintf fmt "UDP(%a)" pp_ports ports
   | `TCP ports -> Format.fprintf fmt "TCP(%a)" pp_ports ports
-  | `ICMP -> Format.pp_print_string fmt "ICMP"
+  | `ICMP ty -> Format.fprintf fmt "ICMP(%d)" (Icmpv4_wire.ty_to_int ty)
   | `Unknown -> Format.pp_print_string fmt "UnknownProtocol"
 
 let pp_packet t fmt {src = _; dst = _; proto; packet} =
