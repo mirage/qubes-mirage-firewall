@@ -59,7 +59,7 @@ let resolve_client client =
 let resolve_host = function
   | `Client c -> resolve_client c
   | `External ip -> `External (try List.assoc ip externals with Not_found -> `Unknown)
-  | (`Client_gateway | `Firewall_uplink | `NetVM) as x -> x
+  | (`Firewall | `NetVM) as x -> x
 
 let classify ~src ~dst packet =
   let `IPv4 (_ip, transport) = packet in
@@ -84,8 +84,7 @@ let pp_host fmt = function
   | `Unknown_client ip -> Format.fprintf fmt "unknown-client(%a)" Ipaddr.pp ip
   | `NetVM -> Format.pp_print_string fmt "net-vm"
   | `External ip -> Format.fprintf fmt "external(%a)" Ipaddr.pp ip
-  | `Firewall_uplink -> Format.pp_print_string fmt "firewall(uplink)"
-  | `Client_gateway -> Format.pp_print_string fmt "firewall(client-gw)"
+  | `Firewall -> Format.pp_print_string fmt "firewall"
 
 let pp_proto fmt = function
   | `UDP ports -> Format.fprintf fmt "UDP(%a)" pp_ports ports
@@ -146,7 +145,7 @@ let apply_rules t rules ~dst info =
   match rules info, dst with
   | `Accept, `Client client_link -> transmit_ipv4 packet client_link
   | `Accept, (`External _ | `NetVM) -> transmit_ipv4 packet t.Router.uplink
-  | `Accept, (`Firewall_uplink | `Client_gateway) ->
+  | `Accept, `Firewall ->
       Log.warn (fun f -> f "Bad rule: firewall can't accept packets %a" (pp_packet t) info);
       return ()
   | `NAT, _ -> add_nat_and_forward_ipv4 t packet
@@ -189,7 +188,7 @@ let ipv4_from_netvm t packet =
   | None -> return ()
   | Some info ->
   match src with
-  | `Client _ | `Firewall_uplink | `Client_gateway ->
+  | `Client _ | `Firewall ->
     Log.warn (fun f -> f "Frame from NetVM has internal source IP address! %a" (pp_packet t) info);
     return ()
   | `External _ | `NetVM as src ->

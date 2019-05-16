@@ -11,7 +11,7 @@ type ports = {
 }
 
 type host = 
-  [ `Client of client_link | `Client_gateway | `Firewall_uplink | `NetVM | `External of Ipaddr.t ]
+  [ `Client of client_link | `Firewall | `NetVM | `External of Ipaddr.t ]
 
 type ('src, 'dst) info = {
   packet : Nat_packet.t;
