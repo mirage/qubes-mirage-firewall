@@ -17,7 +17,7 @@ type ('src, 'dst) info = {
   packet : Nat_packet.t;
   src : 'src;
   dst : 'dst;
-  proto : [ `UDP of ports | `TCP of ports | `ICMP | `Unknown ];
+  proto : [ `UDP of ports | `TCP of ports | `ICMP of Icmpv4_wire.ty | `Unknown ];
 }
 
 (* The first message in a TCP connection has SYN set and ACK clear. *)
