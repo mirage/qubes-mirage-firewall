@@ -89,9 +89,9 @@ let nat_to t ~host ~port packet =
 
 (* Handle incoming packets *)
 
-let apply_rules t (rules : ('a, 'b) Packet.t -> Packet.action) ~dst (firewall_packet : ('a, 'b) Packet.t) : unit Lwt.t =
-  let packet = to_mirage_nat_packet firewall_packet in
-  match rules firewall_packet, dst with
+let apply_rules t (rules : ('a, 'b) Packet.t -> Packet.action) ~dst (annotated_packet : ('a, 'b) Packet.t) : unit Lwt.t =
+  let packet = to_mirage_nat_packet annotated_packet in
+  match rules annotated_packet, dst with
   | `Accept, `Client client_link -> transmit_ipv4 packet client_link
   | `Accept, (`External _ | `NetVM) -> transmit_ipv4 packet t.Router.uplink
   | `Accept, (`Firewall_uplink | `Client_gateway) ->
