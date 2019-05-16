@@ -36,14 +36,7 @@ let pp_host fmt = function
   | `External ip -> Format.fprintf fmt "external(%a)" Ipaddr.pp ip
   | `Firewall_uplink -> Format.pp_print_string fmt "firewall(uplink)"
   | `Client_gateway -> Format.pp_print_string fmt "firewall(client-gw)"
-(* 
-let pp_packet fmt t =
-  Format.fprintf fmt "[src=%a dst=%a ipv4_header=%a transport_header=%a]"
-    pp_host t.src
-    pp_host t.dst
-    Ipv4_packet.pp t.ipv4_header
-    pp_transport_header t.transport_header
-*)
+
 let to_mirage_nat_packet t : Nat_packet.t =
   match t.transport_header with
   | `TCP h  -> `IPv4 (t.ipv4_header, (`TCP (h, t.transport_payload)))
