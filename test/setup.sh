@@ -1,12 +1,52 @@
-#!/bin/sh
+#!/bin/bash
+function explain_commands {
+echo "1) Set up test qubes:"
 echo "Follow the instructions in http://github.com/talex5/qubes-test-mirage to set up the boot-mirage and test-mirage scripts. Make two new qubes in dom0, called mirage-fw-test and fetchmotron, following the instructions for template and qube settings."
+}
+
+function explain_service {
+echo "2) Set up rule update service:"
+echo "In dom0, make a new service:
+
+touch /etc/qubes-rpc/yomimono.updateFirewall
+
+sudo bash
+cd /etc/qubes-rpc
+cat << EOF >> yomimono.updateFirewall
+/usr/local/bin/update-firewall
+EOF
+
+Make a policy file for this service, YOUR_DEV_VM being the qube from which you build (e.g. ocamldev):
+
+sudo bash
+cd /etc/qubes-rpc/policy
+cat << EOF >> yomimono.updateFirewall
+YOUR_DEV_VM dom0 allow
+
+make the update-firewall script:
+
+sudo bash
+cd /usr/local/bin
+
+Copy the file update-rules.sh to /usr/local/bin.	
+In YOUR_DEV_VM, you can now change fetchmotron's firewall rules:
+	
+$ qrexec-client-vm dom0 yomimono.updateFirewall"
+}
 
 if ! [ -x "$(command -v boot-mirage)" ]; then
   echo 'Error: boot-mirage is not installed.' >&2
+  explain_commands >&2
   exit 1
 fi
 if ! [ -x "$(command -v test-mirage)" ]; then
   echo 'Error: test-mirage is not installed.' >&2
+  explain_commands >&2
+  exit 1
+fi
+if $(qrexec-client-vm dom0 yomimono.updateFirewall); then
+  echo "Error: can't update firewall rules." >&2
+  explain_service >&2
   exit 1
 fi
 
