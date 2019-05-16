@@ -61,9 +61,6 @@ let resolve_host = function
   | `External ip -> `External (try List.assoc ip externals with Not_found -> `Unknown)
   | (`Client_gateway | `Firewall_uplink | `NetVM) as x -> x
 
-let pp_ports fmt {sport; dport} =
-  Format.fprintf fmt "sport=%d dport=%d" sport dport
-
 (* NAT *)
 
 let translate t packet =
@@ -92,9 +89,9 @@ let nat_to t ~host ~port packet =
 
 (* Handle incoming packets *)
 
-let apply_rules t rules ~dst packet =
-  let packet = to_mirage_nat_packet packet in
-  match rules packet, dst with
+let apply_rules t (rules : ('a, 'b) Packet.t -> Packet.action) ~dst (firewall_packet : ('a, 'b) Packet.t) : unit Lwt.t =
+  let packet = to_mirage_nat_packet firewall_packet in
+  match rules firewall_packet, dst with
   | `Accept, `Client client_link -> transmit_ipv4 packet client_link
   | `Accept, (`External _ | `NetVM) -> transmit_ipv4 packet t.Router.uplink
   | `Accept, (`Firewall_uplink | `Client_gateway) ->
@@ -140,14 +137,16 @@ let ipv4_from_netvm t packet =
   let src = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.src) in
   let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
   match Packet.of_mirage_nat_packet ~src ~dst:(resolve_host dst) packet with
-  | None -> return ()
+  | None -> Lwt.return_unit
   | Some _ ->
   match src with
   | `Client _ | `Firewall_uplink | `Client_gateway ->
     Log.warn (fun f -> f "Frame from NetVM has internal source IP address! %a" Nat_packet.pp packet);
-    return ()
+    Lwt.return_unit
   | `External _ | `NetVM as src ->
   translate t packet >>= function
   | Some frame -> forward_ipv4 t frame
   | None ->
-    apply_rules t Rules.from_netvm ~dst { info with src }
+    match Packet.of_mirage_nat_packet ~src ~dst packet with
+    | None -> Lwt.return_unit
+    | Some packet -> apply_rules t Rules.from_netvm ~dst packet

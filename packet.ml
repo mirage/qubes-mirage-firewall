@@ -13,11 +13,13 @@ type ports = {
 type host = 
   [ `Client of client_link | `Client_gateway | `Firewall_uplink | `NetVM | `External of Ipaddr.t ]
 
+type transport_header = [`TCP of Tcp.Tcp_packet.t
+                        |`UDP of Udp_packet.t
+                        |`ICMP of Icmpv4_packet.t]
+
 type ('src, 'dst) t = {
   ipv4_header : Ipv4_packet.t;
-  transport_header : [`TCP of Tcp.Tcp_packet.t
-                     |`UDP of Udp_packet.t
-                     |`ICMP of Icmpv4_packet.t];
+  transport_header : transport_header;
   transport_payload : Cstruct.t; 
   src : 'src;
   dst : 'dst;
@@ -34,21 +36,21 @@ let pp_host fmt = function
   | `External ip -> Format.fprintf fmt "external(%a)" Ipaddr.pp ip
   | `Firewall_uplink -> Format.pp_print_string fmt "firewall(uplink)"
   | `Client_gateway -> Format.pp_print_string fmt "firewall(client-gw)"
-
-let pp_packet t fmt packet =
+(* 
+let pp_packet fmt t =
   Format.fprintf fmt "[src=%a dst=%a ipv4_header=%a transport_header=%a]"
     pp_host t.src
     pp_host t.dst
     Ipv4_packet.pp t.ipv4_header
     pp_transport_header t.transport_header
-
+*)
 let to_mirage_nat_packet t : Nat_packet.t =
   match t.transport_header with
   | `TCP h  -> `IPv4 (t.ipv4_header, (`TCP (h, t.transport_payload)))
   | `UDP h  -> `IPv4 (t.ipv4_header, (`UDP (h, t.transport_payload)))
   | `ICMP h -> `IPv4 (t.ipv4_header, (`ICMP (h, t.transport_payload)))
 
-let of_mirage_nat_packet ~src ~dst packet =
+let of_mirage_nat_packet ~src ~dst packet : ('a, 'b) t option =
   let `IPv4 (ipv4_header, ipv4_payload) = packet in
   let transport_header, transport_payload = match ipv4_payload with
     | `TCP (h, p) -> `TCP h, p
