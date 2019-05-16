@@ -1,7 +1,12 @@
 type port = int
 
 type host = 
-  [ `Client of Fw_utils.client_link | `Client_gateway | `Firewall_uplink | `NetVM | `External of Ipaddr.t ]
+  [ `Client of Fw_utils.client_link (** an IP address on the private network *)
+  | `Client_gateway (** the firewall's IP on the private network *)
+  | `Firewall_uplink (** the firewall's IP on the public network *)
+  | `NetVM (** the IP of the firewall's default route *)
+  | `External of Ipaddr.t (** an IP on the public network *)
+  ]
 
 type transport_header = [`TCP of Tcp.Tcp_packet.t
                         |`UDP of Udp_packet.t
