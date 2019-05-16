@@ -45,6 +45,7 @@ let classify_client_packet (packet : ([`Client of _], _) Packet.t) rules : Packe
     List.exists (fun (Q.Range_inclusive (min, max)) -> (min <= port && port <= max)) dstports
   in
   let matches_proto rule packet = match rule.Pf_qubes.Parse_qubes.proto with
+    | None -> true
     | Some rule_proto -> match rule_proto, packet.transport_header with
       | `tcp, `TCP header -> matches_port rule.Q.dstports header.dst_port
       | `udp, `UDP header -> matches_port rule.Q.dstports header.dst_port
