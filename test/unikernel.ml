@@ -13,7 +13,7 @@ let uri = Uri.of_string "http://10.137.0.5:8082"
 module Client (T: TIME) (C: CONSOLE) (RES: Resolver_lwt.S) (CON: Conduit_mirage.S) = struct
 
   let http_fetch c resolver ctx =
-    C.log c (sprintf "Fetching %s with Cohttp:" (Uri.to_string uri)) >>= fun () ->
+    C.log c (yellow "Fetching %s with Cohttp:" (Uri.to_string uri)) >>= fun () ->
     let ctx = Cohttp_mirage.Client.ctx resolver ctx in
     Cohttp_mirage.Client.get ~ctx uri >>= fun (response, body) ->
     Cohttp_lwt.Body.to_string body >>= fun body ->

@@ -44,7 +44,8 @@ if ! [ -x "$(command -v test-mirage)" ]; then
   explain_commands >&2
   exit 1
 fi
-if $(qrexec-client-vm dom0 yomimono.updateFirewall); then
+qrexec-client-vm dom0 yomimono.updateFirewall
+if [ $? -ne 0 ]; then
   echo "Error: can't update firewall rules." >&2
   explain_service >&2
   exit 1
@@ -52,15 +53,25 @@ fi
 
 echo "We're gonna set up a unikernel for the mirage-fw-test qube"
 cd ..
-mirage configure -t xen
-make depend
+mirage configure -t xen && \
+make depend && \
 make
-test-mirage qubes_firewall.xen mirage-fw-test &
-cd test
+if [ $? -ne 0 ]; then
+  echo "Could not build unikernel for mirage-fw-test qube" >&2
+  exit 1
+fi
+cd test 
 
 echo "We're gonna set up a unikernel for fetchmotron qube"
-mirage configure -t qubes
-make depend
+mirage configure -t qubes && \
+make depend && \
 make
+if [ $? -ne 0 ]; then
+  echo "Could not build unikernel for fetchmotron qube" >&2
+  exit 1
+fi
 
+cd ..
+test-mirage qubes_firewall.xen mirage-fw-test &
+cd test
 test-mirage http_fetch.xen fetchmotron 
