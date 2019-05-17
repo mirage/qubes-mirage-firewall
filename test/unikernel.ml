@@ -14,7 +14,7 @@ open Printf
 (* Point-to-point links out of a netvm always have this IP TODO clarify with Marek *) 
 let uri = Uri.of_string "http://10.137.0.5:8082"
 
-module Client (T: TIME) (C: CONSOLE) (RES: Resolver_lwt.S) (CON: Conduit_mirage.S) = struct
+module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver_lwt.S) (CON: Conduit_mirage.S) = struct
 
   exception Check_error of string
   let check_err fmt = Format.ksprintf (fun err -> raise (Check_error err)) fmt
@@ -42,7 +42,12 @@ module Client (T: TIME) (C: CONSOLE) (RES: Resolver_lwt.S) (CON: Conduit_mirage.
     C.log c (sprintf "Received body length: %d" (String.length body)) >>= fun () ->
     C.log c "Cohttp fetch done\n------------\n"
 
-  let start _time c res (ctx:CON.t) =
+  let udp_fetch stack =
+    STACK.UDPV4.write (Ipaddr.V4.of_string_exn "8.8.8.8") 53 STACK.udp (Cstruct.empty) >>= function
+    | Ok () -> .. listener: test with accept rule, if we get reply we're good
+    | Error _ ->
+      
+  let start _time c stack res (ctx:CON.t) =
     C.log c (sprintf "Resolving using DNS server 8.8.8.8 (hardcoded)") >>= fun () ->
     (* wait a sec so we catch the output if it's fast *)
     OS.Time.sleep_ns (Duration.of_sec 1) >>= fun () ->
