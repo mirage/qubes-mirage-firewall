@@ -29,7 +29,7 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
     in
     (* Handle packets from both networks *)
     Lwt.choose [
-      Client_net.listen router;
+      Client_net.listen qubesDB router;
       Uplink.listen uplink router
     ]
 

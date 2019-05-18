@@ -40,7 +40,7 @@ echo "For the UDP reply service:"
 echo "Install nmap-ncat:"
 echo "sudo dnf install nmap-ncat"
 echo "Allow incoming traffic on the appropriate port:"
-echo "sudo iptables -I INPUT -i vif+ -p udp --dport $udp_echo_port"
+echo "sudo iptables -I INPUT -i vif+ -p udp --dport $udp_echo_port -j ACCEPT"
 echo "Then run the service:"
 echo "ncat -e /bin/cat -k -u -l 1235"
 }

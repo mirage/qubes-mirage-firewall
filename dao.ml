@@ -34,7 +34,24 @@ let directory ~handle dir =
   | [""] -> []      (* XenStore client bug *)
   | items -> items
 
-let vifs ~handle domid =
+let read_rules qubesDB client_ip =
+  let root = "/qubes-firewall/" ^ (Ipaddr.V4.to_string client_ip) ^ "/" in
+  let rec get_rule n l =
+    let pattern = root ^ Printf.sprintf "%04d" n in
+    Log.info (fun f -> f "reading %s" pattern);
+    match Qubes.DB.read qubesDB pattern with
+    | None -> 
+      Log.info (fun f -> f "rule %d was empty " n);
+      List.rev l
+    | Some rule ->
+      Log.info (fun f -> f "rule %d: %s" n rule);
+      match Pf_qubes.Parse_qubes.parse_qubes ~number:n rule with
+      | Error e -> (* TODOOOOOOO!! Traffic should be dropped!!*) l
+      | Ok rule -> get_rule (n+1) (rule :: l)
+  in
+  get_rule 0 []
+
+let vifs qubesDB ~handle domid =
   match String.to_int domid with
   | None -> Log.err (fun f -> f "Invalid domid %S" domid); Lwt.return []
   | Some domid ->
@@ -49,7 +66,7 @@ let vifs ~handle domid =
           (fun () -> OS.Xs.read handle (Printf.sprintf "%s/%d/ip" path device_id))
           (fun client_ip ->
              let client_ip = Ipaddr.V4.of_string_exn client_ip in
-             let rules = [] in
+             let rules = read_rules qubesDB client_ip in
              Lwt.return (Some (vif, (client_ip, rules)))
           )
           (function
@@ -61,7 +78,7 @@ let vifs ~handle domid =
           )
       )
 
-let watch_clients fn =
+let watch_clients qubesDB fn =
   OS.Xs.make () >>= fun xs ->
   let backend_vifs = "backend/vif" in
   Log.info (fun f -> f "Watching %s" backend_vifs);
@@ -72,7 +89,7 @@ let watch_clients fn =
         | Xs_protocol.Enoent _ -> return []
         | ex -> fail ex)
     end >>= fun items ->
-    Lwt_list.map_p (vifs ~handle) items >>= fun items ->
+    Lwt_list.map_p (vifs qubesDB ~handle) items >>= fun items ->
     fn (List.concat items |> VifMap.of_list);
     (* Wait for further updates *)
     fail Xs_protocol.Eagain
