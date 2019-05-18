@@ -49,7 +49,8 @@ let vifs ~handle domid =
           (fun () -> OS.Xs.read handle (Printf.sprintf "%s/%d/ip" path device_id))
           (fun client_ip ->
              let client_ip = Ipaddr.V4.of_string_exn client_ip in
-             Lwt.return (Some (vif, client_ip))
+             let rules = [] in
+             Lwt.return (Some (vif, (client_ip, rules)))
           )
           (function
             | Xs_protocol.Enoent _ -> Lwt.return None
@@ -112,5 +113,8 @@ let read_network_config qubesDB =
       DB.after qubesDB bindings >>= aux
   in
   aux (DB.bindings qubesDB)
+
+let read_fw_rules qubesDB domid =
+  []
 
 let set_iptables_error db = Qubes.DB.write db "/qubes-iptables-error"

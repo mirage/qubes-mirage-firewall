@@ -26,10 +26,11 @@ let writev eth dst proto fillfn =
        Lwt.return ()
     )
 
-class client_iface eth ~domid ~gateway_ip ~client_ip client_mac : client_link =
+class client_iface eth ~domid ~gateway_ip ~client_ip client_mac rules : client_link =
   let log_header = Fmt.strf "dom%d:%a" domid Ipaddr.V4.pp client_ip in
   object
     val queue = FrameQ.create (Ipaddr.V4.to_string client_ip)
+    val rules = rules
     method my_mac = ClientEth.mac eth
     method other_mac = client_mac
     method my_ip = gateway_ip
@@ -72,14 +73,14 @@ let input_ipv4 ~iface ~router packet =
     )
 
 (** Connect to a new client's interface and listen for incoming frames. *)
-let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks =
+let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks rules =
   Netback.make ~domid ~device_id >>= fun backend ->
   Log.info (fun f -> f "Client %d (IP: %s) ready" domid (Ipaddr.V4.to_string client_ip));
   ClientEth.connect backend >>= fun eth ->
   let client_mac = Netback.frontend_mac backend in
   let client_eth = router.Router.client_eth in
   let gateway_ip = Client_eth.client_gw client_eth in
-  let iface = new client_iface eth ~domid ~gateway_ip ~client_ip client_mac in
+  let iface = new client_iface eth ~domid ~gateway_ip ~client_ip client_mac rules in
   Router.add_client router iface >>= fun () ->
   Cleanup.on_cleanup cleanup_tasks (fun () -> Router.remove_client router iface);
   let fixed_arp = Client_eth.ARP.create ~net:client_eth iface in
@@ -100,12 +101,12 @@ let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks
   >|= or_raise "Listen on client interface" Netback.pp_error
 
 (** A new client VM has been found in XenStore. Find its interface and connect to it. *)
-let add_client ~router vif client_ip =
+let add_client ~router vif client_ip rules =
   let cleanup_tasks = Cleanup.create () in
   Log.info (fun f -> f "add client vif %a with IP %a" Dao.ClientVif.pp vif Ipaddr.V4.pp client_ip);
   Lwt.async (fun () ->
       Lwt.catch (fun () ->
-          add_vif vif ~client_ip ~router ~cleanup_tasks
+          add_vif vif ~client_ip ~router ~cleanup_tasks rules
         )
         (fun ex ->
            Log.warn (fun f -> f "Error with client %a: %s"
@@ -127,9 +128,9 @@ let listen router =
       )
     );
     (* Check for added clients *)
-    new_set |> Dao.VifMap.iter (fun key ip_addr ->
+    new_set |> Dao.VifMap.iter (fun key (ip_addr, rules) ->
       if not (Dao.VifMap.mem key !clients) then (
-        let cleanup = add_client ~router key ip_addr in
+        let cleanup = add_client ~router key ip_addr rules in
         clients := !clients |> Dao.VifMap.add key cleanup
       )
     )

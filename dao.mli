@@ -15,7 +15,7 @@ module VifMap : sig
   val find : key -> 'a t -> 'a option
 end
 
-val watch_clients : (Ipaddr.V4.t VifMap.t -> unit) -> 'a Lwt.t
+val watch_clients : ((Ipaddr.V4.t * Pf_qubes.Parse_qubes.rule list) VifMap.t -> unit) -> 'a Lwt.t
 (** [watch_clients fn] calls [fn clients] with the list of backend clients
     in XenStore, and again each time XenStore updates. *)
 
@@ -29,5 +29,7 @@ type network_config = {
 val read_network_config : Qubes.DB.t -> network_config Lwt.t
 (** [read_network_config db] fetches the configuration from QubesDB.
     If it isn't there yet, it waits until it is. *)
+
+val read_fw_rules: Qubes.DB.t -> int -> Pf_qubes.Parse_qubes.rule list
 
 val set_iptables_error : Qubes.DB.t -> string -> unit Lwt.t
