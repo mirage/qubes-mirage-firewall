@@ -29,6 +29,17 @@ let externals = [
 
 module Q = Pf_qubes.Parse_qubes
 
+(* we want to replace this list with a structure including rules from QubesDB.
+   we need:
+   1) code for reading the rules (we have some for noticing new clients: dao.ml)
+   2) code for parsing the rules (use ocaml-pf, reduced to the Qubes ruleset)
+   3) code for putting the rules in a structure readable here (???)
+   - also the rules are per-client, so the current structure doesn't really accommodate them
+   - there is a structure tracking each client in Client_eth, which is using a map from IP addresses to
+     Fw_utils.client_link.  let's try putting the rules in this client_link structure?
+   - initially we can set them up with a list, and then look for faster/better/clearer structures later
+   4) code for applying the rules to incoming traffic (below, already in this file)
+   *)
 let dummy_rules =
   Pf_qubes.Parse_qubes.([{ action = Drop ;
     proto = None ;
