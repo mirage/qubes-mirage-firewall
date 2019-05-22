@@ -34,6 +34,17 @@ In YOUR_DEV_VM, you can now change fetchmotron's firewall rules:
 $ qrexec-client-vm dom0 yomimono.updateFirewall"
 }
 
+function explain_upstream {
+echo "Also, start a test service on the upstream NetVM (which is available at 10.137.0.5 from the test unikernel)."
+echo "For the UDP reply service:"
+echo "Install nmap-ncat:"
+echo "sudo dnf install nmap-ncat"
+echo "Allow incoming traffic on the appropriate port:"
+echo "sudo iptables -I INPUT -i vif+ -p udp --dport $udp_echo_port"
+echo "Then run the service:"
+echo "ncat -e /bin/cat -k -u -l 1235"
+}
+
 if ! [ -x "$(command -v boot-mirage)" ]; then
   echo 'Error: boot-mirage is not installed.' >&2
   explain_commands >&2
@@ -48,6 +59,18 @@ qrexec-client-vm dom0 yomimono.updateFirewall
 if [ $? -ne 0 ]; then
   echo "Error: can't update firewall rules." >&2
   explain_service >&2
+  exit 1
+fi
+udp_echo_host=10.137.0.5
+udp_echo_port=1235
+reply=$(echo hi | nc -u $udp_echo_host -q 1 $udp_echo_port)
+if [ "$reply" != "hi" ]; then
+  # TODO: if the development environment and the test unikernel have different
+  # NetVMs serving their respective firewalls, this can be a false negative.
+  # provide some nice way for the user to handle this -
+  # the non-nice way is commenting out this test ;)
+  echo "UDP echo service not reachable at $udp_echo_host:$udp_echo_port" >&2
+  explain_upstream >&2
   exit 1
 fi
 

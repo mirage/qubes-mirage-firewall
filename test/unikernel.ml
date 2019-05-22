@@ -42,15 +42,38 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
     C.log c (sprintf "Received body length: %d" (String.length body)) >>= fun () ->
     C.log c "Cohttp fetch done\n------------\n"
 
-  let udp_fetch stack =
-    STACK.UDPV4.write (Ipaddr.V4.of_string_exn "8.8.8.8") 53 STACK.udp (Cstruct.empty) >>= function
-    | Ok () -> .. listener: test with accept rule, if we get reply we're good
-    | Error _ ->
+  let udp_fetch (stack : STACK.t) =
+    let src_port = 9090 in
+    let echo_port = 1235 in
+    let echo_server = Ipaddr.V4.of_string_exn "10.137.0.5" in
+    let content = Cstruct.of_string "important data" in
+    STACK.listen_udpv4 stack ~port:src_port (fun ~src ~dst:_ ~src_port buf ->
+        if ((0 = Ipaddr.V4.compare echo_server src) && src_port = echo_port) then
+          (* TODO: how do we stop the listener from here? *)
+          match Cstruct.equal buf content with
+          | true -> (* yay *) Lwt.return_unit
+          | false -> (* oh no *)
+            Logs.err (fun f -> f "UDP test: packet corrupted; expected %a but got %a" Cstruct.hexdump_pp content Cstruct.hexdump_pp buf);
+            Lwt.return_unit
+        else
+          (* disregard this packet *)
+          Lwt.return_unit
+      );
+    Lwt.async (fun () ->
+        Lwt.pick [
+          T.sleep_ns 1_000_000_000L;
+          STACK.listen stack;
+        ]
+      );
+    STACK.UDPV4.write echo_server echo_port (STACK.udpv4 stack) content >>= function
+    | Ok () -> (* .. listener: test with accept rule, if we get reply we're good *) Lwt.return_unit
+    | Error _ -> Lwt.return_unit
       
   let start _time c stack res (ctx:CON.t) =
+    udp_fetch stack >>= fun () ->
     C.log c (sprintf "Resolving using DNS server 8.8.8.8 (hardcoded)") >>= fun () ->
     (* wait a sec so we catch the output if it's fast *)
-    OS.Time.sleep_ns (Duration.of_sec 1) >>= fun () ->
+    T.sleep_ns (Duration.of_sec 1) >>= fun () ->
     check_raises "fetch webpage, shold be denied" (Failure "TCP connection failed: connection attempt timed out") @@ http_fetch c res ctx 
 
 end
