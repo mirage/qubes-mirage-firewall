@@ -51,7 +51,7 @@ let dummy_rules =
    }])
 
 (* Does the packet match our rules? *)
-let classify_client_packet (packet : ([`Client of _], _) Packet.t) rules : Packet.action =
+let classify_client_packet (packet : ([`Client of _], _) Packet.t) (client_link : Fw_utils.client_link) : Packet.action =
   let matches_port dstports (port : int) =
     List.exists (fun (Q.Range_inclusive (min, max)) -> (min <= port && port <= max)) dstports
   in
@@ -76,7 +76,7 @@ let classify_client_packet (packet : ([`Client of _], _) Packet.t) rules : Packe
   in
   let action = List.fold_left (fun found rule -> match found with 
       | Some action -> Some action 
-      | None -> if matches_proto rule packet && matches_dest rule packet then Some rule.action else None) None rules
+      | None -> if matches_proto rule packet && matches_dest rule packet then Some rule.action else None) None client_link#get_rules
   in
   match action with
   | None -> `Drop "No matching rule"
@@ -92,7 +92,7 @@ let classify_client_packet (packet : ([`Client of _], _) Packet.t) rules : Packe
     See packet.ml for the definitions of [info] and [action].
 
     Note: If the packet matched an existing NAT rule then this isn't called. *)
-let from_client (packet : ([`Client of _], _) Packet.t) : Packet.action =
+let from_client (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action =
   match packet with
   (* Examples (add your own rules here):
 
@@ -109,18 +109,13 @@ let from_client (packet : ([`Client of _], _) Packet.t) : Packet.action =
                                         when not (is_tcp_start packet) -> `Accept
   | { dst = `External `GoogleDNS } -> `Drop "block Google DNS"
   *)
-  | { dst = (`External _ | `NetVM) } -> 
-    begin
-    match classify_client_packet packet dummy_rules with
-    | `Accept -> `NAT
-    | `Drop s -> `Drop s
-    end
+  | { dst = (`External _ | `NetVM) } -> `NAT
   | { dst = `Client_gateway; transport_header = `UDP header; _ } ->
     if header.dst_port = dns_port
     then `NAT_to (`NetVM, dns_port)
     else `Drop "packet addressed to client gateway"
   | { dst = (`Client_gateway | `Firewall_uplink) } -> `Drop "packet addressed to firewall itself"
-  | { dst = `Client _ } -> classify_client_packet packet dummy_rules
+  | { dst = `Client client_link } -> classify_client_packet packet client_link
 
 (** Decide what to do with a packet received from the outside world.
     Note: If the packet matched an existing NAT rule then this isn't called. *)

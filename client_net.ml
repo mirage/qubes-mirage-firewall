@@ -116,6 +116,13 @@ let add_client ~router vif client_ip rules =
     );
   cleanup_tasks
 
+(*
+let rules_for_client vif =
+  match Dao.VifMap.find vif !clients with
+  | None -> []
+  | Some (ip_addr, rules) -> rules
+*)
+
 (** Watch XenStore for notifications of new clients. *)
 let listen qubesDB router =
   Dao.watch_clients qubesDB (fun new_set ->

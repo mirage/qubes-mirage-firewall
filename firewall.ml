@@ -122,8 +122,9 @@ let ipv4_from_client t ~src packet =
   (* No existing NAT entry. Check the firewall rules. *)
   let `IPv4 (ip, _transport) = packet in
   let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
+  let src = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.src) in
   match of_mirage_nat_packet
-          ~src:(resolve_client src)
+          ~src:(src)
           ~dst:(resolve_host dst)
           packet with
   | None -> return ()
