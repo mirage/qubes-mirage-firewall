@@ -76,7 +76,7 @@ fi
 
 echo "We're gonna set up a unikernel for the mirage-fw-test qube"
 cd ..
-mirage configure -t xen && \
+mirage configure -t xen -l "*:debug" && \
 make depend && \
 make
 if [ $? -ne 0 ]; then

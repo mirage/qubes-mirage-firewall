@@ -36,20 +36,32 @@ let directory ~handle dir =
 
 let read_rules qubesDB client_ip =
   let root = "/qubes-firewall/" ^ (Ipaddr.V4.to_string client_ip) ^ "/" in
-  let rec get_rule n l =
+  let rec get_rule n l : (Pf_qubes.Parse_qubes.rule list, string) result =
     let pattern = root ^ Printf.sprintf "%04d" n in
-    Log.info (fun f -> f "reading %s" pattern);
+    Log.debug (fun f -> f "reading %s" pattern);
     match Qubes.DB.read qubesDB pattern with
     | None -> 
-      Log.info (fun f -> f "rule %d was empty " n);
-      List.rev l
+      Log.debug (fun f -> f "rule %d does not exist; won't look for more" n);
+      Ok (List.rev l)
     | Some rule ->
-      Log.info (fun f -> f "rule %d: %s" n rule);
+      Log.debug (fun f -> f "rule %d: %s" n rule);
       match Pf_qubes.Parse_qubes.parse_qubes ~number:n rule with
-      | Error e -> (* TODOOOOOOO!! Traffic should be dropped!!*) l
-      | Ok rule -> get_rule (n+1) (rule :: l)
+      | Error e -> Log.warn (fun f -> f "Error parsing rule %d: %s" n e); Error e
+      | Ok rule ->
+        Log.debug (fun f -> f "parsed rule: %a" Pf_qubes.Parse_qubes.pp_rule rule);
+        get_rule (n+1) (rule :: l)
   in
-  get_rule 0 []
+  match get_rule 0 [] with
+  | Ok l -> l
+  | Error e ->
+    Log.warn (fun f -> f "Defaulting to deny-all because of rule parse failure (%s)" e);
+    [ Pf_qubes.Parse_qubes.({action = Drop;
+                             proto = None;
+                             specialtarget = None;
+                             dst = `any;
+                             dstports = [];
+                             icmp_type = None;
+                             number = 0;})]
 
 let vifs qubesDB ~handle domid =
   match String.to_int domid with
@@ -130,8 +142,5 @@ let read_network_config qubesDB =
       DB.after qubesDB bindings >>= aux
   in
   aux (DB.bindings qubesDB)
-
-let read_fw_rules qubesDB domid =
-  []
 
 let set_iptables_error db = Qubes.DB.write db "/qubes-iptables-error"

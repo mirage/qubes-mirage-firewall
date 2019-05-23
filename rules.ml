@@ -1,33 +1,18 @@
 (* Copyright (C) 2015, Thomas Leonard <thomas.leonard@unikernel.com>
    See the README file for details. *)
 
-(** Put your firewall rules in this file. *)
+(** Enforce firewall rules from QubesDB. *)
 
-open Packet   (* Allow us to use definitions in packet.ml *)
+open Packet
+module Q = Pf_qubes.Parse_qubes
+
+let src = Logs.Src.create "rules" ~doc:"Firewall rules"
+module Log = (val Logs.src_log src : Logs.LOG)
 
 let dns_port = 53
 
-(* List your AppVM IP addresses here if you want to match on them in the rules below.
-   Any client not listed here will appear as [`Client `Unknown]. *)
-let clients = [
-  (*
-  "10.137.0.12", `Dev;
-  "10.137.0.14", `Untrusted;
-  *)
-]
-
-(* List your external (non-AppVM) IP addresses here if you want to match on them in the rules below.
-   Any external machine not listed here will appear as [`External `Unknown]. *)
-let externals = [
-  (*
-  "8.8.8.8", `GoogleDNS;
-  *)
-]
-
 (* OCaml normally warns if you don't match all fields, but that's OK here. *)
 [@@@ocaml.warning "-9"]
-
-module Q = Pf_qubes.Parse_qubes
 
 (* we want to replace this list with a structure including rules from QubesDB.
    we need:
@@ -40,19 +25,11 @@ module Q = Pf_qubes.Parse_qubes
    - initially we can set them up with a list, and then look for faster/better/clearer structures later
    4) code for applying the rules to incoming traffic (below, already in this file)
    *)
-let dummy_rules =
-  Pf_qubes.Parse_qubes.([{ action = Drop ;
-    proto = None ;
-    specialtarget = None ;
-    dst = `any ;
-    dstports = [] ;
-    icmp_type = None ;
-    number = 0 ;
-   }])
 
 (* Does the packet match our rules? *)
-let classify_client_packet (packet : ([`Client of _], _) Packet.t) (client_link : Fw_utils.client_link) : Packet.action =
+let classify_client_packet (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  : Packet.action =
   let matches_port dstports (port : int) =
+    List.length dstports = 0 ||
     List.exists (fun (Q.Range_inclusive (min, max)) -> (min <= port && port <= max)) dstports
   in
   let matches_proto rule packet = match rule.Pf_qubes.Parse_qubes.proto with
@@ -74,15 +51,25 @@ let classify_client_packet (packet : ([`Client of _], _) Packet.t) (client_link 
     | `hosts subnet -> 
       Ipaddr.Prefix.mem (V4 packet.ipv4_header.Ipv4_packet.dst) subnet
   in
-  let action = List.fold_left (fun found rule -> match found with 
-      | Some action -> Some action 
-      | None -> if matches_proto rule packet && matches_dest rule packet then Some rule.action else None) None client_link#get_rules
-  in
-  match action with
-  | None -> `Drop "No matching rule"
-  | Some Accept -> `Accept
-  | Some Drop -> `Drop "Drop rule matched"
-
+  let (`Client client_link) = packet.src in
+  Log.debug (fun f -> f "checking %d rules for a match" (List.length client_link#get_rules));
+  List.find_opt (fun rule ->
+      if not (matches_proto rule packet) then begin
+        Log.debug (fun f -> f "rule %d is not a match - proto" rule.Q.number);
+        false
+      end else if not (matches_dest rule packet) then begin
+        Log.debug (fun f -> f "rule %d is not a match - dest" rule.Q.number);
+        false
+      end else begin
+        Log.debug (fun f -> f "rule %d is a match" rule.Q.number);
+        true
+      end) client_link#get_rules |> function
+  | None -> `Drop "No matching rule; assuming default drop"
+  | Some {Q.action = Accept; number; _} ->
+    Log.debug (fun f -> f "allowing packet matching rule %d" number);
+    `Accept
+  | Some {Q.action = Drop; number; _} ->
+    `Drop (Printf.sprintf "rule %d explicitly drops this packet" number)
 
 (** This function decides what to do with a packet from a client VM.
 
@@ -94,28 +81,19 @@ let classify_client_packet (packet : ([`Client of _], _) Packet.t) (client_link 
     Note: If the packet matched an existing NAT rule then this isn't called. *)
 let from_client (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action =
   match packet with
-  (* Examples (add your own rules here):
-
-     1. Allows Dev to send SSH packets to Untrusted.
-        Note: responses are not covered by this!
-     2. Allows Untrusted to reply to Dev.
-     3. Blocks an external site.
-
-     In all cases, make sure you've added the VM name to [clients] or [externals] above, or it won't
-     match anything! *)
-  (*
-  | { src = `Client `Dev; dst = `Client `Untrusted; proto = `TCP { dport = 22 } } -> `Accept
-  | { src = `Client `Untrusted; dst = `Client `Dev; proto = `TCP _; packet }
-                                        when not (is_tcp_start packet) -> `Accept
-  | { dst = `External `GoogleDNS } -> `Drop "block Google DNS"
-  *)
-  | { dst = (`External _ | `NetVM) } -> `NAT
+  | { dst = (`External _ | `NetVM) } -> begin
+    (* see whether this traffic is allowed *)
+    match classify_client_packet packet with
+    | `Accept -> `NAT
+    | `Drop s -> `Drop s
+  end
   | { dst = `Client_gateway; transport_header = `UDP header; _ } ->
+    (* TODO: this is where we should implement specialtarget dns rules? *)
     if header.dst_port = dns_port
     then `NAT_to (`NetVM, dns_port)
     else `Drop "packet addressed to client gateway"
   | { dst = (`Client_gateway | `Firewall_uplink) } -> `Drop "packet addressed to firewall itself"
-  | { dst = `Client client_link } -> classify_client_packet packet client_link
+  | { dst = `Client _ } -> classify_client_packet packet
 
 (** Decide what to do with a packet received from the outside world.
     Note: If the packet matched an existing NAT rule then this isn't called. *)

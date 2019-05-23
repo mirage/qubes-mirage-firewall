@@ -50,17 +50,6 @@ let forward_ipv4 t packet =
 
 let parse_ips ips = List.map (fun (ip_str, id) -> (Ipaddr.of_string_exn ip_str, id)) ips
 
-let clients = parse_ips Rules.clients
-let externals = parse_ips Rules.externals
-
-let resolve_client client =
-  `Client (try List.assoc (Ipaddr.V4 client#other_ip) clients with Not_found -> `Unknown)
-
-let resolve_host = function
-  | `Client c -> resolve_client c
-  | `External ip -> `External (try List.assoc ip externals with Not_found -> `Unknown)
-  | (`Client_gateway | `Firewall_uplink | `NetVM) as x -> x
-
 (* NAT *)
 
 let translate t packet =
@@ -97,7 +86,9 @@ let apply_rules t (rules : ('a, 'b) Packet.t -> Packet.action) ~dst (annotated_p
   | `Accept, (`Firewall_uplink | `Client_gateway) ->
       Log.warn (fun f -> f "Bad rule: firewall can't accept packets %a" Nat_packet.pp packet);
       return ()
-  | `NAT, _ -> add_nat_and_forward_ipv4 t packet
+  | `NAT, _ ->
+    Log.debug (fun f -> f "adding NAT rule for %a" Nat_packet.pp packet);
+    add_nat_and_forward_ipv4 t packet
   | `NAT_to (host, port), _ -> nat_to t packet ~host ~port
   | `Drop reason, _ ->
       Log.info (fun f -> f "Dropped packet (%s) %a" reason Nat_packet.pp packet);
@@ -122,11 +113,7 @@ let ipv4_from_client t ~src packet =
   (* No existing NAT entry. Check the firewall rules. *)
   let `IPv4 (ip, _transport) = packet in
   let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
-  let src = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.src) in
-  match of_mirage_nat_packet
-          ~src:(src)
-          ~dst:(resolve_host dst)
-          packet with
+  match of_mirage_nat_packet ~src:(`Client src) ~dst packet with
   | None -> return ()
   | Some firewall_packet -> apply_rules t Rules.from_client ~dst firewall_packet
 
@@ -137,7 +124,7 @@ let ipv4_from_netvm t packet =
   let `IPv4 (ip, _transport) = packet in
   let src = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.src) in
   let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
-  match Packet.of_mirage_nat_packet ~src ~dst:(resolve_host dst) packet with
+  match Packet.of_mirage_nat_packet ~src ~dst packet with
   | None -> Lwt.return_unit
   | Some _ ->
   match src with

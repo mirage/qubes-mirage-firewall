@@ -31,6 +31,7 @@ class client_iface eth ~domid ~gateway_ip ~client_ip client_mac rules : client_l
   object
     val queue = FrameQ.create (Ipaddr.V4.to_string client_ip)
     val rules = rules
+    method get_rules = rules
     method my_mac = ClientEth.mac eth
     method other_mac = client_mac
     method my_ip = gateway_ip
@@ -103,7 +104,8 @@ let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks
 (** A new client VM has been found in XenStore. Find its interface and connect to it. *)
 let add_client ~router vif client_ip rules =
   let cleanup_tasks = Cleanup.create () in
-  Log.info (fun f -> f "add client vif %a with IP %a" Dao.ClientVif.pp vif Ipaddr.V4.pp client_ip);
+  Log.info (fun f -> f "add client vif %a with IP %a and %d firewall rules"
+               Dao.ClientVif.pp vif Ipaddr.V4.pp client_ip (List.length rules));
   Lwt.async (fun () ->
       Lwt.catch (fun () ->
           add_vif vif ~client_ip ~router ~cleanup_tasks rules
@@ -138,6 +140,7 @@ let listen qubesDB router =
     new_set |> Dao.VifMap.iter (fun key (ip_addr, rules) ->
       if not (Dao.VifMap.mem key !clients) then (
         let cleanup = add_client ~router key ip_addr rules in
+        Log.debug (fun f -> f "client %a arrived with %d rules" Dao.ClientVif.pp key (List.length rules));
         clients := !clients |> Dao.VifMap.add key cleanup
       )
     )

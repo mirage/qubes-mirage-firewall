@@ -30,6 +30,4 @@ val read_network_config : Qubes.DB.t -> network_config Lwt.t
 (** [read_network_config db] fetches the configuration from QubesDB.
     If it isn't there yet, it waits until it is. *)
 
-val read_fw_rules: Qubes.DB.t -> int -> Pf_qubes.Parse_qubes.rule list
-
 val set_iptables_error : Qubes.DB.t -> string -> unit Lwt.t
