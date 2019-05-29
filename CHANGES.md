@@ -19,7 +19,7 @@ Changes to rules language:
   Now, `from_client` knows that `src` must be a `Client`,
   and `from_netvm` knows that `src` is `External` or `NetVM`.
 
-- Combine `Client_gateway` and `Firewall_uplink` (@talex5, #65).
+- Combine `Client_gateway` and `Firewall_uplink` (@talex5, #64).
   Before, we used `Client_gateway` for the IP address of the firewall on the client network
   and `Firewall_uplink` for its address on the uplink network.
   However, Qubes 4 uses the same IP address for both, so we can't separate these any longer,
