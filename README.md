@@ -86,6 +86,14 @@ qvm-prefs --set my-app-vm netvm mirage-firewall
 
 Alternatively, you can configure `mirage-firewall` to be your default firewall VM.
 
+Note that by default dom0 uses sys-firewall as its "UpdateVM" (a proxy for downloading updates).
+mirage-firewall cannot be used for this, but any Linux VM should be fine.
+https://www.qubes-os.org/doc/software-update-dom0/ says:
+
+> The role of UpdateVM can be assigned to any VM in the Qubes VM Manager, and
+> there are no significant security implications in this choice. By default,
+> this role is assigned to the firewallvm.
+
 ### Components
 
 This diagram show the main components (each box corresponds to a source `.ml` file with the same name):
