@@ -78,8 +78,7 @@ let vifs qubesDB ~handle domid =
           (fun () -> OS.Xs.read handle (Printf.sprintf "%s/%d/ip" path device_id))
           (fun client_ip ->
              let client_ip = Ipaddr.V4.of_string_exn client_ip in
-             let rules = read_rules qubesDB client_ip in
-             Lwt.return (Some (vif, (client_ip, rules)))
+             Lwt.return (Some (vif, client_ip))
           )
           (function
             | Xs_protocol.Enoent _ -> Lwt.return None
