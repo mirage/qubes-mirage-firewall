@@ -52,7 +52,8 @@ let classify_client_packet (packet : ([`Client of Fw_utils.client_link], _) Pack
       Ipaddr.Prefix.mem (V4 packet.ipv4_header.Ipv4_packet.dst) subnet
   in
   let (`Client client_link) = packet.src in
-  Log.debug (fun f -> f "checking %d rules for a match" (List.length client_link#get_rules));
+  let rules = snd client_link#get_rules in
+  Log.debug (fun f -> f "checking %d rules for a match" (List.length rules));
   List.find_opt (fun rule ->
       if not (matches_proto rule packet) then begin
         Log.debug (fun f -> f "rule %d is not a match - proto" rule.Q.number);
@@ -63,7 +64,7 @@ let classify_client_packet (packet : ([`Client of Fw_utils.client_link], _) Pack
       end else begin
         Log.debug (fun f -> f "rule %d is a match" rule.Q.number);
         true
-      end) client_link#get_rules |> function
+      end) rules |> function
   | None -> `Drop "No matching rule; assuming default drop"
   | Some {Q.action = Accept; number; _} ->
     Log.debug (fun f -> f "allowing packet matching rule %d" number);

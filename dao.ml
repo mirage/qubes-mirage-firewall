@@ -34,12 +34,12 @@ let directory ~handle dir =
   | [""] -> []      (* XenStore client bug *)
   | items -> items
 
-let read_rules qubesDB client_ip =
+let read_rules rules client_ip =
   let root = "/qubes-firewall/" ^ (Ipaddr.V4.to_string client_ip) ^ "/" in
   let rec get_rule n l : (Pf_qubes.Parse_qubes.rule list, string) result =
     let pattern = root ^ Printf.sprintf "%04d" n in
     Log.debug (fun f -> f "reading %s" pattern);
-    match Qubes.DB.read qubesDB pattern with
+    match Qubes.DB.KeyMap.find_opt pattern rules with
     | None -> 
       Log.debug (fun f -> f "rule %d does not exist; won't look for more" n);
       Ok (List.rev l)
