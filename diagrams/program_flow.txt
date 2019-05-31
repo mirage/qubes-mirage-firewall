@@ -1,0 +1,85 @@
+Unikernel.Main.start
+  record start time
+  define qrexec connection
+  start gui watcher (running in its own Lwt.async ())
+  connect to qubesdb
+  connect to qrexec
+  define agent_listener: invoke Qubes.RExec.listen to send rexec traffic to Command.handler
+  log start time & setup duration
+  start shutdown request watcher
+  create the NAT table with My_nat.create
+  define, but don't run, a network listener (`network ~lock nat qubesDB`)
+  Memory_pressure.init ();
+  main loop: Lwt.choose [
+    agent_listener; (* Qubes.RExec.listen qrexec Command.handler *)
+    net_listener; (* process incoming packets *)
+    shutdown_rq; (* process shutdown requests *)
+  ]
+
+----
+
+net_listener: network ~clock nat qubesDB
+  get networking configuration for this VM from qubesdb (* Dao.read_network_config *)
+  initialize the connection to netVM (* Uplink.connect *)
+  signal success to dom0 via iptables_error (* Dao.set_iptables_error *)
+  define a client_eth interface (* Client_eth.create ~client_gw:our_ip *)
+  define a router (* Router.create ~client_eth ~uplink:Uplink.interface uplink ~nat *)
+  handle packets: Lwt.choose [
+    Client_net.listen qubesDB router; (* client/private side *)
+    Uplink.listen uplink router; (* uplink/public side *)
+  ]
+
+----
+
+Uplink.listen uplink router:
+  set up netif-level, eth-level, ip/arp-level listeners
+    ipv4: deserialize with Nat_packet.of_ipv4_packet
+    send successfully deserialized packets to Firewall.ipv4_from_netvm router packet
+----
+
+Client_net.listen qubesDB router:
+  starts a listener via Dao.watch_clients (fun new_clients -> keep clients map updated;
+    if clients left, remove them from vifmap and invoke Cleanup.cleanup cleanup
+    if new clients arrived, call add_client ~router key ip_addr rules and add them to vifmap
+  )
+
+Dao.watch_clients:
+  connect to Xenstore
+  watch "backend/vif" for changes, and when then happen, invoke (fun handle ->
+    get a list of items by invoking `vifs qubesDB ~handle` on changes to backend/vif
+    make a vifmap out of the list
+    keep watching after this)
+
+----
+
+Client_net.add_client
+  make cleanup tasks to store in the vifmap (* Cleanup.create () *)
+  log addition of client vif
+  Lwt.(async (fun () ->
+    catch
+      (fun () -> add_vif vif ~lient_ip ~router ~cleanup_tasks rules)
+      (log and swallow exceptions)
+  ))
+  return the cleanup tasks to be stored in vifmap
+
+Client.add_vif:
+  make the netback device for this client (* Netback.make >>= fun backend -> *)
+  connect the ethernet device for this backend (* ClientEth.connect backend >>= fun eth -> *)
+  set up mac (* Netback.frontend_mac backend *)
+  set up ethernet (* router.Router.client_eth *)
+  set up gateway ip (* Client_eth.client_gw client_eth *)
+  make interface instance (* new client_iface eth ~domid ~gateway_ip ~client_ip client_mac rules *)
+  add this client to the router's interface for this network (* Router.add_client router iface *)
+  register a destructor for this client (* Cleanup.on_cleanup cleanup_tasks (fun () -> Router.remove_client)
+  make a fixed arp table
+  set up a netback listener for incoming packets
+    deserialize with Ethernet_packet.Unmarshal; for good ethernet packets:
+      check ethertype
+        arp packets go to input_arp ~fixed_arp ~iface payload
+        ipv4 packets go to input_ipv4 ~iface ~router payload
+        ipv6 packets get ignored
+
+Client.input_ipv4 ~iface ~router packet =
+  deserialize with Nat_packet.of_ipv4_packet
+  check src to make sure it's the ip address of the client; if not, warn
+  call Firewall.ipv4_from_client with traffic
