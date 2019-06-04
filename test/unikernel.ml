@@ -2,6 +2,9 @@ open Lwt.Infix
 open Mirage_types_lwt
 open Printf
 
+let src = Logs.Src.create "firewall test" ~doc:"Firewall test"
+module Log = (val Logs.src_log src : Logs.LOG)
+
 (* TODO
  * things we can have in rule
  * - action: accept, drop
@@ -30,17 +33,16 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
       check_err "Fail %s: expecting %s, got %s."
       msg (Printexc.to_string exn) (Printexc.to_string e)
     | Some e ->
-      Format.printf "Exception as expected";
+      Format.printf "Exception as expected %s" msg;
       Lwt.return_unit
 
-  let http_fetch c resolver ctx () =
-    C.log c (sprintf "Fetching %s with Cohttp:" (Uri.to_string uri)) >>= fun () ->
+  let http_fetch c resolver ctx =
+    check_raises "HTTP fetch test: " (Failure "TCP connection failed: connection attempt timed out") @@ fun () -> (
     let ctx = Cohttp_mirage.Client.ctx resolver ctx in
     Cohttp_mirage.Client.get ~ctx uri >>= fun (response, body) ->
     Cohttp_lwt.Body.to_string body >>= fun body ->
-    C.log c (Sexplib.Sexp.to_string_hum (Cohttp.Response.sexp_of_t response)) >>= fun () ->
-    C.log c (sprintf "Received body length: %d" (String.length body)) >>= fun () ->
-    C.log c "Cohttp fetch done\n------------\n"
+    Logs.err (fun f -> f "HTTP fetch test: failed :( Got something where we wanted to deny all.");
+    Lwt.return_unit)
 
   let udp_fetch (stack : STACK.t) =
     let src_port = 9090 in
@@ -51,9 +53,11 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
         if ((0 = Ipaddr.V4.compare echo_server src) && src_port = echo_port) then
           (* TODO: how do we stop the listener from here? *)
           match Cstruct.equal buf content with
-          | true -> (* yay *) Lwt.return_unit
+          | true -> (* yay *) 
+            Logs.info (fun f -> f "UDP fetch test: passed :)");
+            Lwt.return_unit
           | false -> (* oh no *)
-            Logs.err (fun f -> f "UDP test: packet corrupted; expected %a but got %a" Cstruct.hexdump_pp content Cstruct.hexdump_pp buf);
+            Logs.err (fun f -> f "UDP fetch test: failed. :( Packet corrupted; expected %a but got %a" Cstruct.hexdump_pp content Cstruct.hexdump_pp buf);
             Lwt.return_unit
         else
           (* disregard this packet *)
@@ -71,9 +75,6 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
       
   let start _time c stack res (ctx:CON.t) =
     udp_fetch stack >>= fun () ->
-    C.log c (sprintf "Resolving using DNS server 8.8.8.8 (hardcoded)") >>= fun () ->
-    (* wait a sec so we catch the output if it's fast *)
-    T.sleep_ns (Duration.of_sec 1) >>= fun () ->
-    check_raises "fetch webpage, shold be denied" (Failure "TCP connection failed: connection attempt timed out") @@ http_fetch c res ctx 
+    http_fetch c res ctx 
 
 end

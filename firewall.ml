@@ -91,7 +91,7 @@ let apply_rules t (rules : ('a, 'b) Packet.t -> Packet.action) ~dst (annotated_p
     add_nat_and_forward_ipv4 t packet
   | `NAT_to (host, port), _ -> nat_to t packet ~host ~port
   | `Drop reason, _ ->
-      Log.info (fun f -> f "Dropped packet (%s) %a" reason Nat_packet.pp packet);
+      Log.debug (fun f -> f "Dropped packet (%s) %a" reason Nat_packet.pp packet);
       return ()
 
 let handle_low_memory t =
