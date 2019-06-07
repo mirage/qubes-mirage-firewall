@@ -10,24 +10,24 @@ module Log = (val Logs.src_log src : Logs.LOG)
  * things we can have in rule
  * - action:
     x accept (UDP fetch test)
-    x drop (HTTP fetch test)
+    x drop (TCP connect denied test)
  * - proto:
-    x None (HTTP fetch test)
-    x TCP
+    x None (TCP connect denied test)
+    x TCP (TCP connect test)
     x UDP (UDP fetch test)
       ICMP
  * - specialtarget:
-    x None (UDP fetch test, HTTP fetch test)
+    x None (UDP fetch test, TCP connect denied test)
       DNS
  * - destination:
-    x Any (HTTP fetch test)
+    x Any (TCP connect denied test)
     x Some host (UDP fetch test)
  * - destination ports:
-    x empty list (HTTP fetch test)
-    x list with one item (UDP fetch test)
-      list with >1 items
+    x empty list (TCP connect denied test)
+    x list with one item, same port in pair (UDP fetch test)
+      list with >1 items, different ports in pair
  * - icmp type:
-    x None (HTTP fetch test, UDP fetch test)
+    x None (TCP connect denied, UDP fetch test)
       query type
       error type
  * - number (ordering over rules, to resolve conflicts by precedence)
@@ -57,14 +57,6 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
       Format.printf "Exception as expected %s" msg;
       Lwt.return_unit
 
-  let http_fetch c resolver ctx =
-    check_raises "HTTP fetch test: " (Failure "TCP connection failed: connection attempt timed out") @@ fun () -> (
-    let ctx = Cohttp_mirage.Client.ctx resolver ctx in
-    Cohttp_mirage.Client.get ~ctx uri >>= fun (response, body) ->
-    Cohttp_lwt.Body.to_string body >>= fun body ->
-    Log.err (fun f -> f "HTTP fetch test: failed :( Got something where we wanted to deny all.");
-    Lwt.return_unit)
-
   let tcp_connect stack =
     let ip = Ipaddr.V4.of_string_exn "10.137.0.5" in
     let port = 8082 in
@@ -74,6 +66,23 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
       STACK.TCPV4.close flow
     | Error e -> Log.err (fun f -> f "TCP test failed: Connection failed :(");
       Lwt.return_unit
+
+  let tcp_connect_denied stack =
+    let ip = Ipaddr.V4.of_string_exn "10.137.0.5" in
+    let port = 80 in
+    let connect = (STACK.TCPV4.create_connection (STACK.tcpv4 stack) (ip, port) >>= function
+    | Ok flow ->
+      Log.err (fun f -> f "TCP connect denied test failed: Connection should be denied, but was not. :(");
+      STACK.TCPV4.close flow
+    | Error e -> Log.info (fun f -> f "TCP connect denied test passed :)");
+      Lwt.return_unit)
+    in
+    let timeout = (
+      T.sleep_ns 1_000_000_000L >>= fun () ->
+      Log.info (fun f -> f "TCP connect denied test passed :)");
+      Lwt.return_unit)
+    in
+    Lwt.pick [ connect ; timeout ]
 
   let udp_fetch ~src_port ~echo_server_port (stack : STACK.t) =
     Log.info (fun f -> f "Entering udp fetch test!!!");
@@ -114,7 +123,7 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
   let start _time c stack res (ctx:CON.t) =
     udp_fetch ~src_port:9090 ~echo_server_port:1235 stack >>= fun () ->
     udp_fetch ~src_port:9091 ~echo_server_port:6668 stack >>= fun () ->
-    tcp_connect stack (* >>= fun () ->
-    http_fetch c res ctx *)
+    tcp_connect stack >>= fun () ->
+    tcp_connect_denied stack
 
 end
