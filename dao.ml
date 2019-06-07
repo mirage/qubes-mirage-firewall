@@ -40,7 +40,7 @@ let read_rules rules client_ip =
     let pattern = root ^ Printf.sprintf "%04d" n in
     Log.debug (fun f -> f "reading %s" pattern);
     match Qubes.DB.KeyMap.find_opt pattern rules with
-    | None -> 
+    | None ->
       Log.debug (fun f -> f "rule %d does not exist; won't look for more" n);
       Ok (List.rev l)
     | Some rule ->
@@ -59,7 +59,7 @@ let read_rules rules client_ip =
                              proto = None;
                              specialtarget = None;
                              dst = `any;
-                             dstports = [];
+                             dstports = None;
                              icmp_type = None;
                              number = 0;})]
 

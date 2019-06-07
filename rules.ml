@@ -28,27 +28,27 @@ let dns_port = 53
 
 (* Does the packet match our rules? *)
 let classify_client_packet (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  : Packet.action =
-  let matches_port dstports (port : int) =
-    List.length dstports = 0 ||
-    List.exists (fun (Q.Range_inclusive (min, max)) -> (min <= port && port <= max)) dstports
+  let matches_port dstports (port : int) = match dstports with
+    | None -> true
+    | Some (Q.Range_inclusive (min, max)) -> min <= port && port <= max
   in
   let matches_proto rule packet = match rule.Pf_qubes.Parse_qubes.proto with
     | None -> true
     | Some rule_proto -> match rule_proto, packet.transport_header with
       | `tcp, `TCP header -> matches_port rule.Q.dstports header.dst_port
       | `udp, `UDP header -> matches_port rule.Q.dstports header.dst_port
-      | `icmp, `ICMP header -> 
+      | `icmp, `ICMP header ->
       begin
         match rule.icmp_type with
         | None -> true
-        | Some rule_icmp_type -> 
+        | Some rule_icmp_type ->
           Icmpv4_wire.ty_to_int header.ty == rule_icmp_type
       end
-      | _, _ -> false 
+      | _, _ -> false
   in
   let matches_dest rule packet = match rule.Pf_qubes.Parse_qubes.dst with
     | `any -> true
-    | `hosts subnet -> 
+    | `hosts subnet ->
       Ipaddr.Prefix.mem (V4 packet.ipv4_header.Ipv4_packet.dst) subnet
   in
   let (`Client client_link) = packet.src in
