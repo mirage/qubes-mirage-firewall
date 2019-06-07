@@ -57,9 +57,8 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
       Format.printf "Exception as expected %s" msg;
       Lwt.return_unit
 
-  let tcp_connect stack =
+  let tcp_connect port stack =
     let ip = Ipaddr.V4.of_string_exn "10.137.0.5" in
-    let port = 8082 in
     STACK.TCPV4.create_connection (STACK.tcpv4 stack) (ip, port) >>= function
     | Ok flow ->
       Log.info (fun f -> f "TCP test passed :)");
@@ -123,7 +122,8 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
   let start _time c stack res (ctx:CON.t) =
     udp_fetch ~src_port:9090 ~echo_server_port:1235 stack >>= fun () ->
     udp_fetch ~src_port:9091 ~echo_server_port:6668 stack >>= fun () ->
-    tcp_connect stack >>= fun () ->
+    tcp_connect 53 stack >>= fun () ->
+    tcp_connect 8082 stack >>= fun () ->
     tcp_connect_denied stack
 
 end
