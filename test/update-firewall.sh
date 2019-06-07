@@ -23,6 +23,9 @@ done
 echo "$TEST_VM firewall rules are now:"
 qvm-firewall $TEST_VM list
 
+echo "Setting $TEST_VM allow rule for TCP port 8082 to 10.137.0.5:"
+qvm-firewall $TEST_VM add accept 10.137.0.5 tcp 8082
+
 echo "Setting $TEST_VM allow rule for UDP port 1235 to 10.137.0.5:"
 qvm-firewall $TEST_VM add accept 10.137.0.5 udp 1235
 

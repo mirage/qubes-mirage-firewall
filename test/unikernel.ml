@@ -13,7 +13,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
     x drop (HTTP fetch test)
  * - proto:
     x None (HTTP fetch test)
-      TCP
+    x TCP
     x UDP (UDP fetch test)
       ICMP
  * - specialtarget:
@@ -65,6 +65,16 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
     Log.err (fun f -> f "HTTP fetch test: failed :( Got something where we wanted to deny all.");
     Lwt.return_unit)
 
+  let tcp_connect stack =
+    let ip = Ipaddr.V4.of_string_exn "10.137.0.5" in
+    let port = 8082 in
+    STACK.TCPV4.create_connection (STACK.tcpv4 stack) (ip, port) >>= function
+    | Ok flow ->
+      Log.info (fun f -> f "TCP test passed :)");
+      STACK.TCPV4.close flow
+    | Error e -> Log.err (fun f -> f "TCP test failed: Connection failed :(");
+      Lwt.return_unit
+
   let udp_fetch ~src_port ~echo_server_port (stack : STACK.t) =
     Log.info (fun f -> f "Entering udp fetch test!!!");
     let resp_correct = ref false in
@@ -103,7 +113,8 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
 
   let start _time c stack res (ctx:CON.t) =
     udp_fetch ~src_port:9090 ~echo_server_port:1235 stack >>= fun () ->
-    udp_fetch ~src_port:9091 ~echo_server_port:6668 stack (* >>= fun () ->
+    udp_fetch ~src_port:9091 ~echo_server_port:6668 stack >>= fun () ->
+    tcp_connect stack (* >>= fun () ->
     http_fetch c res ctx *)
 
 end
