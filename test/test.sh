@@ -76,7 +76,8 @@ fi
 
 echo "We're gonna set up a unikernel for the mirage-fw-test qube"
 cd ..
-mirage configure -t xen -l "*:debug" && \
+make clean && \
+mirage configure -t xen -l "net-xen xenstore:error" && \
 make depend && \
 make
 if [ $? -ne 0 ]; then
@@ -86,7 +87,8 @@ fi
 cd test
 
 echo "We're gonna set up a unikernel for fetchmotron qube"
-mirage configure -t qubes -l "*:debug" && \
+make clean && \
+mirage configure -t qubes -l "net-xen frontend:error" && \
 make depend && \
 make
 if [ $? -ne 0 ]; then
