@@ -49,7 +49,7 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
     Log.info (fun f -> f "Entering udp fetch test!!!");
     let src_port = 9090 in
     let echo_port = 1235 in
-    let resp_received = ref false in
+    let resp_correct = ref false in
     let echo_server = Ipaddr.V4.of_string_exn "10.137.0.5" in
     let content = Cstruct.of_string "important data" in
     STACK.listen_udpv4 stack ~port:src_port (fun ~src ~dst:_ ~src_port buf ->
@@ -59,7 +59,7 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
           match Cstruct.equal buf content with
           | true -> (* yay *)
             Log.info (fun f -> f "UDP fetch test: passed :)");
-            resp_received := true;
+            resp_correct := true;
             Lwt.return_unit
           | false -> (* oh no *)
             Log.err (fun f -> f "UDP fetch test: failed. :( Packet corrupted; expected %a but got %a" Cstruct.hexdump_pp content Cstruct.hexdump_pp buf);
@@ -75,8 +75,8 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
     STACK.UDPV4.write ~src_port ~dst:echo_server ~dst_port:echo_port (STACK.udpv4 stack) content >>= function
     | Ok () -> (* .. listener: test with accept rule, if we get reply we're good *)
       T.sleep_ns 2_000_000_000L >>= fun () ->
-      if !resp_received then Lwt.return_unit else begin
-        Log.err (fun f -> f "UDP fetch test: failed. :( no response was received");
+      if !resp_correct then Lwt.return_unit else begin
+        Log.err (fun f -> f "UDP fetch test: failed. :( correct response not received");
         Lwt.return_unit
       end
     | Error _ ->
