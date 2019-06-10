@@ -3,7 +3,7 @@ open Mirage_types_lwt
 open Printf
 (* http://erratique.ch/software/logs *)
 (* https://github.com/mirage/mirage-logs *)
-let src = Logs.Src.create "firewalltest" ~doc:"Firewalltest"
+let src = Logs.Src.create "firewall test" ~doc:"Firewalltest"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 (* TODO
