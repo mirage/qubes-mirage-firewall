@@ -8,12 +8,32 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 (* TODO
  * things we can have in rule
- * - action: accept, drop
- * - proto: None, TCP, UDP, ICMP
- * - specialtarget: None, DNS
- * - destination: Any, Some host
- * - destination ports: possibly empty list of ranges
+ * - action:
+    x accept (UDP fetch test)
+    x drop (HTTP fetch test)
+ * - proto:
+    x None (HTTP fetch test)
+      TCP
+    x UDP (UDP fetch test)
+      ICMP
+ * - specialtarget:
+    x None (UDP fetch test, HTTP fetch test)
+      DNS
+ * - destination:
+    x Any (HTTP fetch test)
+    x Some host (UDP fetch test)
+ * - destination ports:
+    x empty list (HTTP fetch test)
+    x list with one item (UDP fetch test)
+      list with >1 items
+ * - icmp type:
+    x None (HTTP fetch test, UDP fetch test)
+      query type
+      error type
  * - number (ordering over rules, to resolve conflicts by precedence)
+      no overlap between rules, i.e. ordering unimportant
+      error case: multiple rules with same number?
+    x conflicting rules (specific accept rules with low numbers, drop all with high number)
  *)
 (* Point-to-point links out of a netvm always have this IP TODO clarify with Marek *)
 let uri = Uri.of_string "http://10.137.0.5:8082"
@@ -45,16 +65,14 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
     Log.err (fun f -> f "HTTP fetch test: failed :( Got something where we wanted to deny all.");
     Lwt.return_unit)
 
-  let udp_fetch (stack : STACK.t) =
+  let udp_fetch ~src_port ~echo_server_port (stack : STACK.t) =
     Log.info (fun f -> f "Entering udp fetch test!!!");
-    let src_port = 9090 in
-    let echo_port = 1235 in
     let resp_correct = ref false in
     let echo_server = Ipaddr.V4.of_string_exn "10.137.0.5" in
     let content = Cstruct.of_string "important data" in
     STACK.listen_udpv4 stack ~port:src_port (fun ~src ~dst:_ ~src_port buf ->
         Log.debug (fun f -> f "listen_udpv4 function invoked for packet: %a" Cstruct.hexdump_pp buf);
-        if ((0 = Ipaddr.V4.compare echo_server src) && src_port = echo_port) then
+        if ((0 = Ipaddr.V4.compare echo_server src) && src_port = echo_server_port) then
           (* TODO: how do we stop the listener from here? *)
           match Cstruct.equal buf content with
           | true -> (* yay *)
@@ -72,7 +90,7 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
           end
       );
     Lwt.async (fun () -> STACK.listen stack);
-    STACK.UDPV4.write ~src_port ~dst:echo_server ~dst_port:echo_port (STACK.udpv4 stack) content >>= function
+    STACK.UDPV4.write ~src_port ~dst:echo_server ~dst_port:echo_server_port (STACK.udpv4 stack) content >>= function
     | Ok () -> (* .. listener: test with accept rule, if we get reply we're good *)
       T.sleep_ns 2_000_000_000L >>= fun () ->
       if !resp_correct then Lwt.return_unit else begin
@@ -84,7 +102,8 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
       Lwt.return_unit
 
   let start _time c stack res (ctx:CON.t) =
-    udp_fetch stack (*>>= fun () ->
+    udp_fetch ~src_port:9090 ~echo_server_port:1235 stack >>= fun () ->
+    udp_fetch ~src_port:9091 ~echo_server_port:6668 stack (* >>= fun () ->
     http_fetch c res ctx *)
 
 end
