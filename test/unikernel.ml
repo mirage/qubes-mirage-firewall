@@ -53,6 +53,7 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
     let echo_server = Ipaddr.V4.of_string_exn "10.137.0.5" in
     let content = Cstruct.of_string "important data" in
     STACK.listen_udpv4 stack ~port:src_port (fun ~src ~dst:_ ~src_port buf ->
+        Log.debug (fun f -> f "listen_udpv4 function invoked for packet: %a" Cstruct.hexdump_pp buf);
         if ((0 = Ipaddr.V4.compare echo_server src) && src_port = echo_port) then
           (* TODO: how do we stop the listener from here? *)
           match Cstruct.equal buf content with
@@ -66,11 +67,12 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
         else
           begin
             (* disregard this packet *)
+            Log.debug (fun f -> f "packet is not from the echo server or has the wrong source port");
             Lwt.return_unit
           end
       );
     Lwt.async (fun () -> STACK.listen stack);
-    STACK.UDPV4.write echo_server echo_port (STACK.udpv4 stack) content >>= function
+    STACK.UDPV4.write ~src_port ~dst:echo_server ~dst_port:echo_port (STACK.udpv4 stack) content >>= function
     | Ok () -> (* .. listener: test with accept rule, if we get reply we're good *)
       T.sleep_ns 2_000_000_000L >>= fun () ->
       if !resp_received then Lwt.return_unit else begin
