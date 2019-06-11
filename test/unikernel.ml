@@ -42,23 +42,6 @@ let uri = Uri.of_string @@ "http://" ^ netvm ^ ":8082"
 
 module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver_lwt.S) (CON: Conduit_mirage.S) = struct
 
-  exception Check_error of string
-  let check_err fmt = Format.ksprintf (fun err -> raise (Check_error err)) fmt
-
-  let collect_exception f =
-    Lwt.try_bind f (fun _ -> Lwt.return None) (fun e -> Lwt.return (Some e))
-
-  let check_raises msg exn f =
-    collect_exception f >>= function
-    | None ->
-      check_err "Fail %s: expecting %s, got nothing." msg (Printexc.to_string exn)
-    | Some e when e <> exn ->
-      check_err "Fail %s: expecting %s, got %s."
-      msg (Printexc.to_string exn) (Printexc.to_string e)
-    | Some e ->
-      Format.printf "Exception as expected %s" msg;
-      Lwt.return_unit
-
   let tcp_connect port stack =
     Log.info (fun f -> f "Entering tcp connect test: %s:%d"
                  netvm port);
