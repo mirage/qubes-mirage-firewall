@@ -40,7 +40,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let netvm = "10.137.0.5"
 let uri = Uri.of_string @@ "http://" ^ netvm ^ ":8082"
 
-module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver_lwt.S) (CON: Conduit_mirage.S) = struct
+module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) = struct
 
   let tcp_connect port stack =
     Log.info (fun f -> f "Entering tcp connect test: %s:%d"
@@ -108,7 +108,7 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
       Log.err (fun f -> f "UDP fetch test: failed: :( couldn't write the packet");
       Lwt.return_unit
 
-  let start _time c stack res (ctx:CON.t) =
+  let start _time c stack =
     udp_fetch ~src_port:9090 ~echo_server_port:1235 stack >>= fun () ->
     udp_fetch ~src_port:9091 ~echo_server_port:6668 stack >>= fun () ->
     tcp_connect 53 stack >>= fun () ->
