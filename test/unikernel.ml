@@ -34,9 +34,11 @@ module Log = (val Logs.src_log src : Logs.LOG)
       no overlap between rules, i.e. ordering unimportant
       error case: multiple rules with same number?
     x conflicting rules (specific accept rules with low numbers, drop all with high number)
- *)
+*)
+
 (* Point-to-point links out of a netvm always have this IP TODO clarify with Marek *)
-let uri = Uri.of_string "http://10.137.0.5:8082"
+let netvm = "10.137.0.5"
+let uri = Uri.of_string @@ "http://" ^ netvm ^ ":8082"
 
 module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver_lwt.S) (CON: Conduit_mirage.S) = struct
 
@@ -58,16 +60,18 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
       Lwt.return_unit
 
   let tcp_connect port stack =
-    let ip = Ipaddr.V4.of_string_exn "10.137.0.5" in
+    Log.info (fun f -> f "Entering tcp connect test: %s:%d"
+                 netvm port);
+    let ip = Ipaddr.V4.of_string_exn netvm in
     STACK.TCPV4.create_connection (STACK.tcpv4 stack) (ip, port) >>= function
     | Ok flow ->
-      Log.info (fun f -> f "TCP test passed :)");
+      Log.info (fun f -> f "TCP test on port %d passed :)" port);
       STACK.TCPV4.close flow
     | Error e -> Log.err (fun f -> f "TCP test failed: Connection failed :(");
       Lwt.return_unit
 
   let tcp_connect_denied stack =
-    let ip = Ipaddr.V4.of_string_exn "10.137.0.5" in
+    let ip = Ipaddr.V4.of_string_exn netvm in
     let port = 80 in
     let connect = (STACK.TCPV4.create_connection (STACK.tcpv4 stack) (ip, port) >>= function
     | Ok flow ->
@@ -84,9 +88,10 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
     Lwt.pick [ connect ; timeout ]
 
   let udp_fetch ~src_port ~echo_server_port (stack : STACK.t) =
-    Log.info (fun f -> f "Entering udp fetch test!!!");
+    Log.info (fun f -> f "Entering udp fetch test: %d -> %s:%d"
+                 src_port netvm echo_server_port);
     let resp_correct = ref false in
-    let echo_server = Ipaddr.V4.of_string_exn "10.137.0.5" in
+    let echo_server = Ipaddr.V4.of_string_exn netvm in
     let content = Cstruct.of_string "important data" in
     STACK.listen_udpv4 stack ~port:src_port (fun ~src ~dst:_ ~src_port buf ->
         Log.debug (fun f -> f "listen_udpv4 function invoked for packet: %a" Cstruct.hexdump_pp buf);
@@ -94,11 +99,12 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) (RES: Resolver
           (* TODO: how do we stop the listener from here? *)
           match Cstruct.equal buf content with
           | true -> (* yay *)
-            Log.info (fun f -> f "UDP fetch test: passed :)");
+            Log.info (fun f -> f "UDP fetch test to port %d: passed :)" echo_server_port);
             resp_correct := true;
             Lwt.return_unit
           | false -> (* oh no *)
-            Log.err (fun f -> f "UDP fetch test: failed. :( Packet corrupted; expected %a but got %a" Cstruct.hexdump_pp content Cstruct.hexdump_pp buf);
+            Log.err (fun f -> f "UDP fetch test to port %d: failed. :( Packet corrupted; expected %a but got %a"
+                        echo_server_port Cstruct.hexdump_pp content Cstruct.hexdump_pp buf);
             Lwt.return_unit
         else
           begin
