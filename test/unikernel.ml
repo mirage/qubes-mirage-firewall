@@ -18,7 +18,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
       ICMP
  * - specialtarget:
     x None (UDP fetch test, TCP connect denied test)
-      DNS
+    x DNS (TCP connect test, TCP connect denied test)
  * - destination:
     x Any (TCP connect denied test)
     x Some host (UDP fetch test)
@@ -38,34 +38,34 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 (* Point-to-point links out of a netvm always have this IP TODO clarify with Marek *)
 let netvm = "10.137.0.5"
-let uri = Uri.of_string @@ "http://" ^ netvm ^ ":8082"
+(* default "nameserver"s, which netvm redirects to whatever its real nameservers are *)
+let nameserver_1, nameserver_2 = "10.139.1.1", "10.139.1.2"
 
 module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) = struct
 
-  let tcp_connect port stack =
+  let tcp_connect server port stack =
     Log.info (fun f -> f "Entering tcp connect test: %s:%d"
-                 netvm port);
-    let ip = Ipaddr.V4.of_string_exn netvm in
+                 server port);
+    let ip = Ipaddr.V4.of_string_exn server in
     STACK.TCPV4.create_connection (STACK.tcpv4 stack) (ip, port) >>= function
     | Ok flow ->
-      Log.info (fun f -> f "TCP test on port %d passed :)" port);
+      Log.info (fun f -> f "TCP test to %s:%d passed :)" server port);
       STACK.TCPV4.close flow
-    | Error e -> Log.err (fun f -> f "TCP test failed: Connection failed :(");
+    | Error e -> Log.err (fun f -> f "TCP test to %s:%d failed: Connection failed :(" server port);
       Lwt.return_unit
 
-  let tcp_connect_denied stack =
+  let tcp_connect_denied port stack =
     let ip = Ipaddr.V4.of_string_exn netvm in
-    let port = 80 in
     let connect = (STACK.TCPV4.create_connection (STACK.tcpv4 stack) (ip, port) >>= function
     | Ok flow ->
-      Log.err (fun f -> f "TCP connect denied test failed: Connection should be denied, but was not. :(");
+      Log.err (fun f -> f "TCP connect denied test to %a:%d failed: Connection should be denied, but was not. :(" Ipaddr.V4.pp ip port);
       STACK.TCPV4.close flow
-    | Error e -> Log.info (fun f -> f "TCP connect denied test passed :)");
+    | Error e -> Log.info (fun f -> f "TCP connect denied test to %s:%d passed (error text: %a) :)" netvm port STACK.TCPV4.pp_error e);
       Lwt.return_unit)
     in
     let timeout = (
       T.sleep_ns 1_000_000_000L >>= fun () ->
-      Log.info (fun f -> f "TCP connect denied test passed :)");
+      Log.info (fun f -> f "TCP connect denied test to %s:%d passed :)" netvm port);
       Lwt.return_unit)
     in
     Lwt.pick [ connect ; timeout ]
@@ -101,18 +101,20 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) = struct
     | Ok () -> (* .. listener: test with accept rule, if we get reply we're good *)
       T.sleep_ns 2_000_000_000L >>= fun () ->
       if !resp_correct then Lwt.return_unit else begin
-        Log.err (fun f -> f "UDP fetch test: failed. :( correct response not received");
+        Log.err (fun f -> f "UDP fetch test to port %d: failed. :( correct response not received" echo_server_port);
         Lwt.return_unit
       end
-    | Error _ ->
-      Log.err (fun f -> f "UDP fetch test: failed: :( couldn't write the packet");
+    | Error e ->
+      Log.err (fun f -> f "UDP fetch test to port %d failed: :( couldn't write the packet: %a"
+                  echo_server_port STACK.UDPV4.pp_error e);
       Lwt.return_unit
 
   let start _time c stack =
     udp_fetch ~src_port:9090 ~echo_server_port:1235 stack >>= fun () ->
     udp_fetch ~src_port:9091 ~echo_server_port:6668 stack >>= fun () ->
-    tcp_connect 53 stack >>= fun () ->
-    tcp_connect 8082 stack >>= fun () ->
-    tcp_connect_denied stack
+    tcp_connect nameserver_1 53 stack >>= fun () ->
+    tcp_connect_denied 53 stack >>= fun () ->
+    tcp_connect netvm 8082 stack >>= fun () ->
+    tcp_connect_denied 80 stack
 
 end
