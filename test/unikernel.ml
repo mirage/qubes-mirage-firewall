@@ -43,30 +43,35 @@ let netvm = "10.137.0.5"
 (* default "nameserver"s, which netvm redirects to whatever its real nameservers are *)
 let nameserver_1, nameserver_2 = "10.139.1.1", "10.139.1.2"
 
-module Client (R: RANDOM) (T: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWORK) (Ethernet: ETHERNET) (Arp : ARP) (Ipv4 : IPV4) (Udp : UDPV4) (Tcp : TCPV4) (DB : Qubes.S.DB) = struct
+module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWORK) (DB : Qubes.S.DB) = struct
+  module E = Ethernet.Make(NET)
+  module A = Arp.Make(E)(Time)
+  module I = Static_ipv4.Make(R)(Clock)(E)(A)
+  module U = Udp.Make(I)(R)
+  module T = Tcp.Flow.Make(I)(Time)(Clock)(R)
 
   let tcp_connect server port tcp =
     Log.info (fun f -> f "Entering tcp connect test: %s:%d"
                  server port);
     let ip = Ipaddr.V4.of_string_exn server in
-    Tcp.create_connection tcp (ip, port) >>= function
+    T.create_connection tcp (ip, port) >>= function
     | Ok flow ->
       Log.info (fun f -> f "TCP test to %s:%d passed :)" server port);
-      Tcp.close flow
+      T.close flow
     | Error e -> Log.err (fun f -> f "TCP test to %s:%d failed: Connection failed :(" server port);
       Lwt.return_unit
 
   let tcp_connect_denied port tcp =
     let ip = Ipaddr.V4.of_string_exn netvm in
-    let connect = (Tcp.create_connection tcp (ip, port) >>= function
+    let connect = (T.create_connection tcp (ip, port) >>= function
     | Ok flow ->
       Log.err (fun f -> f "TCP connect denied test to %a:%d failed: Connection should be denied, but was not. :(" Ipaddr.V4.pp ip port);
-      Tcp.close flow
-    | Error e -> Log.info (fun f -> f "TCP connect denied test to %s:%d passed (error text: %a) :)" netvm port Tcp.pp_error e);
+      T.close flow
+    | Error e -> Log.info (fun f -> f "TCP connect denied test to %s:%d passed (error text: %a) :)" netvm port T.pp_error e);
       Lwt.return_unit)
     in
     let timeout = (
-      T.sleep_ns 1_000_000_000L >>= fun () ->
+      Time.sleep_ns 1_000_000_000L >>= fun () ->
       Log.info (fun f -> f "TCP connect denied test to %s:%d passed :)" netvm port);
       Lwt.return_unit)
     in
@@ -78,7 +83,7 @@ module Client (R: RANDOM) (T: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWORK)
     let resp_correct = ref false in
     let echo_server = Ipaddr.V4.of_string_exn netvm in
     let content = Cstruct.of_string "important data" in
-    let udp_listener : Udp.callback = (fun ~src ~dst:_ ~src_port buf ->
+    let udp_listener : U.callback = (fun ~src ~dst:_ ~src_port buf ->
         Log.debug (fun f -> f "listen_udpv4 function invoked for packet: %a" Cstruct.hexdump_pp buf);
         if ((0 = Ipaddr.V4.compare echo_server src) && src_port = echo_server_port) then
           (* TODO: how do we stop the listener from here? *)
@@ -99,11 +104,17 @@ module Client (R: RANDOM) (T: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWORK)
           end
       )
     in
-    let udp_input_argument : Udp.ipinput = Udp.input ~listeners:(fun ~dst_port:_ -> Some udp_listener) udp in
-    Lwt.async (fun () -> NET.listen network ~header_size:Ethernet_wire.sizeof_ethernet
-                  (Ethernet.input ~arpv4:(Arp.input arp)
-                     ~ipv4:(Ipv4.input
-                              ~udp:udp_input_argument
+    let udp_input_argument : U.ipinput = U.input ~listeners:(fun ~dst_port:_ -> Some udp_listener) udp in
+    let udp_listeners ~dst_port : U.callback option =
+      Some (fun ~src:_ ~dst:_ ~src_port:_ _ -> Lwt.return_unit)
+    in
+
+    let udp_arg : U.ipinput = U.input ~listeners:udp_listeners udp in
+    Lwt.async (fun () ->
+    NET.listen network ~header_size:Ethernet_wire.sizeof_ethernet
+                  (E.input ~arpv4:(A.input arp)
+                     ~ipv4:(I.input
+                              ~udp:udp_arg
                               ~tcp:(fun ~src:_ ~dst:_ _contents -> Lwt.return_unit)
                               ~default:(fun ~proto ~src ~dst buf ->
                                   (* TODO: handle ICMP destination unreachable messages here,
@@ -113,25 +124,35 @@ module Client (R: RANDOM) (T: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWORK)
                            )
                      ~ipv6:(fun _ -> Lwt.return_unit)
                      ethernet
-                  ));
-    STACK.UDPV4.write ~src_port ~dst:echo_server ~dst_port:echo_server_port (STACK.udpv4 stack) content >>= function
+                  ) >>= fun _ -> Lwt.return_unit
+    );
+    U.write ~src_port ~dst:echo_server ~dst_port:echo_server_port udp content >>= function
     | Ok () -> (* .. listener: test with accept rule, if we get reply we're good *)
-      T.sleep_ns 2_000_000_000L >>= fun () ->
+      Time.sleep_ns 2_000_000_000L >>= fun () ->
       if !resp_correct then Lwt.return_unit else begin
         Log.err (fun f -> f "UDP fetch test to port %d: failed. :( correct response not received" echo_server_port);
         Lwt.return_unit
       end
     | Error e ->
       Log.err (fun f -> f "UDP fetch test to port %d failed: :( couldn't write the packet: %a"
-                  echo_server_port STACK.UDPV4.pp_error e);
+                  echo_server_port U.pp_error e);
       Lwt.return_unit
 
-  let start random _time clock _c network ethif arp ipv4 udp tcp _db =
+  let start random _time clock _c network _db =
+    E.connect network >>= fun ethif ->
+    A.connect ethif >>= fun arp ->
+    I.connect ~ip:(Ipaddr.V4.of_string_exn "10.137.0.19")
+      ~network:Ipaddr.V4.(Prefix.make 24 @@ of_string_exn "10.137.0.0")
+      ~gateway:(Some (Ipaddr.V4.of_string_exn "10.137.0.25"))
+      clock ethif arp >>= fun ipv4 ->
+    U.connect ipv4 >>= fun udp ->
+    T.connect ipv4 clock >>= fun tcp ->
+
     udp_fetch ~src_port:9090 ~echo_server_port:1235 network ethif arp ipv4 udp >>= fun () ->
     udp_fetch ~src_port:9091 ~echo_server_port:6668 network ethif arp ipv4 udp >>= fun () ->
-    tcp_connect nameserver_1 53 stack >>= fun () ->
-    tcp_connect_denied 53 stack >>= fun () ->
-    tcp_connect netvm 8082 stack >>= fun () ->
-    tcp_connect_denied 80 stack
+    tcp_connect nameserver_1 53 tcp >>= fun () ->
+    tcp_connect_denied 53 tcp >>= fun () ->
+    tcp_connect netvm 8082 tcp >>= fun () ->
+    tcp_connect_denied 80 tcp
 
 end
