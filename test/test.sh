@@ -88,7 +88,7 @@ cd test
 
 echo "We're gonna set up a unikernel for fetchmotron qube"
 make clean && \
-mirage configure -t qubes -l "net-xen frontend:error" && \
+mirage configure -t qubes -l "net-xen frontend:error,*:debug" && \
 make depend && \
 make
 if [ $? -ne 0 ]; then

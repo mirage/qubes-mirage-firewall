@@ -46,7 +46,7 @@ let nameserver_1, nameserver_2 = "10.139.1.1", "10.139.1.2"
 module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWORK) (DB : Qubes.S.DB) = struct
   module E = Ethernet.Make(NET)
   module A = Arp.Make(E)(Time)
-  module I = Static_ipv4.Make(R)(Clock)(E)(A)
+  module I = Qubesdb_ipv4.Make(DB)(R)(Clock)(E)(A)
   module U = Udp.Make(I)(R)
   module T = Tcp.Flow.Make(I)(Time)(Clock)(R)
 
@@ -104,12 +104,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
           end
       )
     in
-    let udp_input_argument : U.ipinput = U.input ~listeners:(fun ~dst_port:_ -> Some udp_listener) udp in
-    let udp_listeners ~dst_port : U.callback option =
-      Some (fun ~src:_ ~dst:_ ~src_port:_ _ -> Lwt.return_unit)
-    in
-
-    let udp_arg : U.ipinput = U.input ~listeners:udp_listeners udp in
+    let udp_arg : U.ipinput = U.input ~listeners:(fun ~dst_port -> Some udp_listener) udp in
     Lwt.async (fun () ->
     NET.listen network ~header_size:Ethernet_wire.sizeof_ethernet
                   (E.input ~arpv4:(A.input arp)
@@ -131,20 +126,19 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
       Time.sleep_ns 2_000_000_000L >>= fun () ->
       if !resp_correct then Lwt.return_unit else begin
         Log.err (fun f -> f "UDP fetch test to port %d: failed. :( correct response not received" echo_server_port);
+        NET.disconnect network >>= fun () ->
         Lwt.return_unit
       end
     | Error e ->
       Log.err (fun f -> f "UDP fetch test to port %d failed: :( couldn't write the packet: %a"
                   echo_server_port U.pp_error e);
+      NET.disconnect network >>= fun () ->
       Lwt.return_unit
 
-  let start random _time clock _c network _db =
+  let start random _time clock _c network db =
     E.connect network >>= fun ethif ->
     A.connect ethif >>= fun arp ->
-    I.connect ~ip:(Ipaddr.V4.of_string_exn "10.137.0.19")
-      ~network:Ipaddr.V4.(Prefix.make 24 @@ of_string_exn "10.137.0.0")
-      ~gateway:(Some (Ipaddr.V4.of_string_exn "10.137.0.25"))
-      clock ethif arp >>= fun ipv4 ->
+    I.connect db clock ethif arp >>= fun ipv4 ->
     U.connect ipv4 >>= fun udp ->
     T.connect ipv4 clock >>= fun tcp ->
 

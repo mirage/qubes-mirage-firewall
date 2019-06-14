@@ -7,6 +7,7 @@ let packages = [
   package "ipaddr";
   package "tcpip" ~sublibs:["ipv4"; "udp"; "tcp"];
   package "mirage-qubes";
+  package "mirage-qubes-ipv4";
 ]
 
 let client =
