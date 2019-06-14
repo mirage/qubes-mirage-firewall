@@ -71,7 +71,7 @@ if [ "$reply" != "hi" ]; then
   # the non-nice way is commenting out this test ;)
   echo "UDP echo service not reachable at $udp_echo_host:$udp_echo_port" >&2
   explain_upstream >&2
-  # exit 1
+#  exit 1
 fi
 
 echo "We're gonna set up a unikernel for the mirage-fw-test qube"

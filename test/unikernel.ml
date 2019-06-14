@@ -21,7 +21,9 @@ module Log = (val Logs.src_log src : Logs.LOG)
     x DNS (TCP connect test, TCP connect denied test)
  * - destination:
     x Any (TCP connect denied test)
-    x Some host (UDP fetch test)
+    x Some ipv4 host (UDP fetch test)
+      Some ipv6 host (we can't do this right now)
+      Some hostname (need a bunch of DNS stuff for that)
  * - destination ports:
     x empty list (TCP connect denied test)
     x list with one item, same port in pair (UDP fetch test)
@@ -41,26 +43,26 @@ let netvm = "10.137.0.5"
 (* default "nameserver"s, which netvm redirects to whatever its real nameservers are *)
 let nameserver_1, nameserver_2 = "10.139.1.1", "10.139.1.2"
 
-module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) = struct
+module Client (R: RANDOM) (T: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWORK) (Ethernet: ETHERNET) (Arp : ARP) (Ipv4 : IPV4) (Udp : UDPV4) (Tcp : TCPV4) (DB : Qubes.S.DB) = struct
 
-  let tcp_connect server port stack =
+  let tcp_connect server port tcp =
     Log.info (fun f -> f "Entering tcp connect test: %s:%d"
                  server port);
     let ip = Ipaddr.V4.of_string_exn server in
-    STACK.TCPV4.create_connection (STACK.tcpv4 stack) (ip, port) >>= function
+    Tcp.create_connection tcp (ip, port) >>= function
     | Ok flow ->
       Log.info (fun f -> f "TCP test to %s:%d passed :)" server port);
-      STACK.TCPV4.close flow
+      Tcp.close flow
     | Error e -> Log.err (fun f -> f "TCP test to %s:%d failed: Connection failed :(" server port);
       Lwt.return_unit
 
-  let tcp_connect_denied port stack =
+  let tcp_connect_denied port tcp =
     let ip = Ipaddr.V4.of_string_exn netvm in
-    let connect = (STACK.TCPV4.create_connection (STACK.tcpv4 stack) (ip, port) >>= function
+    let connect = (Tcp.create_connection tcp (ip, port) >>= function
     | Ok flow ->
       Log.err (fun f -> f "TCP connect denied test to %a:%d failed: Connection should be denied, but was not. :(" Ipaddr.V4.pp ip port);
-      STACK.TCPV4.close flow
-    | Error e -> Log.info (fun f -> f "TCP connect denied test to %s:%d passed (error text: %a) :)" netvm port STACK.TCPV4.pp_error e);
+      Tcp.close flow
+    | Error e -> Log.info (fun f -> f "TCP connect denied test to %s:%d passed (error text: %a) :)" netvm port Tcp.pp_error e);
       Lwt.return_unit)
     in
     let timeout = (
@@ -70,13 +72,13 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) = struct
     in
     Lwt.pick [ connect ; timeout ]
 
-  let udp_fetch ~src_port ~echo_server_port (stack : STACK.t) =
+  let udp_fetch ~src_port ~echo_server_port network ethernet arp ipv4 udp =
     Log.info (fun f -> f "Entering udp fetch test: %d -> %s:%d"
                  src_port netvm echo_server_port);
     let resp_correct = ref false in
     let echo_server = Ipaddr.V4.of_string_exn netvm in
     let content = Cstruct.of_string "important data" in
-    STACK.listen_udpv4 stack ~port:src_port (fun ~src ~dst:_ ~src_port buf ->
+    let udp_listener : Udp.callback = (fun ~src ~dst:_ ~src_port buf ->
         Log.debug (fun f -> f "listen_udpv4 function invoked for packet: %a" Cstruct.hexdump_pp buf);
         if ((0 = Ipaddr.V4.compare echo_server src) && src_port = echo_server_port) then
           (* TODO: how do we stop the listener from here? *)
@@ -95,8 +97,23 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) = struct
             Log.debug (fun f -> f "packet is not from the echo server or has the wrong source port");
             Lwt.return_unit
           end
-      );
-    Lwt.async (fun () -> STACK.listen stack);
+      )
+    in
+    let udp_input_argument : Udp.ipinput = Udp.input ~listeners:(fun ~dst_port:_ -> Some udp_listener) udp in
+    Lwt.async (fun () -> NET.listen network ~header_size:Ethernet_wire.sizeof_ethernet
+                  (Ethernet.input ~arpv4:(Arp.input arp)
+                     ~ipv4:(Ipv4.input
+                              ~udp:udp_input_argument
+                              ~tcp:(fun ~src:_ ~dst:_ _contents -> Lwt.return_unit)
+                              ~default:(fun ~proto ~src ~dst buf ->
+                                  (* TODO: handle ICMP destination unreachable messages here,
+                                              possibly with some detailed help text? *)
+                                  Lwt.return_unit)
+                              ipv4
+                           )
+                     ~ipv6:(fun _ -> Lwt.return_unit)
+                     ethernet
+                  ));
     STACK.UDPV4.write ~src_port ~dst:echo_server ~dst_port:echo_server_port (STACK.udpv4 stack) content >>= function
     | Ok () -> (* .. listener: test with accept rule, if we get reply we're good *)
       T.sleep_ns 2_000_000_000L >>= fun () ->
@@ -109,9 +126,9 @@ module Client (T: TIME) (C: CONSOLE) (STACK: Mirage_stack_lwt.V4) = struct
                   echo_server_port STACK.UDPV4.pp_error e);
       Lwt.return_unit
 
-  let start _time c stack =
-    udp_fetch ~src_port:9090 ~echo_server_port:1235 stack >>= fun () ->
-    udp_fetch ~src_port:9091 ~echo_server_port:6668 stack >>= fun () ->
+  let start random _time clock _c network ethif arp ipv4 udp tcp _db =
+    udp_fetch ~src_port:9090 ~echo_server_port:1235 network ethif arp ipv4 udp >>= fun () ->
+    udp_fetch ~src_port:9091 ~echo_server_port:6668 network ethif arp ipv4 udp >>= fun () ->
     tcp_connect nameserver_1 53 stack >>= fun () ->
     tcp_connect_denied 53 stack >>= fun () ->
     tcp_connect netvm 8082 stack >>= fun () ->
