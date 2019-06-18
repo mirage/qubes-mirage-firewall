@@ -99,7 +99,9 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
         else
           begin
             (* disregard this packet *)
-            Log.debug (fun f -> f "packet is not from the echo server or has the wrong source port");
+            Log.debug (fun f -> f "packet is not from the echo server or has the wrong source port (%d but we wanted %d)"
+                      src_port echo_server_port);
+            (* don't cancel the listener, since we want to keep listening *)
             Lwt.return_unit
           end
       )
@@ -126,13 +128,11 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
       Time.sleep_ns 2_000_000_000L >>= fun () ->
       if !resp_correct then Lwt.return_unit else begin
         Log.err (fun f -> f "UDP fetch test to port %d: failed. :( correct response not received" echo_server_port);
-        NET.disconnect network >>= fun () ->
         Lwt.return_unit
       end
     | Error e ->
       Log.err (fun f -> f "UDP fetch test to port %d failed: :( couldn't write the packet: %a"
                   echo_server_port U.pp_error e);
-      NET.disconnect network >>= fun () ->
       Lwt.return_unit
 
   let start random _time clock _c network db =
