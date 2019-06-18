@@ -40,7 +40,8 @@ echo "For the UDP reply service:"
 echo "Install nmap-ncat:"
 echo "sudo dnf install nmap-ncat"
 echo "Allow incoming traffic on the appropriate port:"
-echo "sudo iptables -I INPUT -i vif+ -p udp --dport $udp_echo_port -j ACCEPT"
+echo "sudo iptables -I INPUT -i vif+ -p udp --dport $udp_echo_port_0 -j ACCEPT"
+echo "sudo iptables -I INPUT -i vif+ -p udp --dport $udp_echo_port_1 -j ACCEPT"
 echo "Then run the service:"
 echo "ncat -e /bin/cat -k -u -l 1235"
 }
@@ -62,16 +63,18 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 udp_echo_host=10.137.0.5
-udp_echo_port=1235
-reply=$(echo hi | nc -u $udp_echo_host -q 1 $udp_echo_port)
-if [ "$reply" != "hi" ]; then
+udp_echo_port_0=1235
+udp_echo_port_1=6668
+reply_0=$(echo hi | nc -u $udp_echo_host -q 1 $udp_echo_port_0)
+reply_1=$(echo hi | nc -u $udp_echo_host -q 1 $udp_echo_port_1)
+if [ "$reply_0" != "hi" ] || [ "$reply_1" != "hi" ]; then
   # TODO: if the development environment and the test unikernel have different
   # NetVMs serving their respective firewalls, this can be a false negative.
   # provide some nice way for the user to handle this -
   # the non-nice way is commenting out this test ;)
-  echo "UDP echo service not reachable at $udp_echo_host:$udp_echo_port" >&2
+  echo "UDP echo services not reachable at $udp_echo_host:$udp_echo_port_0 or $udp_echo_host:$udp_echo_port_1" >&2
   explain_upstream >&2
-#  exit 1
+  exit 1
 fi
 
 echo "We're gonna set up a unikernel for the mirage-fw-test qube"
