@@ -5,7 +5,7 @@ let packages = [
   package "arp";
   package "arp-mirage";
   package "ipaddr";
-  package "tcpip" ~sublibs:["ipv4"; "udp"; "tcp"];
+  package "tcpip" ~sublibs:["icmpv4"; "ipv4"; "udp"; "tcp"];
   package "mirage-qubes";
   package "mirage-qubes-ipv4";
 ]
