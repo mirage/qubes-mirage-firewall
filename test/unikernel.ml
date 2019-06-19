@@ -195,7 +195,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     );
     U.write ~src_port ~dst:echo_server ~dst_port:echo_server_port udp content >>= function
     | Ok () -> (* .. listener: test with accept rule, if we get reply we're good *)
-      Time.sleep_ns 2_000_000_000L >>= fun () ->
+      Time.sleep_ns 1_000_000_000L >>= fun () ->
       if !resp_correct then Lwt.return_unit else begin
         Log.err (fun f -> f "UDP fetch test to port %d: failed. :( correct response not received" echo_server_port);
         Lwt.return_unit
