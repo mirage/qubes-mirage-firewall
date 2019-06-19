@@ -1,6 +1,5 @@
 open Lwt.Infix
 open Mirage_types_lwt
-open Printf
 (* http://erratique.ch/software/logs *)
 (* https://github.com/mirage/mirage-logs *)
 let src = Logs.Src.create "firewall test" ~doc:"Firewalltest"
@@ -59,7 +58,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
          ~ipv4:(I.input
                   ~udp:(fun ~src:_ ~dst:_ _contents -> Lwt.return_unit)
                   ~tcp:(T.input tcp ~listeners:(fun _ -> None))
-                  ~default:(fun ~proto ~src ~dst buf ->
+                  ~default:(fun ~proto:_ ~src:_ ~dst:_ _ ->
                       (* TODO: handle ICMP destination unreachable messages here,
                                   possibly with some detailed help text? *)
                       Lwt.return_unit)
@@ -72,14 +71,14 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     let make_ping payload =
       let echo_request = { Icmpv4_packet.code = 0; (* constant for echo request/reply *)
                            ty = Icmpv4_wire.Echo_request;
-                           subheader = Icmpv4_wire.(Id_and_seq (0, 0)); } in
+                           subheader = Icmpv4_packet.(Id_and_seq (0, 0)); } in
       Icmpv4_packet.Marshal.make_cstruct echo_request ~payload
     in
     let is_reply src server packet =
       0 = Ipaddr.V4.(compare src @@ of_string_exn server) &&
       packet.Icmpv4_packet.code = 0 &&
       packet.Icmpv4_packet.ty = Icmpv4_wire.Echo_reply &&
-      packet.Icmpv4_packet.subheader = Id_and_seq (0, 0)
+      packet.Icmpv4_packet.subheader = Icmpv4_packet.(Id_and_seq (0, 0))
     in
     let icmp_protocol = 1 in
     let resp_received = ref false in
@@ -90,7 +89,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
             ~ipv4:(I.input
                      ~udp:(fun ~src:_ ~dst:_ _contents -> Lwt.return_unit)
                      ~tcp:(fun ~src:_ ~dst:_ _contents -> Lwt.return_unit)
-                     ~default:(fun ~proto ~src ~dst buf ->
+                     ~default:(fun ~proto ~src ~dst:_ buf ->
                          if proto = icmp_protocol then begin
                            (* hopefully this is a reply to an ICMP echo request we sent *)
                            Log.info (fun f -> f "ping test: ICMP message received from %a: %a" I.pp_ipaddr src Cstruct.hexdump_pp buf);
@@ -131,7 +130,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     | Ok flow ->
       Log.info (fun f -> f "TCP test to %s:%d passed :)" server port);
       T.close flow
-    | Error e -> Log.err (fun f -> f "TCP test to %s:%d failed: Connection failed :(" server port);
+    | Error e -> Log.err (fun f -> f "TCP test to %s:%d failed: Connection failed (%a) :(" server port T.pp_error e);
       Lwt.return_unit
 
   let tcp_connect_denied port tcp =
@@ -179,14 +178,14 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
           end
       )
     in
-    let udp_arg : U.ipinput = U.input ~listeners:(fun ~dst_port -> Some udp_listener) udp in
+    let udp_arg : U.ipinput = U.input ~listeners:(fun ~dst_port:_ -> Some udp_listener) udp in
     Lwt.async (fun () ->
     NET.listen network ~header_size:Ethernet_wire.sizeof_ethernet
                   (E.input ~arpv4:(A.input arp)
                      ~ipv4:(I.input
                               ~udp:udp_arg
                               ~tcp:(fun ~src:_ ~dst:_ _contents -> Lwt.return_unit)
-                              ~default:(fun ~proto ~src ~dst buf ->
+                              ~default:(fun ~proto:_ ~src:_ ~dst:_ _ ->
                                   (* TODO: handle ICMP destination unreachable messages here,
                                               possibly with some detailed help text? *)
                                   Lwt.return_unit)
@@ -208,7 +207,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
                   echo_server_port U.pp_error e);
       Lwt.return_unit
 
-  let start random _time clock _c network db =
+  let start _random _time clock _c network db =
     E.connect network >>= fun ethernet ->
     A.connect ethernet >>= fun arp ->
     I.connect db clock ethernet arp >>= fun ipv4 ->
