@@ -1,7 +1,6 @@
 open Lwt.Infix
 open Mirage_types_lwt
-(* http://erratique.ch/software/logs *)
-(* https://github.com/mirage/mirage-logs *)
+
 let src = Logs.Src.create "firewall test" ~doc:"Firewalltest"
 module Log = (val Logs.src_log src : Logs.LOG)
 
@@ -158,7 +157,6 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     let udp_listener : U.callback = (fun ~src ~dst:_ ~src_port buf ->
         Log.debug (fun f -> f "listen_udpv4 function invoked for packet: %a" Cstruct.hexdump_pp buf);
         if ((0 = Ipaddr.V4.compare echo_server src) && src_port = echo_server_port) then
-          (* TODO: how do we stop the listener from here? *)
           match Cstruct.equal buf content with
           | true -> (* yay *)
             Log.info (fun f -> f "UDP fetch test to port %d: passed :)" echo_server_port);
