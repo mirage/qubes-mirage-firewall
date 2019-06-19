@@ -50,6 +50,23 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
   module U = Udp.Make(I)(R)
   module T = Tcp.Flow.Make(I)(Time)(Clock)(R)
 
+  (* Tcp.create_connection needs this listener; it should be running
+     when tcp_connect or tcp_connect_denied tests run *)
+  let tcp_listen network ethernet arp ipv4 tcp= 
+    (NET.listen network ~header_size:Ethernet_wire.sizeof_ethernet
+      (E.input ~arpv4:(A.input arp)
+         ~ipv4:(I.input
+                  ~udp:(fun ~src:_ ~dst:_ _contents -> Lwt.return_unit)
+                  ~tcp:(T.input tcp ~listeners:(fun _ -> None))
+                  ~default:(fun ~proto ~src ~dst buf ->
+                      (* TODO: handle ICMP destination unreachable messages here,
+                                  possibly with some detailed help text? *)
+                      Lwt.return_unit)
+                  ipv4
+               )
+         ~ipv6:(fun _ -> Lwt.return_unit)
+         ethernet)) >>= fun _ -> Lwt.return_unit
+
   let tcp_connect server port tcp =
     Log.info (fun f -> f "Entering tcp connect test: %s:%d"
                  server port);
@@ -136,14 +153,16 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
       Lwt.return_unit
 
   let start random _time clock _c network db =
-    E.connect network >>= fun ethif ->
-    A.connect ethif >>= fun arp ->
-    I.connect db clock ethif arp >>= fun ipv4 ->
+    E.connect network >>= fun ethernet ->
+    A.connect ethernet >>= fun arp ->
+    I.connect db clock ethernet arp >>= fun ipv4 ->
     U.connect ipv4 >>= fun udp ->
     T.connect ipv4 clock >>= fun tcp ->
 
-    udp_fetch ~src_port:9090 ~echo_server_port:1235 network ethif arp ipv4 udp >>= fun () ->
-    udp_fetch ~src_port:9091 ~echo_server_port:6668 network ethif arp ipv4 udp >>= fun () ->
+    udp_fetch ~src_port:9090 ~echo_server_port:1235 network ethernet arp ipv4 udp >>= fun () ->
+    udp_fetch ~src_port:9091 ~echo_server_port:6668 network ethernet arp ipv4 udp >>= fun () ->
+    (* replace the udp-related listeners with the right one for tcp *)
+    Lwt.async (fun () -> tcp_listen network ethernet arp ipv4 tcp);
     tcp_connect nameserver_1 53 tcp >>= fun () ->
     tcp_connect_denied 53 tcp >>= fun () ->
     tcp_connect netvm 8082 tcp >>= fun () ->
