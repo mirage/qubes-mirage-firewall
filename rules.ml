@@ -32,9 +32,16 @@ let classify_client_packet (packet : ([`Client of Fw_utils.client_link], _) Pack
     | None -> true
     | Some (Q.Range_inclusive (min, max)) -> min <= port && port <= max
   in
-  let matches_proto rule packet = match rule.Pf_qubes.Parse_qubes.proto with
-    | None -> true
-    | Some rule_proto -> match rule_proto, packet.transport_header with
+  let matches_proto rule packet = match rule.Pf_qubes.Parse_qubes.proto, rule.Pf_qubes.Parse_qubes.specialtarget with
+    | None, None -> true
+    | None, Some `dns -> begin
+      (* specialtarget=dns is implicitly tcp/udp port 53 *)
+      match packet.transport_header with
+        | `TCP header -> header.dst_port = 53
+        | `UDP header -> header.dst_port = 53
+        | _ -> false
+    end
+    | Some rule_proto, _ -> match rule_proto, packet.transport_header with
       | `tcp, `TCP header -> matches_port rule.Q.dstports header.dst_port
       | `udp, `UDP header -> matches_port rule.Q.dstports header.dst_port
       | `icmp, `ICMP header ->
@@ -89,7 +96,6 @@ let from_client (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Pac
     | `Drop s -> `Drop s
   end
   | { dst = `Client_gateway; transport_header = `UDP header; _ } ->
-    (* TODO: this is where we should implement specialtarget dns rules? *)
     if header.dst_port = dns_port
     then `NAT_to (`NetVM, dns_port)
     else `Drop "packet addressed to client gateway"
