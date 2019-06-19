@@ -35,15 +35,16 @@ $ qrexec-client-vm dom0 yomimono.updateFirewall"
 }
 
 function explain_upstream {
-echo "Also, start a test service on the upstream NetVM (which is available at 10.137.0.5 from the test unikernel)."
-echo "For the UDP reply service:"
+echo "Also, start the test services on the upstream NetVM (which is available at 10.137.0.5 from the test unikernel)."
+echo "For the UDP and TCP reply services:"
 echo "Install nmap-ncat:"
 echo "sudo dnf install nmap-ncat"
-echo "Allow incoming traffic on the appropriate port:"
+echo "Allow incoming traffic from local virtual interfaces on the appropriate ports:"
 echo "sudo iptables -I INPUT -i vif+ -p udp --dport $udp_echo_port_0 -j ACCEPT"
 echo "sudo iptables -I INPUT -i vif+ -p udp --dport $udp_echo_port_1 -j ACCEPT"
-echo "Then run the service:"
+echo "Then run the services:"
 echo "ncat -e /bin/cat -k -u -l 1235"
+echo "ncat -e /bin/cat -k -l 6668"
 }
 
 if ! [ -x "$(command -v boot-mirage)" ]; then
@@ -62,17 +63,17 @@ if [ $? -ne 0 ]; then
   explain_service >&2
   exit 1
 fi
-udp_echo_host=10.137.0.5
-udp_echo_port_0=1235
-udp_echo_port_1=6668
-reply_0=$(echo hi | nc -u $udp_echo_host -q 1 $udp_echo_port_0)
-reply_1=$(echo hi | nc -u $udp_echo_host -q 1 $udp_echo_port_1)
+echo_host=10.137.0.5
+udp_echo_port=1235
+tcp_echo_port=6668
+reply_0=$(echo hi | nc -u $echo_host -q 1 $udp_echo_port )
+reply_1=$(echo hi | nc $echo_host -w 1 $tcp_echo_port )
 if [ "$reply_0" != "hi" ] || [ "$reply_1" != "hi" ]; then
   # TODO: if the development environment and the test unikernel have different
   # NetVMs serving their respective firewalls, this can be a false negative.
   # provide some nice way for the user to handle this -
   # the non-nice way is commenting out this test ;)
-  echo "UDP echo services not reachable at $udp_echo_host:$udp_echo_port_0 or $udp_echo_host:$udp_echo_port_1" >&2
+  echo "echo services not reachable at UDP $echo_host:$udp_echo_port or TCP $echo_host:$tcp_echo_port" >&2
   explain_upstream >&2
   exit 1
 fi
@@ -80,7 +81,7 @@ fi
 echo "We're gonna set up a unikernel for the mirage-fw-test qube"
 cd ..
 make clean && \
-mirage configure -t xen -l "net-xen xenstore:error" && \
+mirage configure -t xen -l "net-xen xenstore:error,rules:debug" && \
 make depend && \
 make
 if [ $? -ne 0 ]; then

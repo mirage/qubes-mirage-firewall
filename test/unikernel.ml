@@ -213,14 +213,13 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     T.connect ipv4 clock >>= fun tcp ->
 
     udp_fetch ~src_port:9090 ~echo_server_port:1235 network ethernet arp ipv4 udp >>= fun () ->
-    udp_fetch ~src_port:9091 ~echo_server_port:6668 network ethernet arp ipv4 udp >>= fun () ->
     (* put this first because tcp_connect_denied tests also generate icmp messages *)
     ping_expect_failure "8.8.8.8" network ethernet arp ipv4 icmp >>= fun () ->
     (* replace the udp-related listeners with the right one for tcp *)
     Lwt.async (fun () -> tcp_listen network ethernet arp ipv4 tcp);
     tcp_connect nameserver_1 53 tcp >>= fun () ->
     tcp_connect_denied 53 tcp >>= fun () ->
-    tcp_connect netvm 8082 tcp >>= fun () ->
-    tcp_connect_denied 80 tcp
+    tcp_connect netvm 6668 tcp >>= fun () ->
+    tcp_connect_denied 8082 tcp
 
 end
