@@ -25,9 +25,9 @@ module Log = (val Logs.src_log src : Logs.LOG)
       Some ipv6 host (we can't do this right now)
       Some hostname (need a bunch of DNS stuff for that)
  * - destination ports:
-    x empty list (TCP connect denied test)
-    x list with one item, same port in pair (UDP fetch test)
-      list with >1 items, different ports in pair
+    x none (TCP connect denied test)
+    x range is one port (UDP fetch test)
+      range has different ports in pair
  * - icmp type:
     x None (TCP connect denied, UDP fetch test)
     x query type (ping test)
@@ -70,11 +70,16 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
 
   let ping_expect_failure server network ethernet arp ipv4 icmp =
     let make_ping payload =
-      let open Icmpv4_packet in
-      let echo_request = { code = 0; (* constant for echo request/reply *)
+      let echo_request = { Icmpv4_packet.code = 0; (* constant for echo request/reply *)
                            ty = Icmpv4_wire.Echo_request;
-                           subheader = Id_and_seq (0, 0); } in
-      Icmpv4_packet.Marshal.make_cstruct echo_request payload
+                           subheader = Icmpv4_wire.(Id_and_seq (0, 0)); } in
+      Icmpv4_packet.Marshal.make_cstruct echo_request ~payload
+    in
+    let is_reply src server packet =
+      0 = Ipaddr.V4.(compare src @@ of_string_exn server) &&
+      packet.Icmpv4_packet.code = 0 &&
+      packet.Icmpv4_packet.ty = Icmpv4_wire.Echo_reply &&
+      packet.Icmpv4_packet.subheader = Id_and_seq (0, 0)
     in
     let icmp_protocol = 1 in
     let resp_received = ref false in
@@ -90,11 +95,10 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
                            (* hopefully this is a reply to an ICMP echo request we sent *)
                            Log.info (fun f -> f "ping test: ICMP message received from %a: %a" I.pp_ipaddr src Cstruct.hexdump_pp buf);
                            match Icmpv4_packet.Unmarshal.of_cstruct buf with
-                           | Ok (packet, _payload) -> Log.info (fun f -> f "ICMP message: %a" Icmpv4_packet.pp packet);
-                             (* TODO: make sure this is an echo response *)
-                             resp_received := true;
-                             Lwt.return_unit
                            | Error e -> Log.err (fun f -> f "couldn't parse ICMP packet: %s" e);
+                             Lwt.return_unit
+                           | Ok (packet, _payload) -> Log.info (fun f -> f "ICMP message: %a" Icmpv4_packet.pp packet);
+                             if is_reply src server packet then resp_received := true;
                              Lwt.return_unit
                          end else begin
                            Log.info (fun f -> f "ping test: non-ICMP/TCP/UDP message received? %a" Cstruct.hexdump_pp buf);
