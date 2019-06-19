@@ -15,7 +15,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
     x None (TCP connect denied test)
     x TCP (TCP connect test)
     x UDP (UDP fetch test)
-      ICMP
+    x ICMP (ping test)
  * - specialtarget:
     x None (UDP fetch test, TCP connect denied test)
     x DNS (TCP connect test, TCP connect denied test)
@@ -30,7 +30,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
       list with >1 items, different ports in pair
  * - icmp type:
     x None (TCP connect denied, UDP fetch test)
-      query type
+    x query type (ping test)
       error type
  * - number (ordering over rules, to resolve conflicts by precedence)
       no overlap between rules, i.e. ordering unimportant
@@ -47,6 +47,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
   module E = Ethernet.Make(NET)
   module A = Arp.Make(E)(Time)
   module I = Qubesdb_ipv4.Make(DB)(R)(Clock)(E)(A)
+  module Icmp = Icmpv4.Make(I)
   module U = Udp.Make(I)(R)
   module T = Tcp.Flow.Make(I)(Time)(Clock)(R)
 
@@ -66,6 +67,57 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
                )
          ~ipv6:(fun _ -> Lwt.return_unit)
          ethernet)) >>= fun _ -> Lwt.return_unit
+
+  let ping_expect_failure server network ethernet arp ipv4 icmp =
+    let make_ping payload =
+      let open Icmpv4_packet in
+      let echo_request = { code = 0; (* constant for echo request/reply *)
+                           ty = Icmpv4_wire.Echo_request;
+                           subheader = Id_and_seq (0, 0); } in
+      Icmpv4_packet.Marshal.make_cstruct echo_request payload
+    in
+    let icmp_protocol = 1 in
+    let resp_received = ref false in
+    Log.info (fun f -> f "Entering ping test: %s" server);
+    let icmp_listen () =
+      (NET.listen network ~header_size:Ethernet_wire.sizeof_ethernet
+         (E.input ~arpv4:(A.input arp)
+            ~ipv4:(I.input
+                     ~udp:(fun ~src:_ ~dst:_ _contents -> Lwt.return_unit)
+                     ~tcp:(fun ~src:_ ~dst:_ _contents -> Lwt.return_unit)
+                     ~default:(fun ~proto ~src ~dst buf ->
+                         if proto = icmp_protocol then begin
+                           (* hopefully this is a reply to an ICMP echo request we sent *)
+                           Log.info (fun f -> f "ping test: ICMP message received from %a: %a" I.pp_ipaddr src Cstruct.hexdump_pp buf);
+                           match Icmpv4_packet.Unmarshal.of_cstruct buf with
+                           | Ok (packet, _payload) -> Log.info (fun f -> f "ICMP message: %a" Icmpv4_packet.pp packet);
+                             (* TODO: make sure this is an echo response *)
+                             resp_received := true;
+                             Lwt.return_unit
+                           | Error e -> Log.err (fun f -> f "couldn't parse ICMP packet: %s" e);
+                             Lwt.return_unit
+                         end else begin
+                           Log.info (fun f -> f "ping test: non-ICMP/TCP/UDP message received? %a" Cstruct.hexdump_pp buf);
+                           Lwt.return_unit
+                         end)
+                     ipv4
+                  )
+            ~ipv6:(fun _ -> Lwt.return_unit)
+            ethernet)) >>= fun _ -> Lwt.return_unit
+    in
+    Lwt.async icmp_listen;
+    Icmp.write icmp ~dst:(Ipaddr.V4.of_string_exn server) (make_ping (Cstruct.of_string "hi")) >>= function
+    | Error e -> Log.err (fun f -> f "ping test: error sending ping: %a" Icmp.pp_error e); Lwt.return_unit
+    | Ok () ->
+      Log.info (fun f -> f "ping test: sent ping to %s" server);
+      Time.sleep_ns 2_000_000_000L >>= fun () ->
+      if !resp_received then begin 
+        Log.err (fun f -> f "ping test failed to server %s: got a response when we should not have. the firewall is too permissive" server);
+        Lwt.return_unit 
+      end else begin
+        Log.err (fun f -> f "ping test passed to server %s: no response from server" server);
+        Lwt.return_unit
+      end
 
   let tcp_connect server port tcp =
     Log.info (fun f -> f "Entering tcp connect test: %s:%d"
@@ -156,11 +208,14 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     E.connect network >>= fun ethernet ->
     A.connect ethernet >>= fun arp ->
     I.connect db clock ethernet arp >>= fun ipv4 ->
+    Icmp.connect ipv4 >>= fun icmp ->
     U.connect ipv4 >>= fun udp ->
     T.connect ipv4 clock >>= fun tcp ->
 
     udp_fetch ~src_port:9090 ~echo_server_port:1235 network ethernet arp ipv4 udp >>= fun () ->
     udp_fetch ~src_port:9091 ~echo_server_port:6668 network ethernet arp ipv4 udp >>= fun () ->
+    (* put this first because tcp_connect_denied tests also generate icmp messages *)
+    ping_expect_failure "8.8.8.8" network ethernet arp ipv4 icmp >>= fun () ->
     (* replace the udp-related listeners with the right one for tcp *)
     Lwt.async (fun () -> tcp_listen network ethernet arp ipv4 tcp);
     tcp_connect nameserver_1 53 tcp >>= fun () ->
