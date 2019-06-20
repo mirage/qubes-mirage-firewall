@@ -49,6 +49,18 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
   module U = Udp.Make(I)(R)
   module T = Tcp.Flow.Make(I)(Time)(Clock)(R)
 
+  let info str = Log.info (fun f -> f "%s" str)
+  let fail str = Log.err (fun f -> f "%s" str)
+
+  let failf (fmt : ('a, Format.formatter, unit, 'b) format4) : 'a = Fmt.kstrf fail fmt
+
+  let die msg =
+    failf msg;
+    assert false
+
+  let pass msg =
+    Log.info (fun f -> f "%a passed :)" msg)
+
   (* Tcp.create_connection needs this listener; it should be running
      when tcp_connect or tcp_connect_denied tests run *)
   let tcp_listen network ethernet arp ipv4 tcp=
