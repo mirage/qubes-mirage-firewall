@@ -32,6 +32,9 @@ qvm-firewall $TEST_VM add accept 10.137.0.5 udp 1235
 echo "Setting $TEST_VM allow rule for TCP port 6668-6670 to 10.137.0.5:"
 qvm-firewall $TEST_VM add accept 10.137.0.5 tcp 6668-6670
 
+echo "Setting $TEST_VM allow rule for ICMP type 8 (ping) to 10.137.0.5:"
+qvm-firewall $TEST_VM add accept 10.137.0.5 icmp icmptype=8
+
 echo "Setting $TEST_VM deny-all rule:"
 qvm-firewall $TEST_VM add drop
 
