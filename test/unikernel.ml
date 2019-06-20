@@ -121,15 +121,15 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
         Lwt.return_unit
       end
 
-  let tcp_connect server port tcp =
-    Log.info (fun f -> f "Entering tcp connect test: %s:%d"
-                 server port);
+  let tcp_connect msg server port tcp =
+    Log.info (fun f -> f "Entering tcp connect test: %s:%d" server port);
     let ip = Ipaddr.V4.of_string_exn server in
+    let msg' = Printf.sprintf "TCP connect test %s to %s:%d" msg server port in
     T.create_connection tcp (ip, port) >>= function
     | Ok flow ->
-      Log.info (fun f -> f "TCP test to %s:%d passed :)" server port);
+      Log.info (fun f -> f "%s passed :)" msg');
       T.close flow
-    | Error e -> Log.err (fun f -> f "TCP test to %s:%d failed: Connection failed (%a) :(" server port T.pp_error e);
+    | Error e -> Log.err (fun f -> f "%s failed: Connection failed (%a) :(" msg' T.pp_error e);
       Lwt.return_unit
 
   let tcp_connect_denied msg port tcp =
@@ -219,11 +219,11 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     ping_expect_failure "8.8.8.8" network ethernet arp ipv4 icmp >>= fun () ->
     (* replace the udp-related listeners with the right one for tcp *)
     Lwt.async (fun () -> tcp_listen network ethernet arp ipv4 tcp);
-    tcp_connect nameserver_1 53 tcp >>= fun () ->
+    tcp_connect "when trying specialtarget" nameserver_1 53 tcp >>= fun () ->
     tcp_connect_denied "" 53 tcp >>= fun () ->
     tcp_connect_denied "when trying below range" 6667 tcp >>= fun () ->
-    tcp_connect netvm 6668 tcp >>= fun () ->
-    tcp_connect netvm 6670 tcp >>= fun () ->
+    tcp_connect "when trying lower bound in range" netvm 6668 tcp >>= fun () ->
+    tcp_connect "when trying upper bound in range" netvm 6670 tcp >>= fun () ->
     tcp_connect_denied "when trying above range" 6671 tcp >>= fun () ->
     tcp_connect_denied "" 8082 tcp
 
