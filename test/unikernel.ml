@@ -51,7 +51,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
 
   (* Tcp.create_connection needs this listener; it should be running
      when tcp_connect or tcp_connect_denied tests run *)
-  let tcp_listen network ethernet arp ipv4 tcp= 
+  let tcp_listen network ethernet arp ipv4 tcp=
     (NET.listen network ~header_size:Ethernet_wire.sizeof_ethernet
       (E.input ~arpv4:(A.input arp)
          ~ipv4:(I.input
@@ -113,11 +113,11 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     | Ok () ->
       Log.info (fun f -> f "ping test: sent ping to %s" server);
       Time.sleep_ns 2_000_000_000L >>= fun () ->
-      if !resp_received then begin 
-        Log.err (fun f -> f "ping test failed to server %s: got a response when we should not have. the firewall is too permissive" server);
-        Lwt.return_unit 
+      if !resp_received then begin
+        Log.err (fun f -> f "ping test failed: server %s got a response, block expected :(" server);
+        Lwt.return_unit
       end else begin
-        Log.err (fun f -> f "ping test passed to server %s: no response from server" server);
+        Log.err (fun f -> f "ping test passed: successfully blocked :)");
         Lwt.return_unit
       end
 
@@ -132,18 +132,19 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     | Error e -> Log.err (fun f -> f "TCP test to %s:%d failed: Connection failed (%a) :(" server port T.pp_error e);
       Lwt.return_unit
 
-  let tcp_connect_denied port tcp =
+  let tcp_connect_denied msg port tcp =
     let ip = Ipaddr.V4.of_string_exn netvm in
+    let msg' = Printf.sprintf "TCP connect denied test %s to %s:%d" msg netvm port in
     let connect = (T.create_connection tcp (ip, port) >>= function
     | Ok flow ->
-      Log.err (fun f -> f "TCP connect denied test to %a:%d failed: Connection should be denied, but was not. :(" Ipaddr.V4.pp ip port);
+      Log.err (fun f -> f "%s failed: Connection should be denied, but was not. :(" msg');
       T.close flow
-    | Error e -> Log.info (fun f -> f "TCP connect denied test to %s:%d passed (error text: %a) :)" netvm port T.pp_error e);
+    | Error e -> Log.info (fun f -> f "%s passed (error text: %a) :)" msg' T.pp_error e);
       Lwt.return_unit)
     in
     let timeout = (
       Time.sleep_ns 1_000_000_000L >>= fun () ->
-      Log.info (fun f -> f "TCP connect denied test to %s:%d passed :)" netvm port);
+      Log.info (fun f -> f "%s passed :)" msg');
       Lwt.return_unit)
     in
     Lwt.pick [ connect ; timeout ]
@@ -219,8 +220,11 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     (* replace the udp-related listeners with the right one for tcp *)
     Lwt.async (fun () -> tcp_listen network ethernet arp ipv4 tcp);
     tcp_connect nameserver_1 53 tcp >>= fun () ->
-    tcp_connect_denied 53 tcp >>= fun () ->
+    tcp_connect_denied "" 53 tcp >>= fun () ->
+    tcp_connect_denied "when trying below range" 6667 tcp >>= fun () ->
     tcp_connect netvm 6668 tcp >>= fun () ->
-    tcp_connect_denied 8082 tcp
+    tcp_connect netvm 6670 tcp >>= fun () ->
+    tcp_connect_denied "when trying above range" 6671 tcp >>= fun () ->
+    tcp_connect_denied "" 8082 tcp
 
 end

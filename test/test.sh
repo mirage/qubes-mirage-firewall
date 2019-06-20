@@ -42,9 +42,11 @@ echo "sudo dnf install nmap-ncat"
 echo "Allow incoming traffic from local virtual interfaces on the appropriate ports:"
 echo "sudo iptables -I INPUT -i vif+ -p udp --dport $udp_echo_port -j ACCEPT"
 echo "sudo iptables -I INPUT -i vif+ -p tcp --dport $tcp_echo_port -j ACCEPT"
+echo "sudo iptables -I INPUT -i vif+ -p tcp --dport 6670 -j ACCEPT"
 echo "Then run the services:"
 echo "ncat -e /bin/cat -k -u -l 1235"
 echo "ncat -e /bin/cat -k -l 6668"
+echo "ncat -e /bin/cat -k -l 6670"
 }
 
 if ! [ -x "$(command -v boot-mirage)" ]; then
@@ -68,7 +70,8 @@ udp_echo_port=1235
 tcp_echo_port=6668
 reply_0=$(echo hi | nc -u $echo_host -q 1 $udp_echo_port )
 reply_1=$(echo hi | nc $echo_host -w 1 $tcp_echo_port )
-if [ "$reply_0" != "hi" ] || [ "$reply_1" != "hi" ]; then
+reply_2=$(echo hi | nc $echo_host -w 1 6670 )
+if [ "$reply_0" != "hi" ] || [ "$reply_1" != "hi" ] || [ "$reply_2" != "hi" ]; then
   # TODO: if the development environment and the test unikernel have different
   # NetVMs serving their respective firewalls, this can be a false negative.
   # provide some nice way for the user to handle this -
