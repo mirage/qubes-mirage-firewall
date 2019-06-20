@@ -37,8 +37,8 @@ let classify_client_packet (packet : ([`Client of Fw_utils.client_link], _) Pack
     | None, Some `dns -> begin
       (* specialtarget=dns is implicitly tcp/udp port 53 *)
       match packet.transport_header with
-        | `TCP header -> header.dst_port = 53
-        | `UDP header -> header.dst_port = 53
+        | `TCP header -> header.dst_port = dns_port
+        | `UDP header -> header.dst_port = dns_port
         | _ -> false
     end
     | Some rule_proto, _ -> match rule_proto, packet.transport_header with
