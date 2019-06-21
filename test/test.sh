@@ -35,18 +35,22 @@ $ qrexec-client-vm dom0 yomimono.updateFirewall"
 }
 
 function explain_upstream {
-echo "Also, start the test services on the upstream NetVM (which is available at 10.137.0.5 from the test unikernel)."
-echo "For the UDP and TCP reply services:"
-echo "Install nmap-ncat:"
-echo "sudo dnf install nmap-ncat"
-echo "Allow incoming traffic from local virtual interfaces on the appropriate ports:"
-echo "sudo iptables -I INPUT -i vif+ -p udp --dport $udp_echo_port -j ACCEPT"
-echo "sudo iptables -I INPUT -i vif+ -p tcp --dport $tcp_echo_port -j ACCEPT"
-echo "sudo iptables -I INPUT -i vif+ -p tcp --dport 6670 -j ACCEPT"
-echo "Then run the services:"
-echo "ncat -e /bin/cat -k -u -l 1235"
-echo "ncat -e /bin/cat -k -l 6668"
-echo "ncat -e /bin/cat -k -l 6670"
+echo "Also, start the test services on the upstream NetVM (which is available at 10.137.0.5 from the test unikernel).
+For the UDP and TCP reply services:
+Install nmap-ncat:
+
+sudo dnf install nmap-ncat
+
+Allow incoming traffic from local virtual interfaces on the appropriate ports,
+then run the services:
+
+sudo iptables -I INPUT -i vif+ -p udp --dport $udp_echo_port -j ACCEPT
+sudo iptables -I INPUT -i vif+ -p tcp --dport $tcp_echo_port_lower -j ACCEPT
+sudo iptables -I INPUT -i vif+ -p tcp --dport $tcp_echo_port_upper -j ACCEPT
+ncat -e /bin/cat -k -u -l $udp_echo_port &
+ncat -e /bin/cat -k -l $tcp_echo_port_lower &
+ncat -e /bin/cat -k -l $tcp_echo_port_upper &
+"
 }
 
 if ! [ -x "$(command -v boot-mirage)" ]; then
@@ -67,19 +71,32 @@ if [ $? -ne 0 ]; then
 fi
 echo_host=10.137.0.5
 udp_echo_port=1235
-tcp_echo_port=6668
-reply_0=$(echo hi | nc -u $echo_host -q 1 $udp_echo_port )
-reply_1=$(echo hi | nc $echo_host -w 1 $tcp_echo_port )
-reply_2=$(echo hi | nc $echo_host -w 1 6670 )
-if [ "$reply_0" != "hi" ] || [ "$reply_1" != "hi" ] || [ "$reply_2" != "hi" ]; then
-  # TODO: if the development environment and the test unikernel have different
-  # NetVMs serving their respective firewalls, this can be a false negative.
-  # provide some nice way for the user to handle this -
-  # the non-nice way is commenting out this test ;)
-  echo "echo services not reachable at UDP $echo_host:$udp_echo_port or TCP $echo_host:$tcp_echo_port" >&2
-  explain_upstream >&2
-  exit 1
-fi
+tcp_echo_port_lower=6668
+tcp_echo_port_upper=6670
+
+# Pretest that checks if our echo servers work.
+# NOTE: we assume the dev qube has the same netvm as fetchmotron.
+# If yours is different, this test will fail (comment it out)
+function pretest {
+  protocol=$1
+  port=$2
+  if [ "$protocol" = "udp" ]; then
+    udp_arg="-u"
+  else
+    udp_arg=""
+  fi
+  reply=$(echo hi | nc $udp_arg $echo_host -w 1 $port)
+  echo "echo hi | nc $udp_arg $echo_host -w 1 $port"
+  if [ "$reply" != "hi" ]; then
+    echo "echo services not reachable at $protocol $echo_host:$port" >&2
+    explain_upstream >&2
+    exit 1
+  fi
+}
+
+pretest "udp" "$udp_echo_port"
+pretest "tcp" "$tcp_echo_port_lower"
+pretest "tcp" "$tcp_echo_port_upper"
 
 echo "We're gonna set up a unikernel for the mirage-fw-test qube"
 cd ..
