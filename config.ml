@@ -27,7 +27,7 @@ let main =
       package "ethernet";
       package "mirage-protocols";
       package "shared-memory-ring" ~min:"3.0.0";
-      package "netchannel" ~min:"1.11.0" ~pin:"git+https://github.com/mirage/mirage-net-xen.git";
+      package "netchannel" ~min:"1.11.0";
       package "mirage-net-xen";
       package "ipaddr" ~min:"3.0.0";
       package "mirage-qubes";
