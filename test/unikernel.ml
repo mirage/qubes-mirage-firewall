@@ -31,6 +31,8 @@ module Log = (val Logs.src_log src : Logs.LOG)
     x None (TCP connect denied, UDP fetch test)
     x query type (ping test)
       error type
+      - errors related to allowed traffic (does it have a host waiting for it?)
+      - directly allowed outbound icmp errors (e.g. for forwarding)
  * - number (ordering over rules, to resolve conflicts by precedence)
       no overlap between rules, i.e. ordering unimportant
       error case: multiple rules with same number?
@@ -120,6 +122,44 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
         Log.err (fun f -> f "ping test passed: successfully blocked :)")
       );
       Lwt.return_unit
+
+  let icmp_error_type network ethernet arp ipv4 udp () =
+    let resp_correct = ref false in
+    let udp_listener : U.callback = (fun ~src ~dst:_ ~src_port buf -> Lwt.return_unit) in
+
+    let udp_arg : U.ipinput = U.input ~listeners:(fun ~dst_port:_ -> Some udp_listener) udp in
+    let echo_server = Ipaddr.V4.of_string_exn netvm in
+    Lwt.async (fun () ->
+    NET.listen network ~header_size:Ethernet_wire.sizeof_ethernet
+                  (E.input ~arpv4:(A.input arp)
+                     ~ipv4:(I.input
+                              ~udp:udp_arg
+                              ~tcp:(fun ~src:_ ~dst:_ _contents -> Lwt.return_unit)
+                              ~default:(fun ~proto ~src ~dst:_ _ ->
+                                  if proto = 1 && Ipaddr.V4.compare src echo_server = 0
+                                  then resp_correct := true;
+                                  (* TODO: check packet *)
+                                  Lwt.return_unit)
+                              ipv4
+                           )
+                     ~ipv6:(fun _ -> Lwt.return_unit)
+                     ethernet
+                  ) >>= fun _ -> Lwt.return_unit
+    );
+    let content = Cstruct.of_string "important data" in
+    U.write ~src_port:1337 ~dst:echo_server ~dst_port:1338 udp content >>= function
+    | Ok () -> (* .. listener: test with accept rule, if we get reply we're good *)
+      Time.sleep_ns 1_000_000_000L >>= fun () ->
+      if !resp_correct then Lwt.return_unit else begin
+        Log.err (fun f -> f "UDP fetch test to port %d: failed. :( correct response not received" 1338);
+        Lwt.return_unit
+      end
+    | Error e ->
+      Log.err (fun f -> f "UDP fetch test to port %d failed: :( couldn't write the packet: %a"
+                  1338 U.pp_error e);
+      Lwt.return_unit
+
+
 
   let tcp_connect msg server port tcp () =
     Log.info (fun f -> f "Entering tcp connect test: %s:%d" server port);
@@ -217,7 +257,8 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     (* put this first because tcp_connect_denied tests also generate icmp messages *)
     let general_tests : unit Alcotest_mirage.test = ("firewall tests", [
         ("UDP fetch", `Quick,  udp_fetch ~src_port:9090 ~echo_server_port:1235 network ethernet arp ipv4 udp );
-        ("Ping expect failure", `Quick, ping_expect_failure "8.8.8.8" network ethernet arp ipv4 icmp )
+        ("Ping expect failure", `Quick, ping_expect_failure "8.8.8.8" network ethernet arp ipv4 icmp );
+        ("ICMP error type", `Quick, icmp_error_type network ethernet arp ipv4 udp )
        ] ) in
     let tcp_tests : unit Alcotest_mirage.test = ("tcp tests", [
         ("TCP connect", `Quick, tcp_connect "when trying specialtarget" nameserver_1 53 tcp);
