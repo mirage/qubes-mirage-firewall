@@ -8,6 +8,8 @@ let packages = [
   package "tcpip" ~sublibs:["icmpv4"; "ipv4"; "udp"; "tcp"];
   package "mirage-qubes";
   package "mirage-qubes-ipv4";
+  package "alcotest";
+  package "alcotest-mirage";
 ]
 
 let client =

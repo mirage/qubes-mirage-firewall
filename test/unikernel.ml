@@ -1,5 +1,6 @@
 open Lwt.Infix
 open Mirage_types_lwt
+open Alcotest
 (* https://www.qubes-os.org/doc/vm-interface/#firewall-rules-in-4x *)
 let src = Logs.Src.create "firewall test" ~doc:"Firewalltest"
 module Log = (val Logs.src_log src : Logs.LOG)
@@ -48,18 +49,6 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
   module Icmp = Icmpv4.Make(I)
   module U = Udp.Make(I)(R)
   module T = Tcp.Flow.Make(I)(Time)(Clock)(R)
-
-  let info str = Log.info (fun f -> f "%s" str)
-  let fail str = Log.err (fun f -> f "%s" str)
-
-  let failf (fmt : ('a, Format.formatter, unit, 'b) format4) : 'a = Fmt.kstrf fail fmt
-
-  let die msg =
-    failf msg;
-    assert false
-
-  let pass msg =
-    Log.info (fun f -> f "%a passed :)" msg)
 
   (* Tcp.create_connection needs this listener; it should be running
      when tcp_connect or tcp_connect_denied tests run *)
@@ -116,7 +105,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
           ~ipv6:(fun _ -> Lwt.return_unit)
           ethernet)) >>= fun _ -> Lwt.return_unit
 
-  let ping_expect_failure server network ethernet arp ipv4 icmp =
+  let ping_expect_failure server network ethernet arp ipv4 icmp () =
     let resp_received = ref false in
     Log.info (fun f -> f "Entering ping test: %s" server);
     Lwt.async @@ ping_denied_listener server network ethernet arp ipv4 resp_received;
@@ -132,7 +121,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
       );
       Lwt.return_unit
 
-  let tcp_connect msg server port tcp =
+  let tcp_connect msg server port tcp () =
     Log.info (fun f -> f "Entering tcp connect test: %s:%d" server port);
     let ip = Ipaddr.V4.of_string_exn server in
     let msg' = Printf.sprintf "TCP connect test %s to %s:%d" msg server port in
@@ -143,7 +132,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     | Error e -> Log.err (fun f -> f "%s failed: Connection failed (%a) :(" msg' T.pp_error e);
       Lwt.return_unit
 
-  let tcp_connect_denied msg port tcp =
+  let tcp_connect_denied msg port tcp () =
     let ip = Ipaddr.V4.of_string_exn netvm in
     let msg' = Printf.sprintf "TCP connect denied test %s to %s:%d" msg netvm port in
     let connect = (T.create_connection tcp (ip, port) >>= function
@@ -160,7 +149,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     in
     Lwt.pick [ connect ; timeout ]
 
-  let udp_fetch ~src_port ~echo_server_port network ethernet arp ipv4 udp =
+  let udp_fetch ~src_port ~echo_server_port network ethernet arp ipv4 udp () =
     Log.info (fun f -> f "Entering udp fetch test: %d -> %s:%d"
                  src_port netvm echo_server_port);
     let resp_correct = ref false in
@@ -225,17 +214,24 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     U.connect ipv4 >>= fun udp ->
     T.connect ipv4 clock >>= fun tcp ->
 
-    udp_fetch ~src_port:9090 ~echo_server_port:1235 network ethernet arp ipv4 udp >>= fun () ->
     (* put this first because tcp_connect_denied tests also generate icmp messages *)
-    ping_expect_failure "8.8.8.8" network ethernet arp ipv4 icmp >>= fun () ->
+    let general_tests : unit Alcotest_mirage.test = ("firewall tests", [
+        ("UDP fetch", `Quick,  udp_fetch ~src_port:9090 ~echo_server_port:1235 network ethernet arp ipv4 udp );
+        ("Ping expect failure", `Quick, ping_expect_failure "8.8.8.8" network ethernet arp ipv4 icmp )
+       ] ) in
+    let tcp_tests : unit Alcotest_mirage.test = ("tcp tests", [
+        ("TCP connect", `Quick, tcp_connect "when trying specialtarget" nameserver_1 53 tcp);
+        ("TCP connect", `Quick, tcp_connect_denied "" 53 tcp);
+        ("TCP connect", `Quick, tcp_connect_denied "when trying below range" 6667 tcp);
+        ("TCP connect", `Quick, tcp_connect "when trying lower bound in range" netvm 6668 tcp);
+        ("TCP connect", `Quick, tcp_connect "when trying upper bound in range" netvm 6670 tcp);
+        ("TCP connect", `Quick, tcp_connect_denied "when trying above range" 6671 tcp);
+        ("TCP connect", `Quick, tcp_connect_denied "" 8082 tcp);
+      ] ) in
+
     (* replace the udp-related listeners with the right one for tcp *)
+    Alcotest_mirage.run "name" [ general_tests ] >>= fun () ->
     Lwt.async (fun () -> tcp_listen network ethernet arp ipv4 tcp);
-    tcp_connect "when trying specialtarget" nameserver_1 53 tcp >>= fun () ->
-    tcp_connect_denied "" 53 tcp >>= fun () ->
-    tcp_connect_denied "when trying below range" 6667 tcp >>= fun () ->
-    tcp_connect "when trying lower bound in range" netvm 6668 tcp >>= fun () ->
-    tcp_connect "when trying upper bound in range" netvm 6670 tcp >>= fun () ->
-    tcp_connect_denied "when trying above range" 6671 tcp >>= fun () ->
-    tcp_connect_denied "" 8082 tcp
+    Alcotest_mirage.run "name" [ tcp_tests ]
 
 end
