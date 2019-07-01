@@ -31,8 +31,8 @@ module Log = (val Logs.src_log src : Logs.LOG)
     x None (TCP connect denied, UDP fetch test)
     x query type (ping test)
       error type
-      - errors related to allowed traffic (does it have a host waiting for it?)
-      - directly allowed outbound icmp errors (e.g. for forwarding)
+    x - errors related to allowed traffic (does it have a host waiting for it?)
+    x - directly allowed outbound icmp errors (e.g. for forwarding)
  * - number (ordering over rules, to resolve conflicts by precedence)
       no overlap between rules, i.e. ordering unimportant
       error case: multiple rules with same number?
@@ -135,11 +135,21 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
                      ~ipv4:(I.input
                               ~udp:udp_arg
                               ~tcp:(fun ~src:_ ~dst:_ _contents -> Lwt.return_unit)
-                              ~default:(fun ~proto ~src ~dst:_ _ ->
+                              ~default:(fun ~proto ~src ~dst:_ buf ->
                                   if proto = 1 && Ipaddr.V4.compare src echo_server = 0
-                                  then resp_correct := true;
-                                  (* TODO: check packet *)
-                                  Lwt.return_unit)
+                                  then
+                                    begin
+                                    (* TODO: check that packet is error packet *)
+                                    match Icmpv4_packet.Unmarshal.of_cstruct buf with
+                                    | Error e -> Log.err (fun f -> f "Error parsing icmp packet %s" e)
+                                    | Ok (packet, _) ->
+                                    (* TODO don't hardcode the numbers, make a datatype *)
+                                    if packet.Icmpv4_packet.code = 10 (* unreachable, admin prohibited *)
+                                    then resp_correct := true
+                                    else Log.debug (fun f -> f "Unrelated icmp packet %a" Icmpv4_packet.pp packet)
+                                    end;
+                                  Lwt.return_unit
+                                )
                               ipv4
                            )
                      ~ipv6:(fun _ -> Lwt.return_unit)
