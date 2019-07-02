@@ -52,6 +52,9 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
   module U = Udp.Make(I)(R)
   module T = Tcp.Flow.Make(I)(Time)(Clock)(R)
 
+  module StackV4 = Tcpip_stack_direct.Make(Time)(R)(NET)(E)(A)(I)(Icmp)(U)(T)
+  module Dns = Dns_mirage_client.Make(StackV4)
+
   (* Tcp.create_connection needs this listener; it should be running
      when tcp_connect or tcp_connect_denied tests run *)
   let tcp_listen network ethernet arp ipv4 tcp=
@@ -182,9 +185,9 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     | Error e -> Log.err (fun f -> f "%s failed: Connection failed (%a) :(" msg' T.pp_error e);
       Lwt.return_unit
 
-  let tcp_connect_denied msg port tcp () =
-    let ip = Ipaddr.V4.of_string_exn netvm in
-    let msg' = Printf.sprintf "TCP connect denied test %s to %s:%d" msg netvm port in
+  let tcp_connect_denied msg server port tcp () =
+    let ip = Ipaddr.V4.of_string_exn server in
+    let msg' = Printf.sprintf "TCP connect denied test %s to %s:%d" msg server port in
     let connect = (T.create_connection tcp (ip, port) >>= function
     | Ok flow ->
       Log.err (fun f -> f "%s failed: Connection should be denied, but was not. :(" msg');
@@ -256,6 +259,29 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
                   echo_server_port U.pp_error e);
       Lwt.return_unit
 
+  let dns_expect_failure ~nameserver ~hostname stack () =
+    let lookup = Domain_name.(of_string_exn hostname |> host_exn) in
+    let nameserver' = `UDP, (Ipaddr.V4.of_string_exn nameserver, 53) in
+    let dns = Dns.create ~nameserver:nameserver' stack in
+    Dns.gethostbyname dns lookup >>= function
+    | Error (`Msg s) when String.compare s "Truncated UDP response" <> 0 -> Log.debug (fun f -> f "DNS test to %s failed as expected: %s"
+                                      nameserver s);
+      Log.info (fun f -> f "DNS traffic to %s correctly blocked :)" nameserver);
+      Lwt.return_unit
+    | Ok addr -> Log.err (fun f -> f "DNS test to %s should have been blocked, but looked up %s:%a" nameserver hostname Ipaddr.V4.pp addr);
+      Lwt.return_unit
+
+  let dns_then_tcp_denied server port udp tcp stack () =
+    let parsed_server = Domain_name.(of_string_exn server |> host_exn) in
+    (* ask dns about server *)
+    let dns = Dns.create stack in
+    Dns.gethostbyname dns parsed_server >>= function
+    | Error (`Msg s) -> Log.err (fun f -> f "couldn't look up ip for %s: %s" server s); Lwt.return_unit
+    | Ok addr ->
+      Log.debug (fun f -> f "looked up ip for %s: %a" server Ipaddr.V4.pp addr);
+      Log.err (fun f -> f "Do more stuff here!!!! :(");
+      Lwt.return_unit
+
   let start _random _time clock _c network db =
     E.connect network >>= fun ethernet ->
     A.connect ethernet >>= fun arp ->
@@ -268,21 +294,29 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     let general_tests : unit Alcotest_mirage.test = ("firewall tests", [
         ("UDP fetch", `Quick,  udp_fetch ~src_port:9090 ~echo_server_port:1235 network ethernet arp ipv4 udp );
         ("Ping expect failure", `Quick, ping_expect_failure "8.8.8.8" network ethernet arp ipv4 icmp );
+        (* TODO: ping_expect_success to the netvm, for which we have an icmptype rule in update-firewall.sh *)
         ("ICMP error type", `Quick, icmp_error_type network ethernet arp ipv4 udp )
        ] ) in
     let tcp_tests : unit Alcotest_mirage.test = ("tcp tests", [
         ("TCP connect", `Quick, tcp_connect "when trying specialtarget" nameserver_1 53 tcp);
-        ("TCP connect", `Quick, tcp_connect_denied "" 53 tcp);
-        ("TCP connect", `Quick, tcp_connect_denied "when trying below range" 6667 tcp);
+        ("TCP connect", `Quick, tcp_connect_denied "" netvm 53 tcp);
+        ("TCP connect", `Quick, tcp_connect_denied "when trying below range" netvm 6667 tcp);
         ("TCP connect", `Quick, tcp_connect "when trying lower bound in range" netvm 6668 tcp);
         ("TCP connect", `Quick, tcp_connect "when trying upper bound in range" netvm 6670 tcp);
-        ("TCP connect", `Quick, tcp_connect_denied "when trying above range" 6671 tcp);
-        ("TCP connect", `Quick, tcp_connect_denied "" 8082 tcp);
+        ("TCP connect", `Quick, tcp_connect_denied "when trying above range" netvm 6671 tcp);
+        ("TCP connect", `Quick, tcp_connect_denied "" netvm 8082 tcp);
       ] ) in
 
     (* replace the udp-related listeners with the right one for tcp *)
     Alcotest_mirage.run "name" [ general_tests ] >>= fun () ->
     Lwt.async (fun () -> tcp_listen network ethernet arp ipv4 tcp);
-    Alcotest_mirage.run "name" [ tcp_tests ]
+    Alcotest_mirage.run "name" [ tcp_tests ] >>= fun () ->
+    (* use the stack abstraction only after the other tests have run, since it's not friendly with outside use of its modules *)
+    StackV4.connect network ethernet arp ipv4 icmp udp tcp >>= fun stack ->
+    let stack_tests = "stack tests", [
+        ("DNS expect failure", `Quick, dns_expect_failure ~nameserver:"8.8.8.8" ~hostname:"mirage.io" stack);
+        ("DNS lookup + TCP connect", `Quick, dns_then_tcp_denied "google.com" 443 udp tcp stack);
+      ] in
+    Alcotest_mirage.run "name" [ stack_tests ]
 
 end
