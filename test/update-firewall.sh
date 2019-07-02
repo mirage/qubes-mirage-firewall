@@ -29,6 +29,9 @@ qvm-firewall $TEST_VM add accept specialtarget=dns
 echo "Setting $TEST_VM allow rule for UDP port 1235 to 10.137.0.5:"
 qvm-firewall $TEST_VM add accept 10.137.0.5 udp 1235
 
+echo "Setting $TEST_VM allow rule for UDP port 1338 to 10.137.0.5:"
+qvm-firewall $TEST_VM add accept 10.137.0.5 udp 1338
+
 echo "Setting $TEST_VM allow rule for TCP port 6668-6670 to 10.137.0.5:"
 qvm-firewall $TEST_VM add accept 10.137.0.5 tcp 6668-6670
 
