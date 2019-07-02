@@ -35,6 +35,12 @@ qvm-firewall $TEST_VM add accept 10.137.0.5 tcp 6668-6670
 echo "Setting $TEST_VM allow rule for ICMP type 8 (ping) to 10.137.0.5:"
 qvm-firewall $TEST_VM add accept 10.137.0.5 icmp icmptype=8
 
+echo "Setting deny rule to host google.com:"
+qvm-firewall $TEST add drop dsthost=google.com
+
+echo "Setting allow-all on port 443 rule:"
+qvm-firewall $TEST add accept proto=tcp dstports=443-443
+
 echo "Setting $TEST_VM deny-all rule:"
 qvm-firewall $TEST_VM add drop
 
