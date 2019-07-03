@@ -9,6 +9,14 @@ module Q = Pf_qubes.Parse_qubes
 let src = Logs.Src.create "rules" ~doc:"Firewall rules"
 module Log = (val Logs.src_log src : Logs.LOG)
 
+(* these nameservers are the "specialtarget" ones --
+   the upstream NetVM will redirect TCP and UDP port 53 traffic with
+   these IPs as destinations to whatever it thinks its upstream nameserver
+   should be. *)
+let specialtarget_nameservers = [
+  Ipaddr.V4.of_string_exn "10.139.1.1";
+  Ipaddr.V4.of_string_exn "10.139.1.2";
+]
 let dns_port = 53
 
 (* OCaml normally warns if you don't match all fields, but that's OK here. *)
@@ -35,10 +43,11 @@ let classify_client_packet (packet : ([`Client of Fw_utils.client_link], _) Pack
   let matches_proto rule packet = match rule.Pf_qubes.Parse_qubes.proto, rule.Pf_qubes.Parse_qubes.specialtarget with
     | None, None -> true
     | None, Some `dns -> begin
-      (* specialtarget=dns is implicitly tcp/udp port 53 *)
+      (* specialtarget=dns applies only to the specialtarget destination IPs, and
+         specialtarget=dns is also implicitly tcp/udp port 53 *)
       match packet.transport_header with
-        | `TCP header -> header.dst_port = dns_port
-        | `UDP header -> header.dst_port = dns_port
+        | `TCP header -> header.dst_port = dns_port && List.mem packet.ipv4_header.dst specialtarget_nameservers
+        | `UDP header -> header.dst_port = dns_port && List.mem packet.ipv4_header.dst specialtarget_nameservers
         | _ -> false
     end
     | Some rule_proto, _ -> match rule_proto, packet.transport_header with
