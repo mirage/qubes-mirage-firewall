@@ -298,7 +298,8 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
         ("ICMP error type", `Quick, icmp_error_type network ethernet arp ipv4 udp )
        ] ) in
     let tcp_tests : unit Alcotest_mirage.test = ("tcp tests", [
-        ("TCP connect", `Quick, tcp_connect "when trying specialtarget" nameserver_1 53 tcp);
+       (* ("TCP connect", `Quick, tcp_connect "when trying specialtarget" nameserver_1 53 tcp);
+        *)
         ("TCP connect", `Quick, tcp_connect_denied "" netvm 53 tcp);
         ("TCP connect", `Quick, tcp_connect_denied "when trying below range" netvm 6667 tcp);
         ("TCP connect", `Quick, tcp_connect "when trying lower bound in range" netvm 6668 tcp);

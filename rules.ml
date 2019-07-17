@@ -64,6 +64,10 @@ let classify_client_packet (packet : ([`Client of Fw_utils.client_link], _) Pack
   in
   let matches_dest rule packet = match rule.Pf_qubes.Parse_qubes.dst with
     | `any -> true
+    (*| `dnsname name -> Dns.lookup name >>= fun ip ->
+      Ipaddr.Prefix.mem (V4 packet.ipv4_header.Ipv4_packet.dst) ip
+      (* TODO *)
+      *)
     | `hosts subnet ->
       Ipaddr.Prefix.mem (V4 packet.ipv4_header.Ipv4_packet.dst) subnet
   in

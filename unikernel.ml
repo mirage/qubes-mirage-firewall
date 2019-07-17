@@ -7,7 +7,7 @@ open Qubes
 let src = Logs.Src.create "unikernel" ~doc:"Main unikernel code"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
+module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = struct
   module Uplink = Uplink.Make(Clock)
 
   (* Set up networking and listen for incoming packets. *)
@@ -51,17 +51,22 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
     )
 
   (* Main unikernel entry point (called from auto-generated main.ml). *)
-  let start clock =
+  let start random clock =
     let start_time = Clock.elapsed_ns clock in
     (* Start qrexec agent, GUI agent and QubesDB agent in parallel *)
     let qrexec = RExec.connect ~domid:0 () in
     GUI.connect ~domid:0 () |> watch_gui;
     let qubesDB = DB.connect ~domid:0 () in
+
+    let server =
+      Dns_server.Primary.create ~rng:R.generate Dns_resolver_root.reserved in
+    let resolver = Dns_resolver.create ~mode:(`Recursive) start_time R.generate server in
+
     (* Wait for clients to connect *)
     qrexec >>= fun qrexec ->
     let agent_listener = RExec.listen qrexec Command.handler in
     qubesDB >>= fun qubesDB ->
-    let startup_time = 
+    let startup_time =
       let (-) = Int64.sub in
       let time_in_ns = Clock.elapsed_ns clock - start_time in
       Int64.to_float time_in_ns /. 1e9
