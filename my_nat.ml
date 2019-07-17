@@ -34,13 +34,17 @@ let translate t packet =
     None
   | Ok packet -> Some packet
 
-let random_user_port () =
-  1024 + Random.int (0xffff - 1024)
+(* TODO put retries in here *)
+let rec random_user_port ports =
+  let p = 1024 + Random.int (0xffff - 1024) in
+  if Ports.PortSet.mem p ports
+  then random_user_port ports
+  else p, Ports.PortSet.add p ports
 
 let reset t =
   Nat.reset t.table
 
-let add_nat_rule_and_translate t ~xl_host action packet =
+let add_nat_rule_and_translate t ports ~xl_host action packet =
   let now = t.get_time () in
   let apply_action xl_port =
     Lwt.catch (fun () ->
@@ -52,7 +56,7 @@ let add_nat_rule_and_translate t ~xl_host action packet =
       )
   in
   let rec aux ~retries =
-    let xl_port = random_user_port () in
+    let xl_port, ports = random_user_port ports in
     apply_action xl_port >>= function
     | Error `Out_of_memory ->
       (* Because hash tables resize in big steps, this can happen even if we have a fair
