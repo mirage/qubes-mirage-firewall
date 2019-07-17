@@ -9,9 +9,12 @@ type t = private {
   client_eth : Client_eth.t;
   nat : My_nat.t;
   uplink : interface;
-  ports : Ports.PortSet.t;
+  ports : Ports.PortSet.t ref;
 }
 (** A routing table. *)
+(* t.ports <- Ports.PortSet.add new_port t.ports *)
+(* so if someone passes ports to a function, is the type Ports.PortSet.t or Ports.PortSet.t ref ? *)
+
 
 val create :
   client_eth:Client_eth.t ->

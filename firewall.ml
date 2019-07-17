@@ -98,7 +98,7 @@ let handle_low_memory t =
   match Memory_pressure.status () with
   | `Memory_critical -> (* TODO: should happen before copying and async *)
       Log.warn (fun f -> f "Memory low - dropping packet and resetting NAT table");
-      My_nat.reset t.Router.nat >|= fun () ->
+      My_nat.reset t.Router.nat t.Router.ports >|= fun () ->
       `Memory_critical
   | `Ok -> Lwt.return `Ok
 
