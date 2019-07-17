@@ -9,6 +9,7 @@ type t = private {
   client_eth : Client_eth.t;
   nat : My_nat.t;
   uplink : interface;
+  ports : Ports.PortSet.t;
 }
 (** A routing table. *)
 
