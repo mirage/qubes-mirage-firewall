@@ -14,6 +14,6 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) : sig
   val interface : t -> interface
   (** The network interface to NetVM. *)
 
-  val listen : t -> Router.t -> unit Lwt.t
+  val listen : t -> Resolver.t -> Router.t -> unit Lwt.t
   (** Handle incoming frames from NetVM. *)
 end

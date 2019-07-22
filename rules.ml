@@ -35,7 +35,7 @@ let dns_port = 53
    *)
 
 (* Does the packet match our rules? *)
-let classify_client_packet (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  : Packet.action =
+let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  : Packet.action =
   let matches_port dstports (port : int) = match dstports with
     | None -> true
     | Some (Q.Range_inclusive (min, max)) -> min <= port && port <= max
@@ -64,12 +64,26 @@ let classify_client_packet (packet : ([`Client of Fw_utils.client_link], _) Pack
   in
   let matches_dest rule packet = match rule.Pf_qubes.Parse_qubes.dst with
     | `any -> true
-    (*| `dnsname name -> Dns.lookup name >>= fun ip ->
-      Ipaddr.Prefix.mem (V4 packet.ipv4_header.Ipv4_packet.dst) ip
-      (* TODO *)
-      *)
     | `hosts subnet ->
       Ipaddr.Prefix.mem (V4 packet.ipv4_header.Ipv4_packet.dst) subnet
+    | `dnsname name ->
+      let open Lwt.Infix in
+      let proto = `Udp in (* TODO: this could be TCP too, but we assume UDP for now *)
+      let src_port = 8888 in (* TODO: use our nice data structure for this *)
+      let query, _ = Dns_client.make_query proto name Dns.Rr_map.A in (* TODO: the query could be MX, AAAA, etc instead of A :/ *)
+      let query_or_reply = true in
+      let dns_handler, query_packets, reply_packets =
+        Resolver.handle_buf resolver proto src_port query
+      in
+      Log.debug (fun f -> f "asking DNS resolver about address %a..." Domain_name.pp name);
+      match query_packets, reply_packets with
+      | _, (proto, addr, _reply_data)::_ -> (* TODO: can there be >1 answer? *)
+        0 = Ipaddr.V4.compare packet.ipv4_header.Ipv4_packet.dst addr
+      | q::tl, _ -> (* TODO send queries; also, is this too big a match? *)
+        false
+      | [], [] -> (* TODO: what does this mean?  I think it means we need to look up the name, but we don't know how *)
+        Log.warn (fun f -> f "couldn't resolve the DNS name %a -- please consider changing this rule to refer to an IP address" Domain_name.pp name);
+        false
   in
   let (`Client client_link) = packet.src in
   let rules = snd client_link#get_rules in
@@ -100,11 +114,11 @@ let classify_client_packet (packet : ([`Client of Fw_utils.client_link], _) Pack
     See packet.ml for the definitions of [info] and [action].
 
     Note: If the packet matched an existing NAT rule then this isn't called. *)
-let from_client (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action =
+let from_client resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action =
   match packet with
   | { dst = (`External _ | `NetVM) } -> begin
     (* see whether this traffic is allowed *)
-    match classify_client_packet packet with
+    match classify_client_packet resolver packet with
     | `Accept -> `NAT
     | `Drop s -> `Drop s
   end
@@ -113,7 +127,7 @@ let from_client (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Pac
     then `NAT_to (`NetVM, dns_port)
     else `Drop "packet addressed to client gateway"
   | { dst = (`Client_gateway | `Firewall_uplink) } -> `Drop "packet addressed to firewall itself"
-  | { dst = `Client _ } -> classify_client_packet packet
+  | { dst = `Client _ } -> classify_client_packet resolver packet
 
 (** Decide what to do with a packet received from the outside world.
     Note: If the packet matched an existing NAT rule then this isn't called. *)

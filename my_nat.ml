@@ -34,22 +34,14 @@ let translate t packet =
     None
   | Ok packet -> Some packet
 
-(* TODO put retries in here *)
-let rec random_user_port ports =
-  let p = 1024 + Random.int (0xffff - 1024) in
-  if Ports.PortSet.mem p !ports
-  then random_user_port ports
-  else
-    begin
-      ports := Ports.PortSet.add p !ports;
-      p
-    end
+let pick_free_port ~nat_ports ~dns_ports =
+  Ports.pick_free_port ~add_list:nat_ports ~consult_list:dns_ports
 
 let reset t p =
   p := Ports.PortSet.empty;
   Nat.reset t.table
 
-let add_nat_rule_and_translate t ports ~xl_host action packet =
+let add_nat_rule_and_translate t nat_ports resolver ~xl_host action packet =
   let now = t.get_time () in
   let apply_action xl_port =
     Lwt.catch (fun () ->
@@ -61,19 +53,19 @@ let add_nat_rule_and_translate t ports ~xl_host action packet =
       )
   in
   let rec aux ~retries =
-    let xl_port = random_user_port ports in
+    let xl_port = pick_free_port ~nat_ports ~dns_ports:resolver.Resolver.dns_ports in
     apply_action xl_port >>= function
     | Error `Out_of_memory ->
       (* Because hash tables resize in big steps, this can happen even if we have a fair
          chunk of free memory. *)
       Log.warn (fun f -> f "Out_of_memory adding NAT rule. Dropping NAT table...");
-      reset t ports >>= fun () ->
+      reset t nat_ports >>= fun () ->
       aux ~retries:(retries - 1)
     | Error `Overlap when retries < 0 -> Lwt.return (Error "Too many retries")
     | Error `Overlap ->
       if retries = 0 then (
         Log.warn (fun f -> f "Failed to find a free port; resetting NAT table");
-        reset t ports >>= fun () ->
+        reset t nat_ports >>= fun () ->
         aux ~retries:(retries - 1)
       ) else (
         aux ~retries:(retries - 1)

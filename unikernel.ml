@@ -11,9 +11,7 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
   module Uplink = Uplink.Make(Clock)
 
   (* Set up networking and listen for incoming packets. *)
-  let network ~clock nat qubesDB =
-    (* Read configuration from QubesDB *)
-    Dao.read_network_config qubesDB >>= fun config ->
+  let network ~clock config (resolver : Resolver.t) nat qubesDB =
     (* Initialise connection to NetVM *)
     Uplink.connect ~clock config >>= fun uplink ->
     (* Report success *)
@@ -29,8 +27,8 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
     in
     (* Handle packets from both networks *)
     Lwt.choose [
-      Client_net.listen qubesDB router;
-      Uplink.listen uplink router
+      Client_net.listen resolver qubesDB router;
+      Uplink.listen uplink resolver router
     ]
 
   (* We don't use the GUI, but it's interesting to keep an eye on it.
@@ -58,10 +56,6 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
     GUI.connect ~domid:0 () |> watch_gui;
     let qubesDB = DB.connect ~domid:0 () in
 
-    let server =
-      Dns_server.Primary.create ~rng:R.generate Dns_resolver_root.reserved in
-    let resolver = Dns_resolver.create ~mode:(`Recursive) start_time R.generate server in
-
     (* Wait for clients to connect *)
     qrexec >>= fun qrexec ->
     let agent_listener = RExec.listen qrexec Command.handler in
@@ -80,7 +74,22 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
     let get_time () = Clock.elapsed_ns clock in
     let max_entries = Key_gen.nat_table_size () in
     My_nat.create ~get_time ~max_entries >>= fun nat ->
-    let net_listener = network ~clock nat qubesDB in
+
+    (* Read network configuration from QubesDB *)
+    Dao.read_network_config qubesDB >>= fun config ->
+
+    let server = Dns_server.Primary.create ~rng:R.generate Dns_resolver_root.reserved in
+
+    let resolver = { Resolver.resolver =
+                       ref (Dns_resolver.create ~mode:(`Recursive) start_time R.generate server);
+                     uplink_ip = config.Dao.uplink_our_ip;
+                     get_ptime = (fun unit -> Ptime.min); (* TODO get pclock from config *)
+                     get_mtime = (fun unit -> Clock.elapsed_ns clock);
+                     dns_ports = ref Ports.PortSet.empty;
+                   } in
+
+    let net_listener = network ~clock config resolver nat qubesDB in
+
     (* Report memory usage to XenStore *)
     Memory_pressure.init ();
     (* Run until something fails or we get a shutdown request. *)

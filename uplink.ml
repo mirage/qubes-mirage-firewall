@@ -31,7 +31,7 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
       )
   end
 
-  let listen t router =
+  let listen t resolver router =
     Netif.listen t.net ~header_size:Ethernet_wire.sizeof_ethernet (fun frame ->
         (* Handle one Ethernet frame from NetVM *)
         Eth.input t.eth
@@ -47,7 +47,7 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
                 Log.warn (fun f -> f "Ignored unknown IPv4 message from uplink: %a" Nat_packet.pp_error e);
                 Lwt.return ()
               | Ok packet ->
-                Firewall.ipv4_from_netvm router packet
+                Firewall.ipv4_from_netvm router resolver packet
             )
           ~ipv6:(fun _ip -> return ())
           frame
