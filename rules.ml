@@ -35,7 +35,7 @@ let dns_port = 53
    *)
 
 (* Does the packet match our rules? *)
-let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  : Packet.action =
+let classify_client_packet resolver router (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  : Packet.action =
   let matches_port dstports (port : int) = match dstports with
     | None -> true
     | Some (Q.Range_inclusive (min, max)) -> min <= port && port <= max
@@ -69,7 +69,7 @@ let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link]
     | `dnsname name ->
       let open Lwt.Infix in
       let proto = `Udp in (* TODO: this could be TCP too, but we assume UDP for now *)
-      let src_port = 8888 in (* TODO: use our nice data structure for this *)
+      let src_port = Resolver.pick_free_port ~nat_ports:router.Router.ports ~dns_ports:resolver.Resolver.dns_ports in
       let query, _ = Dns_client.make_query proto name Dns.Rr_map.A in (* TODO: the query could be MX, AAAA, etc instead of A :/ *)
       let query_or_reply = true in
       let dns_handler, query_packets, reply_packets =
@@ -114,11 +114,11 @@ let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link]
     See packet.ml for the definitions of [info] and [action].
 
     Note: If the packet matched an existing NAT rule then this isn't called. *)
-let from_client resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action =
+let from_client resolver router (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action =
   match packet with
   | { dst = (`External _ | `NetVM) } -> begin
     (* see whether this traffic is allowed *)
-    match classify_client_packet resolver packet with
+    match classify_client_packet resolver router packet with
     | `Accept -> `NAT
     | `Drop s -> `Drop s
   end
@@ -127,7 +127,7 @@ let from_client resolver (packet : ([`Client of Fw_utils.client_link], _) Packet
     then `NAT_to (`NetVM, dns_port)
     else `Drop "packet addressed to client gateway"
   | { dst = (`Client_gateway | `Firewall_uplink) } -> `Drop "packet addressed to firewall itself"
-  | { dst = `Client _ } -> classify_client_packet resolver packet
+  | { dst = `Client _ } -> classify_client_packet resolver router packet
 
 (** Decide what to do with a packet received from the outside world.
     Note: If the packet matched an existing NAT rule then this isn't called. *)

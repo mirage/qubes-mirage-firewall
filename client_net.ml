@@ -71,7 +71,7 @@ let input_ipv4 ~iface ~router resolver packet =
   | Ok packet ->
     let `IPv4 (ip, _) = packet in
     let src = ip.Ipv4_packet.src in
-    if src = iface#other_ip then Firewall.ipv4_from_client router resolver ~src:iface packet
+    if src = iface#other_ip then Firewall.ipv4_from_client resolver router ~src:iface packet
     else (
       Log.warn (fun f -> f "Incorrect source IP %a in IP packet from %a (dropping)"
                    Ipaddr.V4.pp src Ipaddr.V4.pp iface#other_ip);
