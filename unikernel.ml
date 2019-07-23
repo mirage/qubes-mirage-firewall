@@ -23,6 +23,7 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
     let router = Router.create
       ~client_eth
       ~uplink:(Uplink.interface uplink)
+      ~dns_sender:(Uplink.send_dns_request uplink)
       ~nat
     in
     (* Handle packets from both networks *)

@@ -9,6 +9,7 @@ type t = private {
   client_eth : Client_eth.t;
   nat : My_nat.t;
   uplink : interface;
+  dns_sender: int -> (Dns.proto * Ipaddr.V4.t * int * Cstruct.t) -> unit Lwt.t;
   ports : Ports.PortSet.t ref;
 }
 (** A routing table. *)
@@ -19,6 +20,7 @@ type t = private {
 val create :
   client_eth:Client_eth.t ->
   uplink:interface ->
+  dns_sender:(int -> (Dns.proto * Ipaddr.V4.t * int * Cstruct.t) -> unit Lwt.t) ->
   nat:My_nat.t ->
   t
 (** [create ~client_eth ~uplink] is a new routing table
