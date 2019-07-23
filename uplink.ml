@@ -75,4 +75,9 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
       ~my_ip
       ~other_ip:config.Dao.uplink_netvm_ip in
     return { net; eth; arp; interface; ip; udp }
+
+  let send_dns_request t src_port (_, dst, dst_port, buf) =
+    U.write ~src_port ~dst ~dst_port t.udp buf >>= fun _res ->
+    Lwt.return_unit
+
 end

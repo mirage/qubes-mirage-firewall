@@ -16,4 +16,6 @@ module Make (R: Mirage_random.C)(Clock : Mirage_clock_lwt.MCLOCK) : sig
 
   val listen : t -> Resolver.t -> Router.t -> unit Lwt.t
   (** Handle incoming frames from NetVM. *)
+
+  val send_dns_request : t -> int -> ('a * Ipaddr.V4.t * int * Cstruct.t) -> unit Lwt.t
 end

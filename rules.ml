@@ -79,7 +79,9 @@ let classify_client_packet resolver router (packet : ([`Client of Fw_utils.clien
       match query_packets, reply_packets with
       | _, (proto, addr, _reply_data)::_ -> (* TODO: can there be >1 answer? *)
         0 = Ipaddr.V4.compare packet.ipv4_header.Ipv4_packet.dst addr
-      | q::tl, _ -> (* TODO send queries; also, is this too big a match? *)
+      | q::tl, _ ->
+        (* TODO send queries; also, is this too big a match? *)
+
         false
       | [], [] -> (* TODO: what does this mean?  I think it means we need to look up the name, but we don't know how *)
         Log.warn (fun f -> f "couldn't resolve the DNS name %a -- please consider changing this rule to refer to an IP address" Domain_name.pp name);
