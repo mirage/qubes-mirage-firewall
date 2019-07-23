@@ -8,7 +8,7 @@ let src = Logs.Src.create "unikernel" ~doc:"Main unikernel code"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = struct
-  module Uplink = Uplink.Make(Clock)
+  module Uplink = Uplink.Make(R)(Clock)
 
   (* Set up networking and listen for incoming packets. *)
   let network ~clock config (resolver : Resolver.t) nat qubesDB =

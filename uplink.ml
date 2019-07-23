@@ -9,14 +9,18 @@ module Eth = Ethernet.Make(Netif)
 let src = Logs.Src.create "uplink" ~doc:"Network connection to NetVM"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
+module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
   module Arp = Arp.Make(Eth)(OS.Time)
+  module I = Static_ipv4.Make(R)(Clock)(Eth)(Arp)
+  module U = Udp.Make(I)(R)
 
   type t = {
     net : Netif.t;
     eth : Eth.t;
     arp : Arp.t;
     interface : interface;
+    ip : I.t;
+    udp: U.t;
   }
 
   class netvm_iface eth mac ~my_ip ~other_ip : interface = object
@@ -55,17 +59,20 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
 
   let interface t = t.interface
 
-  let connect ~clock:_ config =
-    let ip = config.Dao.uplink_our_ip in
+  let connect ~clock config =
+    let my_ip = config.Dao.uplink_our_ip in
+    let gw = config.Dao.uplink_netvm_ip in
     Netif.connect "0" >>= fun net ->
     Eth.connect net >>= fun eth ->
     Arp.connect eth >>= fun arp ->
-    Arp.add_ip arp ip >>= fun () ->
+    Arp.add_ip arp my_ip >>= fun () ->
+    I.connect ~ip:my_ip ~gateway:(Some gw) clock eth arp >>= fun ip ->
+    U.connect ip >>= fun udp ->
     let netvm_mac =
-      Arp.query arp config.Dao.uplink_netvm_ip
+      Arp.query arp gw
       >|= or_raise "Getting MAC of our NetVM" Arp.pp_error in
     let interface = new netvm_iface eth netvm_mac
-      ~my_ip:ip
+      ~my_ip
       ~other_ip:config.Dao.uplink_netvm_ip in
-    return { net; eth; arp; interface }
+    return { net; eth; arp; interface; ip; udp }
 end

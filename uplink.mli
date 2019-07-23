@@ -5,7 +5,7 @@
 
 open Fw_utils
 
-module Make(Clock : Mirage_clock_lwt.MCLOCK) : sig
+module Make (R: Mirage_random.C)(Clock : Mirage_clock_lwt.MCLOCK) : sig
   type t
 
   val connect : clock:Clock.t -> Dao.network_config -> t Lwt.t
