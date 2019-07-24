@@ -77,7 +77,9 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
     return { net; eth; arp; interface; ip; udp }
 
   let send_dns_request t src_port (_, dst, dst_port, buf) =
-    U.write ~src_port ~dst ~dst_port t.udp buf >>= fun _res ->
-    Lwt.return_unit
+    Log.debug (fun f -> f "sending dns request");
+    U.write ~src_port ~dst ~dst_port t.udp buf >>= function
+    | Error s -> Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s); Lwt.return_unit
+    | Ok () -> Lwt.return_unit
 
 end

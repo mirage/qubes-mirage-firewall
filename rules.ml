@@ -62,53 +62,55 @@ let classify_client_packet resolver router (packet : ([`Client of Fw_utils.clien
       end
       | _, _ -> false
   in
+  (* return here becomes | Match | No_match | Needs_lookup * Domain_name.t *)
   let matches_dest rule packet = match rule.Pf_qubes.Parse_qubes.dst with
-    | `any -> true
+    | `any ->  `Match rule
     | `hosts subnet ->
-      Ipaddr.Prefix.mem (V4 packet.ipv4_header.Ipv4_packet.dst) subnet
+      if (Ipaddr.Prefix.mem (V4 packet.ipv4_header.Ipv4_packet.dst) subnet) then `Match rule else `No_match
     | `dnsname name ->
       let open Lwt.Infix in
       let proto = `Udp in (* TODO: this could be TCP too, but we assume UDP for now *)
       let src_port = Resolver.pick_free_port ~nat_ports:router.Router.ports ~dns_ports:resolver.Resolver.dns_ports in
       let query, _ = Dns_client.make_query proto name Dns.Rr_map.A in (* TODO: the query could be MX, AAAA, etc instead of A :/ *)
       let query_or_reply = true in
-      let dns_handler, query_packets, reply_packets =
+      let dns_handler, reply_packets, query_packets =
         Resolver.handle_buf resolver proto src_port query
       in
       Log.debug (fun f -> f "asking DNS resolver about address %a..." Domain_name.pp name);
       match query_packets, reply_packets with
-      | _, (proto, addr, _reply_data)::_ -> (* TODO: can there be >1 answer? *)
-        0 = Ipaddr.V4.compare packet.ipv4_header.Ipv4_packet.dst addr
-      | q::tl, _ ->
-        (* TODO send queries; also, is this too big a match? *)
-        Lwt.async (fun () ->
-            router.Router.dns_sender src_port q
-          );
-        false
+      | (proto, addr, query_data)::_, _ -> (* TODO: can there be >1 answer? *)
+        Log.debug ( fun f -> f "DNS resolver says to go ask %a about %a" Ipaddr.V4.pp addr Domain_name.pp name);
+        (* TODO: go ask that resolver about this ip *)
+        `Needs_lookup (proto, addr, 53, query_data)
+      | _, (proto, addr,  _port, _reply_data)::tl ->
+        Log.debug ( fun f -> f "DNS resolver says %a is at %a" Domain_name.pp name Ipaddr.V4.pp addr);
+        if 0 = Ipaddr.V4.compare packet.ipv4_header.Ipv4_packet.dst addr then `Match rule else `No_match
       | [], [] -> (* TODO: what does this mean?  I think it means we need to look up the name, but we don't know how *)
         Log.warn (fun f -> f "couldn't resolve the DNS name %a -- please consider changing this rule to refer to an IP address" Domain_name.pp name);
-        false
+        `No_match
   in
   let (`Client client_link) = packet.src in
   let rules = snd client_link#get_rules in
   Log.debug (fun f -> f "checking %d rules for a match" (List.length rules));
-  List.find_opt (fun rule ->
-      if not (matches_proto rule packet) then begin
-        Log.debug (fun f -> f "rule %d is not a match - proto" rule.Q.number);
-        false
-      end else if not (matches_dest rule packet) then begin
-        Log.debug (fun f -> f "rule %d is not a match - dest" rule.Q.number);
-        false
-      end else begin
-        Log.debug (fun f -> f "rule %d is a match" rule.Q.number);
-        true
-      end) rules |> function
-  | None -> `Drop "No matching rule; assuming default drop"
-  | Some {Q.action = Accept; number; _} ->
+  List.fold_left (fun acc rule ->
+      match acc with | `Match rule -> `Match rule
+                     | `Needs_lookup q -> `Needs_lookup q
+                     | `No_match ->
+                       if not (matches_proto rule packet) then begin
+                         Log.debug (fun f -> f "rule %d is not a match - proto" rule.Q.number);
+                         `No_match
+                       end
+                       else matches_dest rule packet
+                       ) `No_match rules |> function
+  | `No_match -> `Drop "No matching rule; assuming default drop"
+  | `Match {Q.action = Accept; number; _} ->
     Log.debug (fun f -> f "allowing packet matching rule %d" number);
     `Accept
-  | Some {Q.action = Drop; number; _} ->
+  | `Match {Q.action = Drop; number; _} ->
     `Drop (Printf.sprintf "rule %d explicitly drops this packet" number)
+  | `Needs_lookup q ->
+    Log.debug ( fun f -> f "asking for lookup of packet: needs_lookup -> lookup_and_retry");
+    `Lookup_and_retry q
 
 (** This function decides what to do with a packet from a client VM.
 
@@ -125,6 +127,7 @@ let from_client resolver router (packet : ([`Client of Fw_utils.client_link], _)
     match classify_client_packet resolver router packet with
     | `Accept -> `NAT
     | `Drop s -> `Drop s
+    | `Lookup_and_retry q -> `Lookup_and_retry q
   end
   | { dst = `Client_gateway; transport_header = `UDP header; _ } ->
     if header.dst_port = dns_port

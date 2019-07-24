@@ -101,7 +101,8 @@ pretest "tcp" "$tcp_echo_port_upper"
 echo "We're gonna set up a unikernel for the mirage-fw-test qube"
 cd ..
 make clean && \
-mirage configure -t xen -l "net-xen xenstore:error,rules:debug" && \
+mirage configure -t xen -l "net-xen xenstore:error,frameQ:debug,uplink:debug,rules:debug,udp:debug,ipv4:debug" && \
+#mirage configure -t xen -l "net-xen xenstore:error" && \
 make depend && \
 make
 if [ $? -ne 0 ]; then

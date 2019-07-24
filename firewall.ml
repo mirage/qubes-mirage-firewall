@@ -78,7 +78,7 @@ let nat_to t dns_resolver ~host ~port packet =
 
 (* Handle incoming packets *)
 
-let apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst (annotated_packet : ('a, 'b) Packet.t) : unit Lwt.t =
+let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst (annotated_packet : ('a, 'b) Packet.t) : unit Lwt.t =
   let packet = to_mirage_nat_packet annotated_packet in
   match rules annotated_packet, dst with
   | `Accept, `Client client_link -> transmit_ipv4 packet client_link
@@ -90,6 +90,14 @@ let apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst (an
     Log.debug (fun f -> f "adding NAT rule for %a" Nat_packet.pp packet);
     add_nat_and_forward_ipv4 t resolver packet
   | `NAT_to (host, port), _ -> nat_to t resolver packet ~host ~port
+  | `Lookup_and_retry (a, b, c, d), _ ->
+    (* TODO stick the dns code in here and then call apply_rules again? *)
+    let src_port = Resolver.pick_free_port ~nat_ports:t.Router.ports ~dns_ports:resolver.Resolver.dns_ports in
+    (* the listener will hopefully receive a reply eventually... TODO figure that out *)
+    (* for now, try once and give up *)
+    Log.debug (fun f -> f "sent a dns request and will give up now: %a" Cstruct.hexdump_pp d);
+    t.Router.dns_sender src_port (a, b, c, d) >>= fun () ->
+    return ()
   | `Drop reason, _ ->
       Log.debug (fun f -> f "Dropped packet (%s) %a" reason Nat_packet.pp packet);
       return ()

@@ -1,6 +1,6 @@
 type port = int
 
-type host = 
+type host =
   [ `Client of Fw_utils.client_link (** an IP address on the private network *)
   | `Client_gateway (** the firewall's IP on the private network *)
   | `Firewall_uplink (** the firewall's IP on the public network *)
@@ -15,7 +15,7 @@ type transport_header = [`TCP of Tcp.Tcp_packet.t
 type ('src, 'dst) t = {
   ipv4_header : Ipv4_packet.t;
   transport_header : transport_header;
-  transport_payload : Cstruct.t; 
+  transport_payload : Cstruct.t;
   src : 'src;
   dst : 'dst;
 }
@@ -36,5 +36,8 @@ type action = [
                between these hosts on these ports, and corresponding ICMP error traffic. *)
   | `NAT_to of host * port (* As for [`NAT], but also rewrite the packet's
                               destination fields so it will be sent to [host:port]. *)
+  | `Lookup_and_retry of (Dns.proto * Ipaddr.V4.t  * int * Cstruct.t)
+  (* Determining whether the traffic should be allowed requires a domain name lookup.
+                                              Try to resolve the name and then check again.*)
   | `Drop of string (* Drop packet for this reason. *)
 ]
