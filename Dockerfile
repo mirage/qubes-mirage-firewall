@@ -7,10 +7,10 @@ FROM ocaml/opam2@sha256:74fb6e30a95e1569db755b3c061970a8270dfc281c4e69bffe2cf990
 # Pin last known-good version for reproducible builds.
 # Remove this line (and the base image pin above) if you want to test with the
 # latest versions.
-RUN git fetch origin && git reset --hard d28fedaa8a077a429bd7bd79cbc19eb90e01c040 && opam update
+RUN git fetch origin && git reset --hard 3389beb33b37da54c9f5a41f19291883dfb59bfb && opam update
 
 RUN sudo apt-get install -y m4 libxen-dev pkg-config
-RUN opam install -y vchan mirage-xen-ocaml mirage-xen-minios io-page mirage-xen mirage mirage-nat mirage-qubes
+RUN opam install -y mirage lwt
 RUN mkdir /home/opam/qubes-mirage-firewall
 ADD config.ml /home/opam/qubes-mirage-firewall/config.ml
 WORKDIR /home/opam/qubes-mirage-firewall
