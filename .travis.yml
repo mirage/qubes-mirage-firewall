@@ -3,6 +3,8 @@ script:
   - echo 'ADD . /home/opam/qubes-mirage-firewall' >> Dockerfile
   - echo 'RUN sudo chown -R opam /home/opam/qubes-mirage-firewall' >> Dockerfile
   - docker build -t qubes-mirage-firewall .
-  - docker run --rm -i qubes-mirage-firewall
+  - docker run --name build -i qubes-mirage-firewall
+  - docker cp build:/home/opam/qubes-mirage-firewall/qubes_firewall.xen .
+  - sha256sum qubes_firewall.xen
 sudo: required
 dist: trusty
