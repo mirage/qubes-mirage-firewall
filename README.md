@@ -18,6 +18,7 @@ See the [Deploy](#deploy) section below for installation instructions.
 Create a new Fedora-29 AppVM (or reuse an existing one). Open a terminal.
 Clone this Git repository and run the `build-with-docker.sh` script:
 
+    mkdir /home/user/docker
     sudo ln -s /home/user/docker /var/lib/docker
     sudo dnf install docker
     sudo systemctl start docker
