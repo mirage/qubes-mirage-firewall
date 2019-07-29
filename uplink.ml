@@ -50,8 +50,16 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
               | Error e ->
                 Log.warn (fun f -> f "Ignored unknown IPv4 message from uplink: %a" Nat_packet.pp_error e);
                 Lwt.return ()
-              | Ok packet ->
-                Firewall.ipv4_from_netvm resolver router packet
+              | Ok (`IPv4 (ip_header, ip_packet)) ->
+                match ip_packet with
+                | `UDP (header, packet) when Ports.PortSet.mem header.dst_port !(resolver.Resolver.dns_ports) ->
+                  let state, _, _ = Resolver.handle_buf resolver `Udp ip_header.src header.src_port packet in
+                  resolver.resolver := state;
+                  resolver.Resolver.dns_ports := Ports.PortSet.remove header.dst_port !(resolver.Resolver.dns_ports);
+                  Log.err (fun f -> f "DNS response packet removed port %d" header.dst_port);
+                  Firewall.ipv4_from_netvm resolver router (`IPv4 (ip_header, ip_packet))
+                | _ ->
+                  Firewall.ipv4_from_netvm resolver router (`IPv4 (ip_header, ip_packet))
             )
           ~ipv6:(fun _ip -> return ())
           frame

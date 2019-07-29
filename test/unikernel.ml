@@ -292,21 +292,21 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
 
     (* put this first because tcp_connect_denied tests also generate icmp messages *)
     let general_tests : unit Alcotest_mirage.test = ("firewall tests", [
-        ("UDP fetch", `Quick,  udp_fetch ~src_port:9090 ~echo_server_port:1235 network ethernet arp ipv4 udp );
+(*        ("UDP fetch", `Quick,  udp_fetch ~src_port:9090 ~echo_server_port:1235 network ethernet arp ipv4 udp );
         ("Ping expect failure", `Quick, ping_expect_failure "8.8.8.8" network ethernet arp ipv4 icmp );
         (* TODO: ping_expect_success to the netvm, for which we have an icmptype rule in update-firewall.sh *)
         ("ICMP error type", `Quick, icmp_error_type network ethernet arp ipv4 udp )
-       ] ) in
+*)       ] ) in
     let tcp_tests : unit Alcotest_mirage.test = ("tcp tests", [
        (* ("TCP connect", `Quick, tcp_connect "when trying specialtarget" nameserver_1 53 tcp);
         *)
         ("TCP connect", `Quick, tcp_connect_denied "" netvm 53 tcp);
-        ("TCP connect", `Quick, tcp_connect_denied "when trying below range" netvm 6667 tcp);
+(*        ("TCP connect", `Quick, tcp_connect_denied "when trying below range" netvm 6667 tcp);
         ("TCP connect", `Quick, tcp_connect "when trying lower bound in range" netvm 6668 tcp);
         ("TCP connect", `Quick, tcp_connect "when trying upper bound in range" netvm 6670 tcp);
         ("TCP connect", `Quick, tcp_connect_denied "when trying above range" netvm 6671 tcp);
         ("TCP connect", `Quick, tcp_connect_denied "" netvm 8082 tcp);
-      ] ) in
+*)      ] ) in
 
     (* replace the udp-related listeners with the right one for tcp *)
     Alcotest_mirage.run "name" [ general_tests ] >>= fun () ->

@@ -74,7 +74,7 @@ let classify_client_packet resolver router (packet : ([`Client of Fw_utils.clien
       let query, _ = Dns_client.make_query proto name Dns.Rr_map.A in (* TODO: the query could be MX, AAAA, etc instead of A :/ *)
       let query_or_reply = true in
       let dns_handler, reply_packets, query_packets =
-        Resolver.handle_buf resolver proto src_port query
+        Resolver.handle_buf resolver proto resolver.uplink_ip src_port query
       in
       Log.debug (fun f -> f "asking DNS resolver about address %a..." Domain_name.pp name);
       match query_packets, reply_packets with

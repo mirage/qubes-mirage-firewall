@@ -97,7 +97,17 @@ let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst
     (* for now, try once and give up *)
     Log.debug (fun f -> f "sent a dns request and will give up now: %a" Cstruct.hexdump_pp d);
     t.Router.dns_sender src_port (a, b, c, d) >>= fun () ->
-    return ()
+    OS.Time.sleep_ns 1_000_000_000L >>= fun () ->
+    Log.info (fun f -> f "Waited a second, wil try again");
+    (*apply_rules t resolver rules ~dst annotated_packet*)
+    begin
+    match rules annotated_packet with
+    | `Lookup_and_retry (a, b, c, d) ->
+      Log.info (fun f -> f "Still no dns response");
+      return ()
+    | _ ->
+      return ()
+    end
   | `Drop reason, _ ->
       Log.debug (fun f -> f "Dropped packet (%s) %a" reason Nat_packet.pp packet);
       return ()
