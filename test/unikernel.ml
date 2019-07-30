@@ -299,9 +299,9 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
 *)       ] ) in
     let tcp_tests : unit Alcotest_mirage.test = ("tcp tests", [
        (* ("TCP connect", `Quick, tcp_connect "when trying specialtarget" nameserver_1 53 tcp);
-        *)
-        ("TCP connect", `Quick, tcp_connect_denied "" netvm 53 tcp);
-(*        ("TCP connect", `Quick, tcp_connect_denied "when trying below range" netvm 6667 tcp);
+        ("TCP connect", `Quick, tcp_connect_denied "" netvm 53 tcp); *)
+        ("TCP connect", `Quick, tcp_connect_denied "when trying below range" netvm 6667 tcp);
+        (* 
         ("TCP connect", `Quick, tcp_connect "when trying lower bound in range" netvm 6668 tcp);
         ("TCP connect", `Quick, tcp_connect "when trying upper bound in range" netvm 6670 tcp);
         ("TCP connect", `Quick, tcp_connect_denied "when trying above range" netvm 6671 tcp);
@@ -309,15 +309,15 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
 *)      ] ) in
 
     (* replace the udp-related listeners with the right one for tcp *)
-    Alcotest_mirage.run "name" [ general_tests ] >>= fun () ->
+    (* Alcotest_mirage.run "name" [ general_tests ] >>= fun () -> *)
     Lwt.async (fun () -> tcp_listen network ethernet arp ipv4 tcp);
-    Alcotest_mirage.run "name" [ tcp_tests ] >>= fun () ->
+    Alcotest_mirage.run "name" [ tcp_tests ] (* >>= fun () ->
     (* use the stack abstraction only after the other tests have run, since it's not friendly with outside use of its modules *)
     StackV4.connect network ethernet arp ipv4 icmp udp tcp >>= fun stack ->
     let stack_tests = "stack tests", [
         ("DNS expect failure", `Quick, dns_expect_failure ~nameserver:"8.8.8.8" ~hostname:"mirage.io" stack);
         ("DNS lookup + TCP connect", `Quick, dns_then_tcp_denied "google.com" 443 udp tcp stack);
       ] in
-    Alcotest_mirage.run "name" [ stack_tests ]
+    Alcotest_mirage.run "name" [ stack_tests ] *)
 
 end

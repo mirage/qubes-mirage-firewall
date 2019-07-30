@@ -84,10 +84,12 @@ let classify_client_packet resolver router (packet : ([`Client of Fw_utils.clien
             Log.debug ( fun f -> f "DNS resolver says to go ask %a about %a" Ipaddr.V4.pp addr Domain_name.pp name)
           ) queries;
         `Needs_lookup queries
-      | _, (proto, addr,  _port, _reply_data)::tl ->
-        (* TODO: we should search through this whole list *)
-        Log.debug ( fun f -> f "DNS resolver says %a is at %a" Domain_name.pp name Ipaddr.V4.pp addr);
-        if 0 = Ipaddr.V4.compare packet.ipv4_header.Ipv4_packet.dst addr then `Match rule else `No_match
+      | _, (proto, addr,  _port, reply_data)::tl -> begin
+          match Resolver.ip_of_reply_packet name reply_data with
+          | Ok ip ->
+            if 0 = Ipaddr.V4.compare packet.ipv4_header.Ipv4_packet.dst addr then `Match rule else `No_match
+          | Error s -> Log.err (fun f -> f "%s" s); `No_match
+      end
       | [], [] -> (* TODO: what does this mean?  I think it means we need to look up the name, but we don't know how *)
         Log.warn (fun f -> f "couldn't resolve the DNS name %a -- please consider changing this rule to refer to an IP address" Domain_name.pp name);
         `No_match
