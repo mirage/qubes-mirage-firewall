@@ -9,7 +9,7 @@ type t = {
   client_eth : Client_eth.t;
   nat : My_nat.t;
   uplink : interface;
-  dns_sender: int -> (Dns.proto * Ipaddr.V4.t * int * Cstruct.t) -> unit Lwt.t;
+  dns_sender: int -> (Dns.proto * Ipaddr.V4.t * Cstruct.t) -> unit Lwt.t;
   ports : Ports.PortSet.t ref;
 }
 

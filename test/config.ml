@@ -8,7 +8,7 @@ let packages = [
   package "tcpip" ~sublibs:["stack-direct"; "icmpv4"; "ipv4"; "udp"; "tcp"];
   package "mirage-qubes";
   package "mirage-qubes-ipv4";
-  package "dns-mirage-client";
+  package "dns-mirage-client" ~pin:"git+https://github.com/mirage/ocaml-dns.git";
   package "alcotest";
   package "alcotest-mirage";
 ]

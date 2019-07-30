@@ -35,6 +35,18 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
       )
   end
 
+  let send_dns_response t src_port (_, dst, dst_port, buf) =
+    Log.debug (fun f -> f "sending dns response");
+    U.write ~src_port ~dst ~dst_port t.udp buf >>= function
+    | Error s -> Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s); Lwt.return_unit
+    | Ok () -> Lwt.return_unit
+
+  let send_dns_query t src_port (_, dst, buf) =
+    Log.debug (fun f -> f "sending dns request");
+    U.write ~src_port ~dst ~dst_port:53 t.udp buf >>= function
+    | Error s -> Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s); Lwt.return_unit
+    | Ok () -> Lwt.return_unit
+
   let listen t resolver router =
     Netif.listen t.net ~header_size:Ethernet_wire.sizeof_ethernet (fun frame ->
         (* Handle one Ethernet frame from NetVM *)
@@ -53,11 +65,13 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
               | Ok (`IPv4 (ip_header, ip_packet)) ->
                 match ip_packet with
                 | `UDP (header, packet) when Ports.PortSet.mem header.dst_port !(resolver.Resolver.dns_ports) ->
-                  let state, _, _ = Resolver.handle_buf resolver `Udp ip_header.src header.src_port packet in
+                  (* TODO: it looks like the resolver thinks these packets aren't relevant; how can we fix that? *)
+                  let state, answers, queries = Resolver.handle_buf resolver `Udp ip_header.src header.src_port packet in
                   resolver.resolver := state;
+                  Log.err (fun f -> f "DNS response packet received; removed port %d" header.dst_port);
                   resolver.Resolver.dns_ports := Ports.PortSet.remove header.dst_port !(resolver.Resolver.dns_ports);
-                  Log.err (fun f -> f "DNS response packet removed port %d" header.dst_port);
-                  Firewall.ipv4_from_netvm resolver router (`IPv4 (ip_header, ip_packet))
+                  Log.err (fun f -> f "%d further queries are needed and %d answers are ready" (List.length queries) (List.length answers));
+                  Lwt_list.iter_s (send_dns_query t (Resolver.pick_free_port ~dns_ports:resolver.Resolver.dns_ports ~nat_ports:router.Router.ports)) queries
                 | _ ->
                   Firewall.ipv4_from_netvm resolver router (`IPv4 (ip_header, ip_packet))
             )
@@ -83,11 +97,5 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
       ~my_ip
       ~other_ip:config.Dao.uplink_netvm_ip in
     return { net; eth; arp; interface; ip; udp }
-
-  let send_dns_request t src_port (_, dst, dst_port, buf) =
-    Log.debug (fun f -> f "sending dns request");
-    U.write ~src_port ~dst ~dst_port t.udp buf >>= function
-    | Error s -> Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s); Lwt.return_unit
-    | Ok () -> Lwt.return_unit
 
 end

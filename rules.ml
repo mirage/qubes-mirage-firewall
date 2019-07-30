@@ -70,19 +70,22 @@ let classify_client_packet resolver router (packet : ([`Client of Fw_utils.clien
     | `dnsname name ->
       let open Lwt.Infix in
       let proto = `Udp in (* TODO: this could be TCP too, but we assume UDP for now *)
-      let src_port = Resolver.pick_free_port ~nat_ports:router.Router.ports ~dns_ports:resolver.Resolver.dns_ports in
-      let query, _ = Dns_client.make_query proto name Dns.Rr_map.A in (* TODO: the query could be MX, AAAA, etc instead of A :/ *)
       let query_or_reply = true in
       let dns_handler, reply_packets, query_packets =
+        let src_port = Resolver.pick_free_port ~nat_ports:router.Router.ports ~dns_ports:resolver.Resolver.dns_ports in
+        let query, _ = Dns_client.make_query proto name Dns.Rr_map.A in (* TODO: the query could be MX, AAAA, etc instead of A :/ *)
         Resolver.handle_buf resolver proto resolver.uplink_ip src_port query
       in
+      resolver.resolver := dns_handler;
       Log.debug (fun f -> f "asking DNS resolver about address %a..." Domain_name.pp name);
       match query_packets, reply_packets with
-      | (proto, addr, query_data)::_, _ -> (* TODO: can there be >1 answer? *)
-        Log.debug ( fun f -> f "DNS resolver says to go ask %a about %a" Ipaddr.V4.pp addr Domain_name.pp name);
-        (* TODO: go ask that resolver about this ip *)
-        `Needs_lookup (proto, addr, 53, query_data)
+      | queries, _ when List.length queries > 0 ->
+        List.iter (fun (proto, addr, _buf) ->
+            Log.debug ( fun f -> f "DNS resolver says to go ask %a about %a" Ipaddr.V4.pp addr Domain_name.pp name)
+          ) queries;
+        `Needs_lookup queries
       | _, (proto, addr,  _port, _reply_data)::tl ->
+        (* TODO: we should search through this whole list *)
         Log.debug ( fun f -> f "DNS resolver says %a is at %a" Domain_name.pp name Ipaddr.V4.pp addr);
         if 0 = Ipaddr.V4.compare packet.ipv4_header.Ipv4_packet.dst addr then `Match rule else `No_match
       | [], [] -> (* TODO: what does this mean?  I think it means we need to look up the name, but we don't know how *)
