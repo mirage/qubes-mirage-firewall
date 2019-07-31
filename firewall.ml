@@ -101,7 +101,7 @@ let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst
             ~dns_ports:resolver.Resolver.dns_ports
         in
         t.Router.dns_sender src_port query) l >>= fun () ->
-    OS.Time.sleep_ns 1_000_000_000L >>= fun () ->
+    OS.Time.sleep_ns 2_000_000_000L >>= fun () ->
     Log.info (fun f -> f "Waited a second, will try again");
     apply_rules t resolver rules ~dst annotated_packet
       (*

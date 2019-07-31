@@ -87,7 +87,8 @@ let classify_client_packet resolver router (packet : ([`Client of Fw_utils.clien
       | _, (proto, addr,  _port, reply_data)::tl -> begin
           match Resolver.ip_of_reply_packet name reply_data with
           | Ok ip ->
-            if 0 = Ipaddr.V4.compare packet.ipv4_header.Ipv4_packet.dst addr then `Match rule else `No_match
+            Log.err (fun f -> f "We got ip %a trying to match against %a trying to resolve domainname %a" Ipaddr.V4.pp ip Ipaddr.V4.pp packet.ipv4_header.Ipv4_packet.dst Domain_name.pp name);
+            if 0 = Ipaddr.V4.compare packet.ipv4_header.Ipv4_packet.dst ip then `Match rule else `No_match
           | Error s -> Log.err (fun f -> f "%s" s); `No_match
       end
       | [], [] -> (* TODO: what does this mean?  I think it means we need to look up the name, but we don't know how *)
