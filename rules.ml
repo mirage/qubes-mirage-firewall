@@ -86,9 +86,10 @@ let classify_client_packet resolver router (packet : ([`Client of Fw_utils.clien
         `Needs_lookup queries
       | _, (proto, addr,  _port, reply_data)::tl -> begin
           match Resolver.ip_of_reply_packet name reply_data with
-          | Ok ip ->
-            Log.err (fun f -> f "We got ip %a trying to match against %a trying to resolve domainname %a" Ipaddr.V4.pp ip Ipaddr.V4.pp packet.ipv4_header.Ipv4_packet.dst Domain_name.pp name);
-            if 0 = Ipaddr.V4.compare packet.ipv4_header.Ipv4_packet.dst ip then `Match rule else `No_match
+          | Ok (_, ips) ->
+            if Dns.Rr_map.Ipv4_set.mem packet.ipv4_header.Ipv4_packet.dst ips
+            then `Match rule
+            else `No_match
           | Error s -> Log.err (fun f -> f "%s" s); `No_match
       end
       | [], [] -> (* TODO: what does this mean?  I think it means we need to look up the name, but we don't know how *)
@@ -106,7 +107,17 @@ let classify_client_packet resolver router (packet : ([`Client of Fw_utils.clien
                          Log.debug (fun f -> f "rule %d is not a match - proto" rule.Q.number);
                          `No_match
                        end
-                       else matches_dest rule packet
+                       else
+                         match (matches_dest rule packet) with
+                         | `No_match ->
+                           Log.debug (fun f -> f "rule %d is not a match - dest" rule.Q.number);
+                           `No_match
+                         | `Match rule ->
+                           Log.debug (fun f -> f "rule %d is a match - dest" rule.Q.number);
+                           `Match rule
+                         | `Needs_lookup q ->
+                           Log.debug (fun f -> f "rule %d needs lookup - dest" rule.Q.number);
+                           `Needs_lookup q
                        ) `No_match rules |> function
   | `No_match -> `Drop "No matching rule; assuming default drop"
   | `Match {Q.action = Accept; number; _} ->

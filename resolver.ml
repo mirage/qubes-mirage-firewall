@@ -23,12 +23,13 @@ let ip_of_reply_packet (name : [`host] Domain_name.t) reply_data =
     match dns_packet.data with
     | `Answer (map1, map2) ->
       (* module Answer : sig type t = Name_rr_map.t * Name_rr_map.t *)
-      (match Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A map1 with
-      | None -> Log.debug (fun f -> f "map1 didn't have an A record for domain name")
-      | Some q -> Log.debug (fun f -> f "map1 found something!!!"));
-      (match Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A map2 with
-      | None -> Log.debug (fun f -> f "map2 didn't have an A record for domain name")
-      | Some q -> Log.debug (fun f -> f "map2 found something!!!"));
-      Error "success"
+      begin
+      match Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A map1 with
+      | Some q -> Ok q
+      | None ->
+        match Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A map2 with
+        | None -> Error "maps didn't have an A record for domain name"
+        | Some q -> Ok q
+      end
     | _ -> Error "this is not an answer"
-    
+
