@@ -28,6 +28,7 @@ let main =
       package "mirage-protocols";
       package "shared-memory-ring" ~min:"3.0.0";
       package "netchannel" ~min:"1.11.0";
+      package "mirage-xen" ~max:"4.0.0";
       package "mirage-net-xen";
       package "ipaddr" ~min:"4.0.0";
       package "mirage-qubes";
