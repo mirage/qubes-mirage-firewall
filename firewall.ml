@@ -91,6 +91,7 @@ let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst
     add_nat_and_forward_ipv4 t resolver packet
   | `NAT_to (host, port), _ -> nat_to t resolver packet ~host ~port
   | `Lookup_and_retry l, _ ->
+
     (* TODO stick the dns code in here and then call apply_rules again? *)
     (* the listener will hopefully receive a reply eventually... TODO figure that out *)
     (* for now, try once *)

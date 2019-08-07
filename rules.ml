@@ -63,38 +63,24 @@ let classify_client_packet resolver router (packet : ([`Client of Fw_utils.clien
       | _, _ -> false
   in
   (* return here becomes | Match | No_match | Needs_lookup * Domain_name.t *)
-  let matches_dest rule packet = match rule.Pf_qubes.Parse_qubes.dst with
+  let matches_dest rule packet =
+    let ip = packet.ipv4_header.Ipv4_packet.dst in
+    match rule.Pf_qubes.Parse_qubes.dst with
     | `any ->  `Match rule
     | `hosts subnet ->
-      if (Ipaddr.Prefix.mem (V4 packet.ipv4_header.Ipv4_packet.dst) subnet) then `Match rule else `No_match
+      if (Ipaddr.Prefix.mem (V4 ip) subnet) then `Match rule else `No_match
     | `dnsname name ->
-      let open Lwt.Infix in
-      let proto = `Udp in (* TODO: this could be TCP too, but we assume UDP for now *)
-      let query_or_reply = true in
-      let dns_handler, reply_packets, query_packets =
-        let src_port = Resolver.pick_free_port ~nat_ports:router.Router.ports ~dns_ports:resolver.Resolver.dns_ports in
-        let query, _ = Dns_client.make_query proto name Dns.Rr_map.A in (* TODO: the query could be MX, AAAA, etc instead of A :/ *)
-        Resolver.handle_buf resolver proto resolver.uplink_ip src_port query
-      in
-      resolver.resolver := dns_handler;
-      Log.debug (fun f -> f "asking DNS resolver about address %a..." Domain_name.pp name);
-      match query_packets, reply_packets with
-      | queries, _ when List.length queries > 0 ->
-        List.iter (fun (proto, addr, _buf) ->
-            Log.debug ( fun f -> f "DNS resolver says to go ask %a about %a" Ipaddr.V4.pp addr Domain_name.pp name)
-          ) queries;
-        `Needs_lookup queries
-      | _, (proto, addr,  _port, reply_data)::tl -> begin
-          match Resolver.ip_of_reply_packet name reply_data with
-          | Ok (_, ips) ->
-            if Dns.Rr_map.Ipv4_set.mem packet.ipv4_header.Ipv4_packet.dst ips
-            then `Match rule
-            else `No_match
-          | Error s -> Log.err (fun f -> f "%s" s); `No_match
-      end
+      match Resolver.get_cache_response_or_queries resolver name with
+      | `Unknown (mvar, queries) (*TODO*) -> `Needs_lookup queries
+      | `Known answers ->
+          let find = Dns.Rr_map.Ipv4_set.mem in
+          if List.exists (find ip) answers
+          then `Match rule
+          else `No_match
       | [], [] -> (* TODO: what does this mean?  I think it means we need to look up the name, but we don't know how *)
         Log.warn (fun f -> f "couldn't resolve the DNS name %a -- please consider changing this rule to refer to an IP address" Domain_name.pp name);
         `No_match
+
   in
   let (`Client client_link) = packet.src in
   let rules = snd client_link#get_rules in
