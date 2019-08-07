@@ -56,13 +56,13 @@ let get_cache_response_or_queries t name =
   let ts = t.get_mtime () in
   let query_or_reply = true in
   let proto = `Udp in
-  let query_cstruct, _ = Dns_client.make_query `Udp (Domain_name.of_string_exn name) Dns.Rr_map.A in
+  let query_cstruct, _ = Dns_client.make_query `Udp name Dns.Rr_map.A in
 
   let sender = t.uplink_ip in
 
   let new_resolver, answers', upstream_queries = Dns_resolver.handle_buf !(t.resolver) p_now ts query_or_reply proto sender src_port query_cstruct in
   t.resolver := new_resolver;
-  let answers = handle_answers answers' in
+  let answers = handle_answers name answers' in
   if answers <> []
   then
     `Known answers

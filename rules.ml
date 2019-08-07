@@ -71,16 +71,12 @@ let classify_client_packet resolver router (packet : ([`Client of Fw_utils.clien
       if (Ipaddr.Prefix.mem (V4 ip) subnet) then `Match rule else `No_match
     | `dnsname name ->
       match Resolver.get_cache_response_or_queries resolver name with
-      | `Unknown (mvar, queries) (*TODO*) -> `Needs_lookup queries
+      | `Unknown (mvar, queries) (* TODO: caller needs to know what to wait on *) -> `Needs_lookup queries
       | `Known answers ->
           let find = Dns.Rr_map.Ipv4_set.mem in
-          if List.exists (find ip) answers
+          if List.exists (fun (_ttl, ipset) -> find ip ipset) answers
           then `Match rule
           else `No_match
-      | [], [] -> (* TODO: what does this mean?  I think it means we need to look up the name, but we don't know how *)
-        Log.warn (fun f -> f "couldn't resolve the DNS name %a -- please consider changing this rule to refer to an IP address" Domain_name.pp name);
-        `No_match
-
   in
   let (`Client client_link) = packet.src in
   let rules = snd client_link#get_rules in
