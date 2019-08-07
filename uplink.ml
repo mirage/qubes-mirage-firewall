@@ -64,12 +64,12 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
                 Lwt.return ()
               | Ok (`IPv4 (ip_header, ip_packet)) ->
                 match ip_packet with
-                | `UDP (header, packet) when Ports.PortSet.mem header.dst_port !(resolver.Resolver.dns_ports) ->
+                | `UDP (header, packet) when Ports.PortSet.mem header.Udp_packet.dst_port !(resolver.Resolver.dns_ports) ->
                   (* TODO: it looks like the resolver thinks these packets aren't relevant; how can we fix that? *)
-                  let state, answers, queries = Resolver.handle_buf resolver `Udp ip_header.src header.src_port packet in
-                  resolver.resolver := state;
-                  Log.err (fun f -> f "DNS response packet received; removed port %d" header.dst_port);
-                  resolver.Resolver.dns_ports := Ports.PortSet.remove header.dst_port !(resolver.Resolver.dns_ports);
+                  let state, answers, queries = Resolver.handle_buf resolver `Udp ip_header.Ipv4_packet.src header.Udp_packet.src_port packet in
+                  resolver.Resolver.resolver := state;
+                  Log.err (fun f -> f "DNS response packet received; removed port %d" header.Udp_packet.dst_port);
+                  resolver.Resolver.dns_ports := Ports.PortSet.remove header.Udp_packet.dst_port !(resolver.Resolver.dns_ports);
                   Log.err (fun f -> f "%d further queries are needed and %d answers are ready" (List.length queries) (List.length answers));
                   Lwt_list.iter_s (send_dns_query t (Resolver.pick_free_port ~dns_ports:resolver.Resolver.dns_ports ~nat_ports:router.Router.ports)) queries
                 | _ ->

@@ -50,7 +50,7 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
     )
 
   (* Main unikernel entry point (called from auto-generated main.ml). *)
-  let start random clock =
+  let start _random clock =
     let start_time = Clock.elapsed_ns clock in
     (* Start qrexec agent, GUI agent and QubesDB agent in parallel *)
     let qrexec = RExec.connect ~domid:0 () in
@@ -84,8 +84,8 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
     let resolver = { Resolver.resolver =
                        ref (Dns_resolver.create ~mode:(`Recursive) start_time R.generate server);
                      uplink_ip = config.Dao.uplink_our_ip;
-                     get_ptime = (fun unit -> Ptime.min); (* TODO get pclock from config *)
-                     get_mtime = (fun unit -> Clock.elapsed_ns clock);
+                     get_ptime = (fun _unit -> Ptime.min); (* TODO get pclock from config *)
+                     get_mtime = (fun () -> Clock.elapsed_ns clock);
                      dns_ports = ref Ports.PortSet.empty;
                      unknown_names = ref Resolver.NameMvar.empty;
                    } in

@@ -63,7 +63,7 @@ let read_rules rules client_ip =
                              icmp_type = None;
                              number = 0;})]
 
-let vifs qubesDB ~handle domid =
+let vifs ~handle domid =
   match String.to_int domid with
   | None -> Log.err (fun f -> f "Invalid domid %S" domid); Lwt.return []
   | Some domid ->
@@ -100,7 +100,7 @@ let watch_clients qubesDB fn =
         | Xs_protocol.Enoent _ -> return []
         | ex -> fail ex)
     end >>= fun items ->
-    Lwt_list.map_p (vifs qubesDB ~handle) items >>= fun items ->
+    Lwt_list.map_p (vifs ~handle) items >>= fun items ->
     fn (List.concat items |> VifMap.of_list);
     (* Wait for further updates *)
     fail Xs_protocol.Eagain

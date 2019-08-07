@@ -46,10 +46,6 @@ let forward_ipv4 t packet =
   | Some iface -> transmit_ipv4 packet iface
   | None -> Lwt.return_unit
 
-(* Packet classification *)
-
-let parse_ips ips = List.map (fun (ip_str, id) -> (Ipaddr.of_string_exn ip_str, id)) ips
-
 (* NAT *)
 
 let translate t packet =

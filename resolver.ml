@@ -78,7 +78,7 @@ let ip_of_reply_packet (name : [`host] Domain_name.t) reply_data =
   | Error e -> Error (Fmt.strf "couldn't decode dns reply: %a" Dns.Packet.pp_err e)
   | Ok dns_packet ->
     Log.debug (fun f -> f "DNS reply packet: %a" Dns.Packet.pp dns_packet);
-    match dns_packet.data with
+    match dns_packet.Dns.Packet.data with
     | `Answer (map1, map2) ->
       (* module Answer : sig type t = Name_rr_map.t * Name_rr_map.t *)
       begin
