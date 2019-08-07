@@ -25,11 +25,11 @@ let handle_answers name answers =
   Log.info (fun f -> f "sitting on %d answers" (List.length answers));
   let records = List.map (fun (_, _, _, record) -> record) answers in
 
-  let answers_for_us us records =
+  let answers_for_name name records =
     let open Dns.Packet in
     let get_ip_set acc record =
       let find_me (answer, authority) =
-        Dns.Name_rr_map.find (Domain_name.of_string_exn "robur.io") Dns.Rr_map.A answer
+        Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A answer
       in
 
     match record.data with
@@ -47,7 +47,7 @@ let handle_answers name answers =
     | Ok decoded -> decoded :: acc
   in
   let arecord_map = List.fold_left decode [] records in
-  answers_for_us name arecord_map
+  answers_for_name name arecord_map
 
 let get_cache_response_or_queries t name =
   (* listener needs no bookkeeping of port number as there is no real network interface traffic, just an in memory call *)
