@@ -63,6 +63,7 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
                 Log.warn (fun f -> f "Ignored unknown IPv4 message from uplink: %a" Nat_packet.pp_error e);
                 Lwt.return ()
               | Ok (`IPv4 (ip_header, ip_packet)) ->
+                Log.debug (fun f -> f "received an ipv4 packet from %a on uplink interface" Ipaddr.V4.pp ip_header.Ipv4_packet.src);
                 match ip_packet with
                 | `UDP (header, packet) when Ports.PortSet.mem header.Udp_packet.dst_port !(resolver.Resolver.dns_ports) ->
                   let state, answers, queries = Resolver.handle_buf resolver `Udp ip_header.Ipv4_packet.src header.Udp_packet.src_port packet in
