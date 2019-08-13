@@ -274,7 +274,9 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
   let dns_then_tcp_denied server port udp tcp stack () =
     let parsed_server = Domain_name.(of_string_exn server |> host_exn) in
     (* ask dns about server *)
-    let dns = Dns.create stack in
+    Log.debug (fun f -> f "going to make a dns thing using nameserver %s" nameserver_1);
+    let dns = Dns.create ~nameserver:(`UDP, ((Ipaddr.V4.of_string_exn nameserver_1), 53)) stack in
+    Log.debug (fun f -> f "OK, going to look up %s now" server);
     Dns.gethostbyname dns parsed_server >>= function
     | Error (`Msg s) -> Log.err (fun f -> f "couldn't look up ip for %s: %s" server s); Lwt.return_unit
     | Ok addr ->
@@ -300,7 +302,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     let tcp_tests : unit Alcotest_mirage.test = ("tcp tests", [
        (* ("TCP connect", `Quick, tcp_connect "when trying specialtarget" nameserver_1 53 tcp);
         ("TCP connect", `Quick, tcp_connect_denied "" netvm 53 tcp); *)
-        ("TCP connect", `Quick, tcp_connect_denied "when trying below range" netvm 6667 tcp);
+        (* ("TCP connect", `Quick, tcp_connect_denied "when trying below range" netvm 6667 tcp); *)
         (*
         ("TCP connect", `Quick, tcp_connect "when trying lower bound in range" netvm 6668 tcp);
         ("TCP connect", `Quick, tcp_connect "when trying upper bound in range" netvm 6670 tcp);
@@ -315,8 +317,14 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     (* use the stack abstraction only after the other tests have run, since it's not friendly with outside use of its modules *)
     StackV4.connect network ethernet arp ipv4 icmp udp tcp >>= fun stack ->
     let stack_tests = "stack tests", [
-        ("DNS expect failure", `Quick, dns_expect_failure ~nameserver:"8.8.8.8" ~hostname:"mirage.io" stack);
-        ("DNS lookup + TCP connect", `Quick, dns_then_tcp_denied "google.com" 443 udp tcp stack);
+        (* ("DNS expect failure", `Quick, dns_expect_failure ~nameserver:"8.8.8.8" ~hostname:"mirage.io" stack); *)
+        (* the test below won't work on @linse's internet,
+         * because the nameserver there doesn't answer on TCP port 53,
+         * only UDP port 53.  Dns_mirage_client.ml disregards our request
+         * to use UDP and uses TCP anyway, so this request can never work there. *)
+        (* If we can figure out a way to have this test unikernel do a UDP lookup with minimal pain,
+         * we should re-enable this test. *)
+        (* ("DNS lookup + TCP connect", `Quick, dns_then_tcp_denied "google.com" 443 udp tcp stack); *)
       ] in
     Alcotest_mirage.run "name" [ stack_tests ]
 
