@@ -86,14 +86,14 @@ let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst
     Log.debug (fun f -> f "adding NAT rule for %a" Nat_packet.pp packet);
     add_nat_and_forward_ipv4 t resolver packet
   | `NAT_to (host, port), _ -> nat_to t resolver packet ~host ~port
-  | `Lookup_and_retry (mvar, outgoing_queries) ->
-    Log.debug (fun f -> f "sending %d dns requests to figure out whether a rule matches" @@ List.length l);
+  | `Lookup_and_retry (mvar, outgoing_queries), _ ->
+    Log.debug (fun f -> f "sending %d dns requests to figure out whether a rule matches" @@ List.length outgoing_queries);
     Lwt_list.iter_s (fun query ->
         let src_port = Resolver.pick_free_port
             ~nat_ports:t.Router.ports
             ~dns_ports:resolver.Resolver.dns_ports
         in
-        t.Router.dns_sender src_port query) l >>= fun () ->
+        t.Router.dns_sender src_port query) outgoing_queries >>= fun () ->
     Log.debug (fun f -> f "waiting on response for dns requests...");
     Lwt_mvar.take mvar >>= fun answers ->
     Log.info (fun f -> f "!!! good news, everyone! !!!");

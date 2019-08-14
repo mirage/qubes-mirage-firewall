@@ -76,10 +76,11 @@ let classify_client_packet resolver _router (packet : ([`Client of Fw_utils.clie
       match Resolver.get_cache_response_or_queries resolver name with
       | `Unknown (mvar, queries) (* TODO: caller needs to know what to wait on *) -> `Needs_lookup (mvar, queries)
       | `Known answers ->
-          let find = Dns.Rr_map.Ipv4_set.mem in
-          if List.exists (fun (_ttl, ipset) -> find ip ipset) answers
-          then `Match rule
-          else `No_match
+        Log.debug (fun f -> f "resolver knew some IPs for %a already" Domain_name.pp name);
+        let find = Dns.Rr_map.Ipv4_set.mem in
+        if List.exists (fun (_ttl, ipset) -> find ip ipset) answers
+        then `Match rule
+        else `No_match
   in
   let (`Client client_link) = packet.src in
   let rules = snd client_link#get_rules in

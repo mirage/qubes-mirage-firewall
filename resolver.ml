@@ -22,7 +22,6 @@ let pick_free_port ~nat_ports ~dns_ports =
   Ports.pick_free_port ~add_list:dns_ports ~consult_list:nat_ports
 
 let handle_answers name answers =
-  Log.info (fun f -> f "sitting on %d answers" (List.length answers));
   let records = List.map (fun (_, _, _, record) -> record) answers in
 
   let answers_for_name name records =
@@ -47,6 +46,7 @@ let handle_answers name answers =
     | Ok decoded -> decoded :: acc
   in
   let arecord_map = List.fold_left decode [] records in
+  Log.debug (fun f -> f "got %d parseable A records answers for name %a" (List.length arecord_map) Domain_name.pp name);
   answers_for_name name arecord_map
 
 let get_cache_response_or_queries t name =
@@ -81,9 +81,10 @@ let ip_of_reply_packet (name : [`host] Domain_name.t) dns_packet =
   | `Answer (answer, _authority) ->
     (* module Answer : sig type t = Name_rr_map.t * Name_rr_map.t *)
     begin
-      match Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A map1 with
-      | Some q -> Ok q
+      match Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A answer with
       | None -> Error `No_A_record
+      | Some q ->
+        Ok q
     end
   | _ -> Error  `Not_answer
 

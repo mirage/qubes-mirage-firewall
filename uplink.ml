@@ -71,7 +71,12 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
                   Log.err (fun f -> f "DNS response packet received; removed port %d" header.Udp_packet.dst_port);
                   resolver.Resolver.dns_ports := Ports.PortSet.remove header.Udp_packet.dst_port !(resolver.Resolver.dns_ports);
                   Log.err (fun f -> f "%d further queries are needed and %d answers are ready" (List.length queries) (List.length answers));
-                  Lwt_list.iter_s (send_dns_query t (Resolver.pick_free_port ~dns_ports:resolver.Resolver.dns_ports ~nat_ports:router.Router.ports)) queries
+                  Lwt_list.iter_p (send_dns_query t (Resolver.pick_free_port ~dns_ports:resolver.Resolver.dns_ports ~nat_ports:router.Router.ports)) queries >>= fun () ->
+                  let answers = Resolver.handle_answers answers in
+                  if answers <> []
+                  then
+                    (* TODO: we need a nice API for putting into the mvar that resolver.ml is wrapping *)
+                  else Lwt.return_unit
                 | _ ->
                   Firewall.ipv4_from_netvm resolver router (`IPv4 (ip_header, ip_packet))
             )
