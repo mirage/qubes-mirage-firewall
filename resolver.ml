@@ -28,7 +28,7 @@ let handle_answers name answers =
   let answers_for_name name records =
     let open Dns.Packet in
     let get_ip_set acc record =
-      let find_me (answer, authority) =
+      let find_me (answer, _authority) =
         Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A answer
       in
 
@@ -73,21 +73,17 @@ let get_cache_response_or_queries t name =
       `Unknown (mvar, upstream_queries)
     end
 
-let ip_of_reply_packet (name : [`host] Domain_name.t) reply_data =
-  match Dns.Packet.decode reply_data with
-  | Error e -> Error (Fmt.strf "couldn't decode dns reply: %a" Dns.Packet.pp_err e)
-  | Ok dns_packet ->
-    Log.debug (fun f -> f "DNS reply packet: %a" Dns.Packet.pp dns_packet);
-    match dns_packet.Dns.Packet.data with
-    | `Answer (map1, map2) ->
-      (* module Answer : sig type t = Name_rr_map.t * Name_rr_map.t *)
-      begin
+let ip_of_reply_packet (name : [`host] Domain_name.t) dns_packet =
+  Log.debug (fun f -> f "DNS reply packet: %a" Dns.Packet.pp dns_packet);
+  match dns_packet.Dns.Packet.data with
+  (* TODO: how should we handle authority? *)
+  (* TODO: we should probably handle other record types (CNAME, MX) properly... *)
+  | `Answer (answer, _authority) ->
+    (* module Answer : sig type t = Name_rr_map.t * Name_rr_map.t *)
+    begin
       match Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A map1 with
       | Some q -> Ok q
-      | None ->
-        match Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A map2 with
-        | None -> Error "maps didn't have an A record for domain name"
-        | Some q -> Ok q
-      end
-    | _ -> Error "this is not an answer"
+      | None -> Error `No_A_record
+    end
+  | _ -> Error  `Not_answer
 

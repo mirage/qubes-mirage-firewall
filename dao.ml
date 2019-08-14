@@ -89,7 +89,7 @@ let vifs ~handle domid =
           )
       )
 
-let watch_clients qubesDB fn =
+let watch_clients fn =
   OS.Xs.make () >>= fun xs ->
   let backend_vifs = "backend/vif" in
   Log.info (fun f -> f "Watching %s" backend_vifs);

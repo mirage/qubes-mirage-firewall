@@ -86,11 +86,7 @@ let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst
     Log.debug (fun f -> f "adding NAT rule for %a" Nat_packet.pp packet);
     add_nat_and_forward_ipv4 t resolver packet
   | `NAT_to (host, port), _ -> nat_to t resolver packet ~host ~port
-  | `Lookup_and_retry l, _ ->
-
-    (* TODO stick the dns code in here and then call apply_rules again? *)
-    (* the listener will hopefully receive a reply eventually... TODO figure that out *)
-    (* for now, try once *)
+  | `Lookup_and_retry (mvar, outgoing_queries) ->
     Log.debug (fun f -> f "sending %d dns requests to figure out whether a rule matches" @@ List.length l);
     Lwt_list.iter_s (fun query ->
         let src_port = Resolver.pick_free_port
@@ -98,20 +94,10 @@ let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst
             ~dns_ports:resolver.Resolver.dns_ports
         in
         t.Router.dns_sender src_port query) l >>= fun () ->
-    OS.Time.sleep_ns 2_000_000_000L >>= fun () ->
-    Log.info (fun f -> f "Waited a second, will try again");
-    apply_rules t resolver rules ~dst annotated_packet
-      (*
-    begin
-    match rules annotated_packet with
-    | `Lookup_and_retry l ->
-      Log.info (fun f -> f "Still no dns response; we need to ask %d more questions, at least" @@ List.length l);
-      return ()
-    | _ ->
-      Log.info (fun f -> f "!!! good news, everyone! !!!");
-      return ()
-    end
-         *)
+    Log.debug (fun f -> f "waiting on response for dns requests...");
+    Lwt_mvar.take mvar >>= fun answers ->
+    Log.info (fun f -> f "!!! good news, everyone! !!!");
+    return ()
   | `Drop reason, _ ->
       Log.debug (fun f -> f "Dropped packet (%s) %a" reason Nat_packet.pp packet);
       return ()

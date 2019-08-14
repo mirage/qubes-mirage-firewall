@@ -35,30 +35,33 @@ let dns_port = 53
    *)
 
 (* Does the packet match our rules? *)
-let classify_client_packet resolver router (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  : Packet.action =
+let classify_client_packet resolver _router (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  : Packet.action =
   let matches_port dstports (port : int) = match dstports with
     | None -> true
     | Some (Q.Range_inclusive (min, max)) -> min <= port && port <= max
   in
   let matches_proto rule packet = match rule.Pf_qubes.Parse_qubes.proto, rule.Pf_qubes.Parse_qubes.specialtarget with
     | None, None -> true
-    | None, Some `dns -> begin
+    | None, Some `dns when List.mem packet.ipv4_header.Ipv4_packet.dst specialtarget_nameservers -> begin
       (* specialtarget=dns applies only to the specialtarget destination IPs, and
          specialtarget=dns is also implicitly tcp/udp port 53 *)
       match packet.transport_header with
-        | `TCP header -> header.dst_port = dns_port && List.mem packet.ipv4_header.dst specialtarget_nameservers
-        | `UDP header -> header.dst_port = dns_port && List.mem packet.ipv4_header.dst specialtarget_nameservers
+        | `TCP header -> header.Tcp.Tcp_packet.dst_port = dns_port
+        | `UDP header -> header.Udp_packet.dst_port = dns_port
         | _ -> false
     end
+(* DNS rules can only match traffic headed to the specialtarget hosts, so any other destination
+   isn't a match for DNS rules *)
+    | None, Some `dns -> false
     | Some rule_proto, _ -> match rule_proto, packet.transport_header with
-      | `tcp, `TCP header -> matches_port rule.Q.dstports header.dst_port
-      | `udp, `UDP header -> matches_port rule.Q.dstports header.dst_port
+      | `tcp, `TCP header -> matches_port rule.Q.dstports header.Tcp.Tcp_packet.dst_port
+      | `udp, `UDP header -> matches_port rule.Q.dstports header.Udp_packet.dst_port
       | `icmp, `ICMP header ->
       begin
-        match rule.icmp_type with
+        match rule.Pf_qubes.Parse_qubes.icmp_type with
         | None -> true
         | Some rule_icmp_type ->
-          Icmpv4_wire.ty_to_int header.ty == rule_icmp_type
+          0 = compare rule_icmp_type @@ Icmpv4_wire.ty_to_int header.Icmpv4_packet.ty
       end
       | _, _ -> false
   in
@@ -68,10 +71,10 @@ let classify_client_packet resolver router (packet : ([`Client of Fw_utils.clien
     match rule.Pf_qubes.Parse_qubes.dst with
     | `any ->  `Match rule
     | `hosts subnet ->
-      if (Ipaddr.Prefix.mem (V4 ip) subnet) then `Match rule else `No_match
+      if (Ipaddr.Prefix.mem Ipaddr.(V4 ip) subnet) then `Match rule else `No_match
     | `dnsname name ->
       match Resolver.get_cache_response_or_queries resolver name with
-      | `Unknown (mvar, queries) (* TODO: caller needs to know what to wait on *) -> `Needs_lookup queries
+      | `Unknown (mvar, queries) (* TODO: caller needs to know what to wait on *) -> `Needs_lookup (mvar, queries)
       | `Known answers ->
           let find = Dns.Rr_map.Ipv4_set.mem in
           if List.exists (fun (_ttl, ipset) -> find ip ipset) answers
@@ -102,10 +105,10 @@ let classify_client_packet resolver router (packet : ([`Client of Fw_utils.clien
                            `Needs_lookup q
                        ) `No_match rules |> function
   | `No_match -> `Drop "No matching rule; assuming default drop"
-  | `Match {Q.action = Accept; number; _} ->
+  | `Match {Q.action = Q.Accept; number; _} ->
     Log.debug (fun f -> f "allowing packet matching rule %d" number);
     `Accept
-  | `Match {Q.action = Drop; number; _} ->
+  | `Match {Q.action = Q.Drop; number; _} ->
     `Drop (Printf.sprintf "rule %d explicitly drops this packet" number)
   | `Needs_lookup q ->
     Log.debug ( fun f -> f "asking for lookup of packet: needs_lookup -> lookup_and_retry");
@@ -129,7 +132,7 @@ let from_client resolver router (packet : ([`Client of Fw_utils.client_link], _)
     | `Lookup_and_retry q -> `Lookup_and_retry q
   end
   | { dst = `Client_gateway; transport_header = `UDP header; _ } ->
-    if header.dst_port = dns_port
+    if header.Udp_packet.dst_port = dns_port
     then `NAT_to (`NetVM, dns_port)
     else `Drop "packet addressed to client gateway"
   | { dst = (`Client_gateway | `Firewall_uplink) } -> `Drop "packet addressed to firewall itself"

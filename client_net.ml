@@ -134,7 +134,7 @@ let add_client resolver ~router vif client_ip qubesDB =
 
 (** Watch XenStore for notifications of new clients. *)
 let listen resolver qubesDB router =
-  Dao.watch_clients qubesDB (fun new_set ->
+  Dao.watch_clients (fun new_set ->
     (* Check for removed clients *)
     !clients |> Dao.VifMap.iter (fun key cleanup ->
       if not (Dao.VifMap.mem key new_set) then (

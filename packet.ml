@@ -5,11 +5,6 @@ open Fw_utils
 
 type port = int
 
-type ports = {
-  sport : port; (* Source port *)
-  dport : port; (* Destination *)
-}
-
 type host =
   [ `Client of client_link | `Client_gateway | `Firewall_uplink | `NetVM | `External of Ipaddr.t ]
 
@@ -57,11 +52,6 @@ let of_mirage_nat_packet ~src ~dst packet : ('a, 'b) t option =
     src;
     dst;
   }
-
-(* The first message in a TCP connection has SYN set and ACK clear. *)
-let is_tcp_start = function
-  | `IPv4 (_ip, `TCP (hdr, _body)) -> Tcp.Tcp_packet.(hdr.syn && not hdr.ack)
-  | _ -> false
 
 (* possible actions to take for a packet: *)
 type action = [
