@@ -47,7 +47,29 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
     | Error s -> Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s); Lwt.return_unit
     | Ok () -> Lwt.return_unit
 
+
   let listen t resolver router =
+
+    let ok_packet ip_header ip_packet =
+      let open Udp_packet in
+      let open Resolver in
+      let open Router in
+      let module Ports = Ports.PortSet in
+
+      Log.debug (fun f -> f "received ipv4 packet from %a on uplink" Ipaddr.V4.pp ip_header.Ipv4_packet.src);
+      match ip_packet with
+      | `UDP (header, packet) when Ports.mem header.dst_port !(resolver.dns_ports) ->
+        let state, answers, queries = Resolver.handle_buf resolver `Udp ip_header.Ipv4_packet.src header.src_port packet in
+        resolver.resolver := state;
+        resolver.dns_ports := Ports.remove header.dst_port !(resolver.dns_ports);
+        Log.debug (fun f -> f "%d further queries needed and %d answers ready" (List.length queries) (List.length answers));
+        let pick_port () = pick_free_port ~dns_ports:resolver.dns_ports ~nat_ports:router.ports in
+        Lwt_list.iter_p (send_dns_query t @@ pick_port ()) queries >>= fun () ->
+        Resolver.handle_answers_and_notify resolver answers
+      | _ ->
+        Firewall.ipv4_from_netvm resolver router (`IPv4 (ip_header, ip_packet))
+    in
+
     Netif.listen t.net ~header_size:Ethernet_wire.sizeof_ethernet (fun frame ->
         (* Handle one Ethernet frame from NetVM *)
         Eth.input t.eth
@@ -62,23 +84,7 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
               | Error e ->
                 Log.warn (fun f -> f "Ignored unknown IPv4 message from uplink: %a" Nat_packet.pp_error e);
                 Lwt.return ()
-              | Ok (`IPv4 (ip_header, ip_packet)) ->
-                Log.debug (fun f -> f "received an ipv4 packet from %a on uplink interface" Ipaddr.V4.pp ip_header.Ipv4_packet.src);
-                match ip_packet with
-                | `UDP (header, packet) when Ports.PortSet.mem header.Udp_packet.dst_port !(resolver.Resolver.dns_ports) ->
-                  let state, answers, queries = Resolver.handle_buf resolver `Udp ip_header.Ipv4_packet.src header.Udp_packet.src_port packet in
-                  resolver.Resolver.resolver := state;
-                  Log.err (fun f -> f "DNS response packet received; removed port %d" header.Udp_packet.dst_port);
-                  resolver.Resolver.dns_ports := Ports.PortSet.remove header.Udp_packet.dst_port !(resolver.Resolver.dns_ports);
-                  Log.err (fun f -> f "%d further queries are needed and %d answers are ready" (List.length queries) (List.length answers));
-                  Lwt_list.iter_p (send_dns_query t (Resolver.pick_free_port ~dns_ports:resolver.Resolver.dns_ports ~nat_ports:router.Router.ports)) queries >>= fun () ->
-                  let answers = Resolver.handle_answers answers in
-                  if answers <> []
-                  then
-                    (* TODO: we need a nice API for putting into the mvar that resolver.ml is wrapping *)
-                  else Lwt.return_unit
-                | _ ->
-                  Firewall.ipv4_from_netvm resolver router (`IPv4 (ip_header, ip_packet))
+              | Ok (`IPv4 (header, packet)) -> ok_packet header packet
             )
           ~ipv6:(fun _ip -> return ())
           frame

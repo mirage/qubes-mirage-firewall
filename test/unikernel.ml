@@ -300,15 +300,13 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
         ("ICMP error type", `Quick, icmp_error_type network ethernet arp ipv4 udp )
        ] ) in
     let tcp_tests : unit Alcotest_mirage.test = ("tcp tests", [
-       (* ("TCP connect", `Quick, tcp_connect "when trying specialtarget" nameserver_1 53 tcp);
-        ("TCP connect", `Quick, tcp_connect_denied "" netvm 53 tcp); *)
-        (* ("TCP connect", `Quick, tcp_connect_denied "when trying below range" netvm 6667 tcp); *)
-        (*
+        (*("TCP connect", `Quick, tcp_connect "when trying specialtarget" nameserver_1 53 tcp);*)
+        ("TCP connect", `Quick, tcp_connect_denied "" netvm 53 tcp);
+        ("TCP connect", `Quick, tcp_connect_denied "when trying below range" netvm 6667 tcp);
         ("TCP connect", `Quick, tcp_connect "when trying lower bound in range" netvm 6668 tcp);
         ("TCP connect", `Quick, tcp_connect "when trying upper bound in range" netvm 6670 tcp);
         ("TCP connect", `Quick, tcp_connect_denied "when trying above range" netvm 6671 tcp);
         ("TCP connect", `Quick, tcp_connect_denied "" netvm 8082 tcp);
-           *)
       ] ) in
 
     (* replace the udp-related listeners with the right one for tcp *)
@@ -318,7 +316,8 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     (* use the stack abstraction only after the other tests have run, since it's not friendly with outside use of its modules *)
     StackV4.connect network ethernet arp ipv4 icmp udp tcp >>= fun stack ->
     let stack_tests = "stack tests", [
-        (* ("DNS expect failure", `Quick, dns_expect_failure ~nameserver:"8.8.8.8" ~hostname:"mirage.io" stack); *)
+        (*("DNS expect failure", `Quick, dns_expect_failure ~nameserver:"8.8.8.8" ~hostname:"mirage.io" stack);
+         *)
         (* the test below won't work on @linse's internet,
          * because the nameserver there doesn't answer on TCP port 53,
          * only UDP port 53.  Dns_mirage_client.ml disregards our request
