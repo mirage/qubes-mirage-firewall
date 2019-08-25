@@ -6,7 +6,7 @@ open Lwt
 let src = Logs.Src.create "memory_pressure" ~doc:"Memory pressure monitor"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let total_pages = OS.MM.Heap_pages.total ()
+let total_pages = Os_xen.MM.Heap_pages.total ()
 let pagesize_kb = Io_page.page_size / 1024
 
 let meminfo ~used =
@@ -23,7 +23,7 @@ let meminfo ~used =
 
 let report_mem_usage used =
   Lwt.async (fun () ->
-    let open OS in
+    let open Os_xen in
     Xs.make () >>= fun xs ->
     Xs.immediate xs (fun h ->
       Xs.write h "memory/meminfo" (meminfo ~used)
@@ -32,16 +32,16 @@ let report_mem_usage used =
 
 let init () =
   Gc.full_major ();
-  let used = OS.MM.Heap_pages.used () in
+  let used = Os_xen.MM.Heap_pages.used () in
   report_mem_usage used
 
 let status () =
-  let used = OS.MM.Heap_pages.used () |> float_of_int in
+  let used = Os_xen.MM.Heap_pages.used () |> float_of_int in
   let frac = used /. float_of_int total_pages in
   if frac < 0.9 then `Ok
   else (
     Gc.full_major ();
-    let used = OS.MM.Heap_pages.used () in
+    let used = Os_xen.MM.Heap_pages.used () in
     report_mem_usage used;
     let frac = float_of_int used /. float_of_int total_pages in
     if frac > 0.9 then `Memory_critical

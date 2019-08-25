@@ -30,7 +30,7 @@ module VifMap = struct
 end
 
 let directory ~handle dir =
-  OS.Xs.directory handle dir >|= function
+  Os_xen.Xs.directory handle dir >|= function
   | [""] -> []      (* XenStore client bug *)
   | items -> items
 
@@ -46,7 +46,7 @@ let vifs ~handle domid =
         | Some device_id ->
         let vif = { ClientVif.domid; device_id } in
         Lwt.try_bind
-          (fun () -> OS.Xs.read handle (Printf.sprintf "%s/%d/ip" path device_id))
+          (fun () -> Os_xen.Xs.read handle (Printf.sprintf "%s/%d/ip" path device_id))
           (fun client_ip ->
              let client_ip = Ipaddr.V4.of_string_exn client_ip in
              Lwt.return (Some (vif, client_ip))
@@ -61,10 +61,10 @@ let vifs ~handle domid =
       )
 
 let watch_clients fn =
-  OS.Xs.make () >>= fun xs ->
+  Os_xen.Xs.make () >>= fun xs ->
   let backend_vifs = "backend/vif" in
   Log.info (fun f -> f "Watching %s" backend_vifs);
-  OS.Xs.wait xs (fun handle ->
+  Os_xen.Xs.wait xs (fun handle ->
     begin Lwt.catch
       (fun () -> directory ~handle backend_vifs)
       (function
