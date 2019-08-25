@@ -33,6 +33,7 @@ let main =
       package "mirage-qubes";
       package "mirage-nat" ~min:"1.2.0";
       package "mirage-logs";
+      package "mirage-xen" ~min:"4.0.0";
     ]
     "Unikernel.Main" (mclock @-> job)
 

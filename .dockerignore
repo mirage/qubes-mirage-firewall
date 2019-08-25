@@ -2,3 +2,6 @@
 _build
 *.xen
 *.bz2
+*.tar.bz2
+*.tgz
+mirage-firewall-bin*
