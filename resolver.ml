@@ -139,9 +139,19 @@ let ip_of_reply_packet (name : [`host] Domain_name.t) dns_packet =
     (* module Answer : sig type t = Name_rr_map.t * Name_rr_map.t *)
     begin
       match Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A answer with
-      | None -> Error `No_A_record
-      | Some q ->
-        Ok q
+      | Some q -> Ok q
+      | None ->
+        (* nethack.alt.org => CNAME someawshostnethack.alt.org
+         * in the mvar map, we have an entry with key nethack.alt.org and value some_mvar to wake up
+         * but we need to look up someawshostnethack.alt.org (and potentially more cnames beyond it) to get the ipv4 to compare with the packet
+         * so we need to either
+           * have another structure that lets us map further cname responses (like someawshostnethack.alt.org) to the original request
+           * change the key from nethack.alt.org to someawshostnethack.alt.org so the response triggers the same mvar
+             * if we do this, the answer won't match (because we have an A record for someawshostnethack.alt.org, but we think
+             * we need to look up nethack.alt.org, which isn't the same)
+             * *)
+        match Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.Cname answer with
+        Error `No_A_record
     end
   | _ -> Error  `Not_answer
 
