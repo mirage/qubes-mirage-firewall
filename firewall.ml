@@ -73,7 +73,7 @@ let nat_to t dns_resolver ~host ~port packet =
       Lwt.return ()
 
 (* Handle incoming packets *)
-
+(* mvar: (int32 * Dns.Rr_map.Ipv4_set.t) Lwt_mvar.t *)
 let lookup_and_retry t resolver mvar outgoing_queries =
   Log.debug (fun f -> f "sending %d dns requests to figure out whether a rule matches" @@ List.length outgoing_queries);
   Lwt_list.iter_s (fun query ->
@@ -83,7 +83,11 @@ let lookup_and_retry t resolver mvar outgoing_queries =
       in
       t.Router.dns_sender src_port query) outgoing_queries >>= fun () ->
   Log.debug (fun f -> f "waiting on response for dns requests...");
-  Lwt_mvar.take mvar >>= fun answers ->
+  Lwt_mvar.take mvar >>= fun (name, ip_set) ->
+  (* Q: is there only one response / mvar? or can there be multiple? *)
+  (* TODO Verify that the looked up name from the rule is covered in the answers *)
+  (* TODO Get ip_set for that requested name only *)
+  (* TODO Update the rule in memory so that it points to the ip_set instead of the hostname *)
   Log.info (fun f -> f "!!! good news, everyone! !!!");
   return ()
 
