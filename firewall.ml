@@ -74,7 +74,7 @@ let nat_to t dns_resolver ~host ~port packet =
 
 (* Handle incoming packets *)
 (* mvar: (int32 * Dns.Rr_map.Ipv4_set.t) Lwt_mvar.t *)
-let lookup_and_retry t resolver mvar outgoing_queries =
+let lookup t resolver mvar outgoing_queries =
   Log.debug (fun f -> f "sending %d dns requests to figure out whether a rule matches" @@ List.length outgoing_queries);
   Lwt_list.iter_s (fun query ->
       let src_port = Resolver.pick_free_port
@@ -84,11 +84,7 @@ let lookup_and_retry t resolver mvar outgoing_queries =
       t.Router.dns_sender src_port query) outgoing_queries >>= fun () ->
   Log.debug (fun f -> f "waiting on response for dns requests...");
   Lwt_mvar.take mvar >>= fun (name, ip_set) ->
-  (* Q: is there only one response / mvar? or can there be multiple? *)
-  (* TODO Verify that the looked up name from the rule is covered in the answers *)
-  (* TODO Get ip_set for that requested name only *)
-  (* TODO Update the rule in memory so that it points to the ip_set instead of the hostname *)
-  Log.info (fun f -> f "!!! good news, everyone! !!!");
+  (* TODO Q: can there be multiple response packets/mvars? Do we need to loop? *)
   return ()
 
 let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst (annotated_packet : ('a, 'b) Packet.t) : unit Lwt.t =
@@ -104,7 +100,8 @@ let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst
       add_nat_and_forward_ipv4 t resolver packet
   | `NAT_to (host, port), _ -> nat_to t resolver packet ~host ~port
   | `Lookup_and_retry (mvar, outgoing_queries), _ ->
-      lookup_and_retry t resolver mvar outgoing_queries
+      lookup t resolver mvar outgoing_queries >>= fun () ->
+      apply_rules t resolver rules ~dst annotated_packet
   | `Drop reason, _ ->
       Log.debug (fun f -> f "Dropped packet (%s) %a" reason Nat_packet.pp packet);
       return ()
