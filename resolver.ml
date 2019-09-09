@@ -8,7 +8,7 @@ module NameMvar = Map.Make(struct
 
 type t = {
   resolver : Dns_resolver.t;
-  dns_ports : Ports.PortSet.t ref;
+  dns_ports : Ports.PortSet.t;
   uplink_ip : Ipaddr.V4.t ;
   get_ptime : unit -> Ptime.t;
   get_mtime : unit -> int64;
@@ -109,7 +109,7 @@ let handle_answers_and_notify t answers =
 
 let get_cache_response_or_queries t name =
   (* listener needs no bookkeeping of port number as there is no real network interface traffic, just an in memory call *)
-  let src_port = pick_free_port ~nat_ports:(ref Ports.PortSet.empty) ~dns_ports:t.dns_ports in
+  let dns_ports, src_port = pick_free_port ~nat_ports:Ports.PortSet.empty ~dns_ports:t.dns_ports in
   let p_now = t.get_ptime () in
   let ts = t.get_mtime () in
   let query_or_reply = true in

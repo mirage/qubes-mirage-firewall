@@ -10,7 +10,6 @@ type t = private {
   nat : My_nat.t;
   uplink : interface;
   dns_sender: int -> (Dns.proto * Ipaddr.V4.t * Cstruct.t) -> unit Lwt.t;
-  ports : Ports.PortSet.t ref;
 }
 (** A routing table. *)
 (* t.ports <- Ports.PortSet.add new_port t.ports *)

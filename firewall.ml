@@ -52,33 +52,36 @@ let translate t packet =
   My_nat.translate t.Router.nat packet
 
 (* Add a NAT rule for the endpoints in this frame, via a random port on the firewall. *)
-let add_nat_and_forward_ipv4 t resolver packet =
-  let xl_host = t.Router.uplink#my_ip in
-  My_nat.add_nat_rule_and_translate t.Router.nat t.Router.ports resolver ~xl_host `NAT packet >>= function
-  | Ok packet -> forward_ipv4 t packet
+let add_nat_and_forward_ipv4 router resolver packet =
+  let xl_host = router.Router.uplink#my_ip in
+  My_nat.add_nat_rule_and_translate router.Router.nat resolver ~xl_host `NAT packet >>= function
+  | Ok (nat, packet) ->
+    forward_ipv4 router packet >>= fun () ->
+    Lwt.return nat
   | Error e ->
     Log.warn (fun f -> f "Failed to add NAT rewrite rule: %s (%a)" e Nat_packet.pp packet);
-    Lwt.return ()
+    Lwt.return router.Router.nat
 
 (* Add a NAT rule to redirect this conversation to [host:port] instead of us. *)
-let nat_to t dns_resolver ~host ~port packet =
+let nat_to t dns_resolver ~host ~port packet : My_nat.t Lwt.t =
   match Router.resolve t host with
-  | Ipaddr.V6 _ -> Log.warn (fun f -> f "Cannot NAT with IPv6"); Lwt.return ()
+  | Ipaddr.V6 _ -> Log.warn (fun f -> f "Cannot NAT with IPv6"); Lwt.return t.Router.nat
   | Ipaddr.V4 target ->
     let xl_host = t.Router.uplink#my_ip in
-    My_nat.add_nat_rule_and_translate t.Router.nat t.Router.ports dns_resolver ~xl_host (`Redirect (target, port)) packet >>= function
-    | Ok packet -> forward_ipv4 t packet
+    My_nat.add_nat_rule_and_translate t.Router.nat dns_resolver ~xl_host (`Redirect (target, port)) packet >>= function
+    | Ok (nat, packet) -> forward_ipv4 t packet >>= fun () ->
+      Lwt.return nat
     | Error e ->
       Log.warn (fun f -> f "Failed to add NAT redirect rule: %s (%a)" e Nat_packet.pp packet);
-      Lwt.return ()
+      Lwt.return t.Router.nat
 
 (* Handle incoming packets *)
 (* mvar: (int32 * Dns.Rr_map.Ipv4_set.t) Lwt_mvar.t *)
 let lookup t resolver mvar outgoing_queries =
   Log.debug (fun f -> f "sending %d dns requests to figure out whether a rule matches" @@ List.length outgoing_queries);
   Lwt_list.iter_s (fun query ->
-      let src_port = Resolver.pick_free_port
-          ~nat_ports:t.Router.ports
+      let dns_ports, src_port = Resolver.pick_free_port
+          ~nat_ports:(My_nat.ports t.Router.nat)
           ~dns_ports:resolver.Resolver.dns_ports
       in
       t.Router.dns_sender src_port query) outgoing_queries >>= fun () ->
@@ -90,21 +93,22 @@ let lookup t resolver mvar outgoing_queries =
 let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst (annotated_packet : ('a, 'b) Packet.t) : unit Lwt.t =
   let packet = to_mirage_nat_packet annotated_packet in
   match rules annotated_packet, dst with
-  | `Accept, `Client client_link -> transmit_ipv4 packet client_link
-  | `Accept, (`External _ | `NetVM) -> transmit_ipv4 packet t.Router.uplink
+  | `Accept, `Client client_link -> transmit_ipv4 packet client_link >>= fun () -> return t
+  | `Accept, (`External _ | `NetVM) -> transmit_ipv4 packet t.Router.uplink >>= fun () -> return t
   | `Accept, (`Firewall_uplink | `Client_gateway) ->
       Log.warn (fun f -> f "Bad rule: firewall can't accept packets %a" Nat_packet.pp packet);
-      return ()
+      return t
   | `NAT, _ ->
       Log.debug (fun f -> f "adding NAT rule for %a" Nat_packet.pp packet);
       add_nat_and_forward_ipv4 t resolver packet
-  | `NAT_to (host, port), _ -> nat_to t resolver packet ~host ~port
+  | `NAT_to (host, port), _ ->
+      nat_to t resolver packet ~host ~port
   | `Lookup_and_retry (resolver, mvar, outgoing_queries), _ ->
       lookup t resolver mvar outgoing_queries >>= fun () ->
       apply_rules t resolver rules ~dst annotated_packet
   | `Drop reason, _ ->
       Log.debug (fun f -> f "Dropped packet (%s) %a" reason Nat_packet.pp packet);
-      return ()
+      return t
 
 let handle_low_memory t =
   match Memory_pressure.status () with

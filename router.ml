@@ -10,11 +10,10 @@ type t = {
   nat : My_nat.t;
   uplink : interface;
   dns_sender: int -> (Dns.proto * Ipaddr.V4.t * Cstruct.t) -> unit Lwt.t;
-  ports : Ports.PortSet.t ref;
 }
 
 let create ~client_eth ~uplink ~dns_sender ~nat =
-  { client_eth; nat; uplink; dns_sender; ports = ref Ports.PortSet.empty }
+  { client_eth; nat; uplink; dns_sender }
 
 let target t buf =
   let dst_ip = buf.Ipv4_packet.dst in
