@@ -1,16 +1,18 @@
 let src = Logs.Src.create "fw-resolver" ~doc:"Firewall's DNS resolver module"
 module Log = (val Logs.src_log src : Logs.LOG)
 
+open Lwt.Infix
+
 module NameMvar = Map.Make(struct
    type t = [`host] Domain_name.t
    let compare = Domain_name.compare
   end)
 
-module Dns_client_flow_qubes : Dns_client_flow.S = struct
+module Dns_client_flow_qubes = struct
   type +'a io = 'a Lwt.t
   type io_addr = Ipaddr.V4.t * int
   type ns_addr = [ `TCP | `UDP ] * io_addr
-  type stack = Uplink.t * Lwt_mvar.t
+  type stack = (src_port:int -> dst:Ipaddr.V4.t -> dst_port:int -> Cstruct.t -> (unit, [ `Msg of string ]) result Lwt.t) * Cstruct.t Lwt_mvar.t
 
   type t = {
     rng : (int -> Cstruct.t) ;
@@ -28,8 +30,9 @@ module Dns_client_flow_qubes : Dns_client_flow.S = struct
 
   let connect ?nameserver t = Lwt.return (Ok t)
 
-  let send t buf =
-    U.write ~src_port:1053 ~dst:(fst t.nameserver) ~dst_port:(snd t.nameserver) (fst t.stack) buf
+  let send (t : flow) buf : (unit, [> `Msg of string ]) result Lwt.t =
+    let dst, dst_port = snd t.nameserver in
+    (fst t.stack) ~src_port:1053 ~dst ~dst_port buf >|= Rresult.R.open_error_msg
 
   let recv t =
     Lwt_mvar.take (snd t.stack) >|= fun buf -> Ok buf
@@ -41,11 +44,11 @@ module Dns_client_flow_qubes : Dns_client_flow.S = struct
   let lift = Lwt.return
 end
 
-module Dns_client = Dns_client.Make(Dns_client_flow_qubes)
+module Dns_client = Dns_client_flow.Make(Dns_client_flow_qubes)
 
 type t = {
-  cache : [`host] Domain_name.t Hashtbl.t ;
-  client : Dns_client.t;
+  cache : ([`host] Domain_name.t, Ipaddr.V4.t) Hashtbl.t ;
+  client : Dns_client_flow_qubes.t;
   dns_ports : Ports.PortSet.t ref;
   uplink_ip : Ipaddr.V4.t ;
   get_ptime : unit -> Ptime.t;

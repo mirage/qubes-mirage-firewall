@@ -113,10 +113,10 @@ fi
 cd test
 
 echo "We're gonna set up a unikernel for fetchmotron qube"
-make clean && \
-mirage configure -t qubes -l "net-xen frontend:error,firewall test:debug" && \
-make depend && \
-make
+#make clean && \
+#mirage configure -t qubes -l "net-xen frontend:error,firewall test:debug" && \
+#make depend && \
+#make
 if [ $? -ne 0 ]; then
   echo "Could not build unikernel for fetchmotron qube" >&2
   exit 1

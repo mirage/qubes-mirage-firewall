@@ -74,12 +74,12 @@ let nat_to t dns_resolver ~host ~port packet =
 
 (* Handle incoming packets *)
 (* mvar: (int32 * Dns.Rr_map.Ipv4_set.t) Lwt_mvar.t *)
-let lookup t resolver mvar name =
+let lookup t resolver name =
   Log.debug (fun f -> f "waiting on dns resolution");
-  Resolver.Dns_client.gethostbyname resolver.client name >>= function
+  Resolver.Dns_client.gethostbyname resolver.Resolver.client name >>= function
   | Error _ -> Lwt.return ()
   | Ok ip ->
-    Hashtbl.add name ip resolver.cache ;
+    Hashtbl.add resolver.cache name ip ;
     Log.debug (fun f -> f "waited on response for dns requests...");
     (* Lwt_mvar.take mvar >>= fun (name, ip_set) -> *)
     (* TODO Q: can there be multiple response packets/mvars? Do we need to loop? *)
@@ -97,8 +97,8 @@ let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst
       Log.debug (fun f -> f "adding NAT rule for %a" Nat_packet.pp packet);
       add_nat_and_forward_ipv4 t resolver packet
   | `NAT_to (host, port), _ -> nat_to t resolver packet ~host ~port
-  | `Lookup_and_retry (mvar, name), _ ->
-      lookup t resolver mvar name >>= fun () ->
+  | `Lookup_and_retry name, _ ->
+      lookup t resolver name >>= fun () ->
       apply_rules t resolver rules ~dst annotated_packet
   | `Drop reason, _ ->
       Log.debug (fun f -> f "Dropped packet (%s) %a" reason Nat_packet.pp packet);

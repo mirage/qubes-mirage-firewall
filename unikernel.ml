@@ -80,9 +80,9 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
     (* Initialise connection to NetVM *)
     Uplink.connect ~clock config >>= fun uplink ->
 
-    let dns_mvar = Lwt_mvar.create () in
+    let dns_mvar = Lwt_mvar.create_empty () in
     let resolver = { Resolver.cache = Hashtbl.create 13;
-                     client = Resolver.Dns_client.create ~rng:R.generate (uplink.Uplink.udp, dns_mvar);
+                     client = Resolver.Dns_client.create ~rng:R.generate (Uplink.send_dns_client_query uplink, dns_mvar);
                      uplink_ip = config.Dao.uplink_our_ip;
                      get_ptime = (fun _unit -> Ptime.min); (* TODO get pclock from config *)
                      get_mtime = (fun () -> Clock.elapsed_ns clock);
