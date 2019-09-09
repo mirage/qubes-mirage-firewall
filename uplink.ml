@@ -4,7 +4,6 @@
 open Lwt.Infix
 open Fw_utils
 
-
 module Eth = Ethernet.Make(Netif)
 
 let src = Logs.Src.create "uplink" ~doc:"Network connection to NetVM"
@@ -49,9 +48,9 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
     | Ok () -> Lwt.return_unit
 
 
-  let listen t dns_mvar resolver router =
+  let listen t resolver router =
 
-    let ok_packet ip_header ip_packet ip_payload =
+    let ok_packet ip_header ip_packet =
       let open Udp_packet in
       let open Resolver in
       let open Router in
@@ -60,8 +59,13 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
       Log.debug (fun f -> f "received ipv4 packet from %a on uplink" Ipaddr.V4.pp ip_header.Ipv4_packet.src);
       match ip_packet with
       | `UDP (header, packet) when Ports.mem header.dst_port !(resolver.dns_ports) ->
-        (* resolver.dns_ports := Ports.remove header.dst_port !(resolver.dns_ports); *)
-        Lwt_mvar.put dns_mvar ip_payload
+        let state, answers, queries = Resolver.handle_buf resolver `Udp ip_header.Ipv4_packet.src header.src_port packet in
+        resolver.resolver := state;
+        resolver.dns_ports := Ports.remove header.dst_port !(resolver.dns_ports);
+        Log.debug (fun f -> f "%d further queries needed and %d answers ready" (List.length queries) (List.length answers));
+        let pick_port () = pick_free_port ~dns_ports:resolver.dns_ports ~nat_ports:router.ports in
+        Lwt_list.iter_p (send_dns_query t @@ pick_port ()) queries >>= fun () ->
+        Resolver.handle_answers_and_notify resolver answers
       | _ ->
         Firewall.ipv4_from_netvm resolver router (`IPv4 (ip_header, ip_packet))
     in
@@ -80,7 +84,7 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
               | Error e ->
                 Log.warn (fun f -> f "Ignored unknown IPv4 message from uplink: %a" Nat_packet.pp_error e);
                 Lwt.return ()
-              | Ok (`IPv4 (header, packet)) -> ok_packet header packet ip
+              | Ok (`IPv4 (header, packet)) -> ok_packet header packet
             )
           ~ipv6:(fun _ip -> return ())
           frame

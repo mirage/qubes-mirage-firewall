@@ -11,7 +11,9 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
   module Uplink = Uplink.Make(R)(Clock)
 
   (* Set up networking and listen for incoming packets. *)
-  let network ~clock config uplink dns_mvar (resolver : Resolver.t) nat qubesDB =
+  let network ~clock config (resolver : Resolver.t) nat qubesDB =
+    (* Initialise connection to NetVM *)
+    Uplink.connect ~clock config >>= fun uplink ->
     (* Report success *)
     Dao.set_iptables_error qubesDB "" >>= fun () ->
     (* Set up client-side networking *)
@@ -27,7 +29,7 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
     (* Handle packets from both networks *)
     Lwt.choose [
       Client_net.listen resolver qubesDB router;
-      Uplink.listen uplink dns_mvar resolver router
+      Uplink.listen uplink resolver router
     ]
 
   (* We don't use the GUI, but it's interesting to keep an eye on it.
@@ -77,20 +79,18 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
     (* Read network configuration from QubesDB *)
     Dao.read_network_config qubesDB >>= fun config ->
 
-    (* Initialise connection to NetVM *)
-    Uplink.connect ~clock config >>= fun uplink ->
+    let server = Dns_server.Primary.create ~rng:R.generate Dns_resolver_root.reserved in
 
-    let dns_mvar = Lwt_mvar.create () in
-    let resolver = { Resolver.cache = Hashtbl.create 13;
-                     client = Resolver.Dns_client.create ~rng:R.generate (uplink.Uplink.udp, dns_mvar);
+    let resolver = { Resolver.resolver =
+                       ref (Dns_resolver.create ~mode:(`Recursive) start_time R.generate server);
                      uplink_ip = config.Dao.uplink_our_ip;
                      get_ptime = (fun _unit -> Ptime.min); (* TODO get pclock from config *)
                      get_mtime = (fun () -> Clock.elapsed_ns clock);
-                     dns_ports = ref (Ports.PortSet.singleton 1053);
+                     dns_ports = ref Ports.PortSet.empty;
                      unknown_names = ref Resolver.NameMvar.empty;
                    } in
 
-    let net_listener = network ~clock config uplink dns_mvar resolver nat qubesDB in
+    let net_listener = network ~clock config resolver nat qubesDB in
 
     (* Report memory usage to XenStore *)
     Memory_pressure.init ();
