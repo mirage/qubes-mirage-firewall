@@ -53,7 +53,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
   module T = Tcp.Flow.Make(I)(Time)(Clock)(R)
 
   module StackV4 = Tcpip_stack_direct.Make(Time)(R)(NET)(E)(A)(I)(Icmp)(U)(T)
-  module Dns = Dns_mirage_client.Make(StackV4)
+  module Dns = Dns_client_mirage.Make(R)(StackV4)
 
   (* Tcp.create_connection needs this listener; it should be running
      when tcp_connect or tcp_connect_denied tests run *)
@@ -316,8 +316,8 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     (* use the stack abstraction only after the other tests have run, since it's not friendly with outside use of its modules *)
     StackV4.connect network ethernet arp ipv4 icmp udp tcp >>= fun stack ->
     let stack_tests = "stack tests", [
-        (*("DNS expect failure", `Quick, dns_expect_failure ~nameserver:"8.8.8.8" ~hostname:"mirage.io" stack);
-         *)
+        ("DNS expect failure", `Quick, dns_expect_failure ~nameserver:"8.8.8.8" ~hostname:"mirage.io" stack);
+
         (* the test below won't work on @linse's internet,
          * because the nameserver there doesn't answer on TCP port 53,
          * only UDP port 53.  Dns_mirage_client.ml disregards our request

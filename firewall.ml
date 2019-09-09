@@ -99,7 +99,7 @@ let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst
       Log.debug (fun f -> f "adding NAT rule for %a" Nat_packet.pp packet);
       add_nat_and_forward_ipv4 t resolver packet
   | `NAT_to (host, port), _ -> nat_to t resolver packet ~host ~port
-  | `Lookup_and_retry (mvar, outgoing_queries), _ ->
+  | `Lookup_and_retry (resolver, mvar, outgoing_queries), _ ->
       lookup t resolver mvar outgoing_queries >>= fun () ->
       apply_rules t resolver rules ~dst annotated_packet
   | `Drop reason, _ ->

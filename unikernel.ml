@@ -82,7 +82,7 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
     let server = Dns_server.Primary.create ~rng:R.generate Dns_resolver_root.reserved in
 
     let resolver = { Resolver.resolver =
-                       ref (Dns_resolver.create ~mode:(`Recursive) start_time R.generate server);
+                     Dns_resolver.create ~mode:(`Recursive) start_time R.generate server;
                      uplink_ip = config.Dao.uplink_our_ip;
                      get_ptime = (fun _unit -> Ptime.min); (* TODO get pclock from config *)
                      get_mtime = (fun () -> Clock.elapsed_ns clock);

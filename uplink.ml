@@ -60,7 +60,7 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
       match ip_packet with
       | `UDP (header, packet) when Ports.mem header.dst_port !(resolver.dns_ports) ->
         let state, answers, queries = Resolver.handle_buf resolver `Udp ip_header.Ipv4_packet.src header.src_port packet in
-        resolver.resolver := state;
+        let resolver = { resolver with resolver = state } in
         resolver.dns_ports := Ports.remove header.dst_port !(resolver.dns_ports);
         Log.debug (fun f -> f "%d further queries needed and %d answers ready" (List.length queries) (List.length answers));
         let pick_port () = pick_free_port ~dns_ports:resolver.dns_ports ~nat_ports:router.ports in

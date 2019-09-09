@@ -36,7 +36,8 @@ type action = [
                between these hosts on these ports, and corresponding ICMP error traffic. *)
   | `NAT_to of host * port (* As for [`NAT], but also rewrite the packet's
                               destination fields so it will be sent to [host:port]. *)
-  | `Lookup_and_retry of (int32 * Dns.Rr_map.Ipv4_set.t) Lwt_mvar.t *
+  | `Lookup_and_retry of Resolver.t *
+                         (int32 * Dns.Rr_map.Ipv4_set.t) Lwt_mvar.t *
                          (Dns.proto * Ipaddr.V4.t * Cstruct.t) list
   (* Determining whether the traffic should be allowed requires a domain name lookup.
                                               Try to resolve the name and then check again.*)
