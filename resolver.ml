@@ -12,6 +12,7 @@ type t = {
   uplink_ip : Ipaddr.V4.t ;
   get_ptime : unit -> Ptime.t;
   get_mtime : unit -> int64;
+  get_random : int -> Cstruct.t;
   unknown_names : (int32 * Dns.Rr_map.Ipv4_set.t) Lwt_mvar.t NameMvar.t ref;
 }
 
@@ -113,7 +114,7 @@ let get_cache_response_or_queries t name =
   let ts = t.get_mtime () in
   let query_or_reply = true in
   let proto = `Udp in
-  let query_cstruct, _ = Dns_client.make_query `Udp name Dns.Rr_map.A in
+  let query_cstruct, _ = Dns_client.make_query t.get_random `Udp name Dns.Rr_map.A in
 
   let sender = t.uplink_ip in
 
@@ -149,8 +150,8 @@ let ip_of_reply_packet (name : [`host] Domain_name.t) dns_packet =
            * change the key from nethack.alt.org to someawshostnethack.alt.org so the response triggers the same mvar
              * if we do this, the answer won't match (because we have an A record for someawshostnethack.alt.org, but we think
              * we need to look up nethack.alt.org, which isn't the same)
-             * *)
         match Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.Cname answer with
+             * *)
         Error `No_A_record
     end
   | _ -> Error  `Not_answer

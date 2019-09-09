@@ -86,6 +86,7 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
                      uplink_ip = config.Dao.uplink_our_ip;
                      get_ptime = (fun _unit -> Ptime.min); (* TODO get pclock from config *)
                      get_mtime = (fun () -> Clock.elapsed_ns clock);
+                     get_random = R.generate;
                      dns_ports = ref Ports.PortSet.empty;
                      unknown_names = ref Resolver.NameMvar.empty;
                    } in
