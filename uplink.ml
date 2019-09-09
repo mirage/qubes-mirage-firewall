@@ -48,10 +48,6 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
     | Error s -> Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s); Lwt.return_unit
     | Ok () -> Lwt.return_unit
 
-  let send_dns_client_query t ~src_port ~dst ~dst_port buf =
-    U.write ~src_port ~dst ~dst_port t.udp buf >|= function
-    | Error s -> Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s); Error (`Msg "failure")
-    | Ok () -> Ok ()
 
   let listen t dns_mvar resolver router =
 

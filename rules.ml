@@ -73,9 +73,9 @@ let classify_client_packet resolver _router (packet : ([`Client of Fw_utils.clie
     | `hosts subnet ->
       if (Ipaddr.Prefix.mem Ipaddr.(V4 ip) subnet) then `Match rule else `No_match
     | `dnsname name ->
-      match Hashtbl.find_opt resolver.Resolver.cache name with
-      | None -> `Needs_lookup name
-      | Some ip' -> if Ipaddr.V4.compare ip ip' = 0 then `Match rule else `No_match
+      match Hashtbl.find_opt name resolver.cache with
+      | None -> `Needs_lookup (mvar, name)
+      | Some ip' -> if Ipaddr.V4.compare ip ip' = 0 then `Match else `No_match
   in
   let (`Client client_link) = packet.src in
   let rules = snd client_link#get_rules in
