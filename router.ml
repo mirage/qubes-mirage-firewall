@@ -10,6 +10,7 @@ type t = {
   nat : My_nat.t;
   uplink : interface;
   dns_sender: int -> (Dns.proto * Ipaddr.V4.t * Cstruct.t) -> unit Lwt.t;
+  (* NOTE: do not try to make this pure, it relies on mvars / side effects *)
   ports : Ports.PortSet.t ref;
 }
 

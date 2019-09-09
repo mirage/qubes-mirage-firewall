@@ -1,0 +1,6 @@
+- make state of dns transactions more explicit
+- dns itself: what to do when a dns server does not reply?
+  - nx domain - type of reply for domain does not exist - drop packet, error message should be different though
+- cname / mxrecord need to follow indirection to resolve
+- tcp lookups
+- ipv6 (out of scope)

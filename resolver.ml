@@ -8,6 +8,7 @@ module NameMvar = Map.Make(struct
 
 type t = {
   resolver : Dns_resolver.t;
+  (* NOTE: do not try to make this pure, it relies on mvars / side effects *)
   dns_ports : Ports.PortSet.t ref;
   uplink_ip : Ipaddr.V4.t ;
   get_ptime : unit -> Ptime.t;
