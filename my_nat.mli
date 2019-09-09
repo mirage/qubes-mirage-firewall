@@ -10,9 +10,8 @@ type action = [
   | `Redirect of Mirage_nat.endpoint
 ]
 
-val ports : t -> Ports.PortSet.t
 val create : get_time:(unit -> Mirage_nat.time) -> max_entries:int -> t Lwt.t
-val reset : t -> unit Lwt.t
+val reset : t -> Ports.PortSet.t ref -> unit Lwt.t
 val translate : t -> Nat_packet.t -> Nat_packet.t option Lwt.t
-val add_nat_rule_and_translate : t -> Resolver.t ->
-  xl_host:Ipaddr.V4.t -> action -> Nat_packet.t -> ((t * Nat_packet.t), string) result Lwt.t
+val add_nat_rule_and_translate : t -> Ports.PortSet.t ref -> Resolver.t ->
+  xl_host:Ipaddr.V4.t -> action -> Nat_packet.t -> (Nat_packet.t, string) result Lwt.t

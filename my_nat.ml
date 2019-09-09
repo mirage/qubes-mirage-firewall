@@ -16,16 +16,13 @@ module Nat = Mirage_nat_lru
 type t = {
   table : Nat.t;
   get_time : unit -> Mirage_nat.time;
-  nat_ports : Ports.PortSet.t;
 }
-
-let ports t = t.nat_ports
 
 let create ~get_time ~max_entries =
   let tcp_size = 7 * max_entries / 8 in
   let udp_size = max_entries - tcp_size in
   Nat.empty ~tcp_size ~udp_size ~icmp_size:100 >|= fun table ->
-  { table ; get_time ; nat_ports = Ports.PortSet.empty }
+  { get_time; table }
 
 let translate t packet =
   Nat.translate t.table packet >|= function
@@ -40,11 +37,11 @@ let translate t packet =
 let pick_free_port ~nat_ports ~dns_ports =
   Ports.pick_free_port ~add_list:nat_ports ~consult_list:dns_ports
 
-let reset t =
-  let t = { t with nat_ports = Ports.PortSet.empty } in
+let reset t p =
+  p := Ports.PortSet.empty;
   Nat.reset t.table
 
-let add_nat_rule_and_translate t resolver ~xl_host action packet =
+let add_nat_rule_and_translate t nat_ports resolver ~xl_host action packet =
   let now = t.get_time () in
   let apply_action xl_port =
     Lwt.catch (fun () ->
@@ -56,19 +53,19 @@ let add_nat_rule_and_translate t resolver ~xl_host action packet =
       )
   in
   let rec aux ~retries =
-    let nat_ports, xl_port = pick_free_port ~nat_ports:t.nat_ports ~dns_ports:resolver.Resolver.dns_ports in
+    let xl_port = pick_free_port ~nat_ports ~dns_ports:resolver.Resolver.dns_ports in
     apply_action xl_port >>= function
     | Error `Out_of_memory ->
       (* Because hash tables resize in big steps, this can happen even if we have a fair
          chunk of free memory. *)
       Log.warn (fun f -> f "Out_of_memory adding NAT rule. Dropping NAT table...");
-      reset t >>= fun () ->
+      reset t nat_ports >>= fun () ->
       aux ~retries:(retries - 1)
     | Error `Overlap when retries < 0 -> Lwt.return (Error "Too many retries")
     | Error `Overlap ->
       if retries = 0 then (
         Log.warn (fun f -> f "Failed to find a free port; resetting NAT table");
-        reset t >>= fun () ->
+        reset t nat_ports >>= fun () ->
         aux ~retries:(retries - 1)
       ) else (
         aux ~retries:(retries - 1)
@@ -80,6 +77,6 @@ let add_nat_rule_and_translate t resolver ~xl_host action packet =
       translate t packet >|= function
       | None -> Error "No NAT entry, even after adding one!"
       | Some packet ->
-        Ok ({ t with nat_ports }, packet)
+        Ok packet
   in
   aux ~retries:100
