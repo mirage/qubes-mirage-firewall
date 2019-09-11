@@ -73,7 +73,6 @@ let nat_to t dns_resolver ~host ~port packet =
       Lwt.return ()
 
 (* Handle incoming packets *)
-(* mvar: (int32 * Dns.Rr_map.Ipv4_set.t) Lwt_mvar.t *)
 let lookup t resolver mvar outgoing_queries =
   Log.debug (fun f -> f "sending %d dns requests to figure out whether a rule matches" @@ List.length outgoing_queries);
   Lwt_list.iter_s (fun query ->
@@ -83,7 +82,7 @@ let lookup t resolver mvar outgoing_queries =
       in
       t.Router.dns_sender src_port query) outgoing_queries >>= fun () ->
   Log.debug (fun f -> f "waiting on response for dns requests...");
-  Lwt_mvar.take mvar >>= fun (name, ip_set) ->
+  Lwt_mvar.take mvar >>= fun _ ->
   (* TODO Q: can there be multiple response packets/mvars? Do we need to loop? *)
   return ()
 
