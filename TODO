@@ -3,4 +3,5 @@
   - nx domain - type of reply for domain does not exist - drop packet, error message should be different though
 - cname / mxrecord need to follow indirection to resolve
 - tcp lookups
+- too many tags - rules.ml / firewall.ml
 - ipv6 (out of scope)

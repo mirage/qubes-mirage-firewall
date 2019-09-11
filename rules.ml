@@ -1,7 +1,7 @@
 (* Copyright (C) 2015, Thomas Leonard <thomas.leonard@unikernel.com>
    See the README file for details. *)
 
-(** Enforce firewall rules from QubesDB. *)
+(** This module applies firewall rules from QubesDB. *)
 
 open Packet
 module Q = Pf_qubes.Parse_qubes
@@ -9,48 +9,31 @@ module Q = Pf_qubes.Parse_qubes
 let src = Logs.Src.create "rules" ~doc:"Firewall rules"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-(* these nameservers are the "specialtarget" ones --
-   the upstream NetVM will redirect TCP and UDP port 53 traffic with
-   these IPs as destinations to whatever it thinks its upstream nameserver
-   should be. *)
-let specialtarget_nameservers = [
+(* the upstream NetVM will redirect TCP and UDP port 53 traffic with
+   these destination IPs to its upstream nameserver. *)
+let default_dns_servers = [
   Ipaddr.V4.of_string_exn "10.139.1.1";
   Ipaddr.V4.of_string_exn "10.139.1.2";
 ]
 let dns_port = 53
 
-(* OCaml normally warns if you don't match all fields, but that's OK here. *)
-[@@@ocaml.warning "-9"]
+module Classifier = struct
 
-(* we want to replace this list with a structure including rules from QubesDB.
-   we need:
-   1) code for reading the rules (we have some for noticing new clients: dao.ml)
-   2) code for parsing the rules (use ocaml-pf, reduced to the Qubes ruleset)
-   3) code for putting the rules in a structure readable here (???)
-   - also the rules are per-client, so the current structure doesn't really accommodate them
-   - there is a structure tracking each client in Client_eth, which is using a map from IP addresses to
-     Fw_utils.client_link.  let's try putting the rules in this client_link structure?
-   - initially we can set them up with a list, and then look for faster/better/clearer structures later
-   4) code for applying the rules to incoming traffic (below, already in this file)
-   *)
-
-(* Does the packet match our rules? *)
-let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  : Packet.action =
   let matches_port dstports (port : int) = match dstports with
     | None -> true
     | Some (Q.Range_inclusive (min, max)) -> min <= port && port <= max
-  in
+
   let matches_proto rule packet = match rule.Pf_qubes.Parse_qubes.proto, rule.Pf_qubes.Parse_qubes.specialtarget with
     | None, None -> true
-    | None, Some `dns when List.mem packet.ipv4_header.Ipv4_packet.dst specialtarget_nameservers -> begin
+    | None, Some `dns when List.mem packet.ipv4_header.Ipv4_packet.dst default_dns_servers -> begin
       (* specialtarget=dns applies only to the specialtarget destination IPs, and
          specialtarget=dns is also implicitly tcp/udp port 53 *)
       match packet.transport_header with
         | `TCP header -> header.Tcp.Tcp_packet.dst_port = dns_port
         | `UDP header -> header.Udp_packet.dst_port = dns_port
         | _ -> false
-    end
-(* DNS rules can only match traffic headed to the specialtarget hosts, so any other destination
+      end
+   (* DNS rules can only match traffic headed to the specialtarget hosts, so any other destination
    isn't a match for DNS rules *)
     | None, Some `dns -> false
     | Some rule_proto, _ -> match rule_proto, packet.transport_header with
@@ -64,8 +47,8 @@ let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link]
           0 = compare rule_icmp_type @@ Icmpv4_wire.ty_to_int header.Icmpv4_packet.ty
       end
       | _, _ -> false
-  in
-  let matches_dest rule packet =
+
+  let matches_dest resolver rule packet =
     let ip = packet.ipv4_header.Ipv4_packet.dst in
     match rule.Pf_qubes.Parse_qubes.dst with
     | `any ->  `Match rule
@@ -80,13 +63,17 @@ let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link]
         if List.exists (fun (_ttl, ipset) -> find ip ipset) answers
         then `Match rule
         else `No_match
-  in
+
+end
+
+(* Does the packet match our rules? *)
+let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  : Packet.action =
   let (`Client client_link) = packet.src in
   let rules = snd client_link#get_rules in
   Log.debug (fun f -> f "checking %d rules for a match" (List.length rules));
   List.fold_left (fun acc rule ->
       match acc with | `No_match ->
-                       if matches_proto rule packet then matches_dest rule packet else begin
+                       if Classifier.matches_proto rule packet then Classifier.matches_dest resolver rule packet else begin
                          Log.debug (fun f -> f "rule %d is not a match - proto" rule.Q.number);
                          `No_match
                        end
@@ -103,17 +90,10 @@ let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link]
                             will attempt and then try again to find matching rules");
     `Lookup_and_retry q
 
-(** This function decides what to do with a packet from a client VM.
-
-    It takes as input an argument [info] (of type [Packet.info]) describing the
-    packet, and returns an action (of type [Packet.action]) to perform.
-
-    See packet.ml for the definitions of [info] and [action].
-
-    Note: If the packet matched an existing NAT rule then this isn't called. *)
+(** Packets from the outside world that don't match any NAT table entry are being checked against the fw rules here *)
 let from_client resolver router (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action =
   match packet with
-  | { dst = (`External _ | `NetVM) } -> begin
+  | { dst = (`External _ | `NetVM); _ } -> begin
     (* see whether this traffic is allowed *)
     match classify_client_packet resolver packet with
     | `Accept -> `NAT
@@ -124,11 +104,9 @@ let from_client resolver router (packet : ([`Client of Fw_utils.client_link], _)
     if header.Udp_packet.dst_port = dns_port
     then `NAT_to (`NetVM, dns_port)
     else `Drop "packet addressed to client gateway"
-  | { dst = (`Client_gateway | `Firewall_uplink) } -> `Drop "packet addressed to firewall itself"
-  | { dst = `Client _ } -> classify_client_packet resolver packet
+  | { dst = (`Client_gateway | `Firewall_uplink) ; _ } -> `Drop "packet addressed to firewall itself"
+  | { dst = `Client _ ; _ } -> classify_client_packet resolver packet
 
-(** Decide what to do with a packet received from the outside world.
-    Note: If the packet matched an existing NAT rule then this isn't called. *)
+(** Packets from the outside world that don't match any NAT table entry are being dropped by default *)
 let from_netvm (packet : ([`NetVM | `External of _], _) Packet.t) : Packet.action =
-  match packet with
-  | _ -> `Drop "drop by default"
+  `Drop "drop by default"
