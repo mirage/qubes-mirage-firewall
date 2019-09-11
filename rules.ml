@@ -35,7 +35,7 @@ let dns_port = 53
    *)
 
 (* Does the packet match our rules? *)
-let classify_client_packet resolver _router (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  : Packet.action =
+let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  : Packet.action =
   let matches_port dstports (port : int) = match dstports with
     | None -> true
     | Some (Q.Range_inclusive (min, max)) -> min <= port && port <= max
@@ -65,7 +65,6 @@ let classify_client_packet resolver _router (packet : ([`Client of Fw_utils.clie
       end
       | _, _ -> false
   in
-  (* return here becomes | Match | No_match | Needs_lookup * Domain_name.t *)
   let matches_dest rule packet =
     let ip = packet.ipv4_header.Ipv4_packet.dst in
     match rule.Pf_qubes.Parse_qubes.dst with
@@ -74,7 +73,7 @@ let classify_client_packet resolver _router (packet : ([`Client of Fw_utils.clie
       if (Ipaddr.Prefix.mem Ipaddr.(V4 ip) subnet) then `Match rule else `No_match
     | `dnsname name ->
       match Resolver.get_cache_response_or_queries resolver name with
-      | t, `Unknown (mvar, queries) -> `Needs_lookup (t, mvar, queries)
+      | t, `Unknown (mvar, queries) -> `Lookup_and_retry (t, mvar, queries)
       | t, `Known answers ->
         Log.debug (fun f -> f "resolver knew some IPs for %a already" Domain_name.pp name);
         let find = Dns.Rr_map.Ipv4_set.mem in
@@ -86,33 +85,22 @@ let classify_client_packet resolver _router (packet : ([`Client of Fw_utils.clie
   let rules = snd client_link#get_rules in
   Log.debug (fun f -> f "checking %d rules for a match" (List.length rules));
   List.fold_left (fun acc rule ->
-      match acc with | `Match rule -> `Match rule
-                     | `Needs_lookup q -> `Needs_lookup q
-                     | `No_match ->
-                       if not (matches_proto rule packet) then begin
+      match acc with | `No_match ->
+                       if matches_proto rule packet then matches_dest rule packet else begin
                          Log.debug (fun f -> f "rule %d is not a match - proto" rule.Q.number);
                          `No_match
                        end
-                       else
-                         match (matches_dest rule packet) with
-                         | `No_match ->
-                           Log.debug (fun f -> f "rule %d is not a match - dest" rule.Q.number);
-                           `No_match
-                         | `Match rule ->
-                           Log.debug (fun f -> f "rule %d is a match - dest" rule.Q.number);
-                           `Match rule
-                         | `Needs_lookup q ->
-                           Log.debug (fun f -> f "rule %d needs lookup - dest" rule.Q.number);
-                           `Needs_lookup q
-                       ) `No_match rules |> function
+                     | q -> q
+    ) `No_match rules |> function
   | `No_match -> `Drop "No matching rule; assuming default drop"
   | `Match {Q.action = Q.Accept; number; _} ->
     Log.debug (fun f -> f "allowing packet matching rule %d" number);
     `Accept
   | `Match {Q.action = Q.Drop; number; _} ->
-    `Drop (Printf.sprintf "rule %d explicitly drops this packet" number)
-  | `Needs_lookup q ->
-    Log.debug ( fun f -> f "asking for lookup of packet: needs_lookup -> lookup_and_retry");
+    `Drop (Printf.sprintf "rule number %d explicitly drops this packet" number)
+  | `Lookup_and_retry q ->
+    Log.debug ( fun f -> f "packet requires a DNS lookup - \
+                            will attempt and then try again to find matching rules");
     `Lookup_and_retry q
 
 (** This function decides what to do with a packet from a client VM.
@@ -127,7 +115,7 @@ let from_client resolver router (packet : ([`Client of Fw_utils.client_link], _)
   match packet with
   | { dst = (`External _ | `NetVM) } -> begin
     (* see whether this traffic is allowed *)
-    match classify_client_packet resolver router packet with
+    match classify_client_packet resolver packet with
     | `Accept -> `NAT
     | `Drop s -> `Drop s
     | `Lookup_and_retry q -> `Lookup_and_retry q
@@ -137,7 +125,7 @@ let from_client resolver router (packet : ([`Client of Fw_utils.client_link], _)
     then `NAT_to (`NetVM, dns_port)
     else `Drop "packet addressed to client gateway"
   | { dst = (`Client_gateway | `Firewall_uplink) } -> `Drop "packet addressed to firewall itself"
-  | { dst = `Client _ } -> classify_client_packet resolver router packet
+  | { dst = `Client _ } -> classify_client_packet resolver packet
 
 (** Decide what to do with a packet received from the outside world.
     Note: If the packet matched an existing NAT rule then this isn't called. *)
