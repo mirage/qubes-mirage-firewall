@@ -81,13 +81,22 @@ let lookup t resolver mvar outgoing_queries =
           ~dns_ports:resolver.Resolver.dns_ports
       in
       t.Router.dns_sender src_port query) outgoing_queries >>= fun () ->
-  Log.info (fun f -> f "waiting on response for dns requests...");
+  Log.debug (fun f -> f "waiting on response for dns requests...");
+  let try_take mvar =
+    Lwt_mvar.take mvar >>= fun _ ->
+    Log.debug (fun f -> f "got a response to dns stuff; shouldn't time out");
+    Lwt.return (Ok ())
+  in
+  let timeout () =
+    OS.Time.sleep_ns 10_000_000_000L >>= fun () ->
+    Log.err (fun f -> f "Timed out waiting for DNS replies.  Please check sys-net's DNS settings, or set the IP addresses for remote hosts in the firewall rules.");
+    Lwt.return (Error `Timeout);
+  in
   Lwt.pick [
     (* TODO Q: can there be multiple response packets/mvars? Do we need to loop? *)
-    (Lwt_mvar.take mvar >>= fun _ -> Lwt.return (Ok ()));
-    (OS.Time.sleep_ns 2_000_000_000L >>= fun () ->
-     Log.err (fun f -> f "Timed out waiting for DNS replies.  Please check sys-net's DNS settings, or set the IP addresses for remote hosts in the firewall rules."); Lwt.return (Error `Timeout));
-]
+    try_take mvar;
+    timeout ();
+  ]
 
 let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst (annotated_packet : ('a, 'b) Packet.t) : unit Lwt.t =
   let packet = to_mirage_nat_packet annotated_packet in
