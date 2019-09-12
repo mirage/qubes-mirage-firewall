@@ -1,7 +1,9 @@
-- make state of dns transactions more explicit
-- dns itself: what to do when a dns server does not reply?
-  - nx domain - type of reply for domain does not exist - drop packet, error message should be different though
+x dns itself: what to do when a dns server does not reply?
+  ? nx domain - type of reply for domain does not exist - drop packet, error message should be different though
 - cname / mxrecord need to follow indirection to resolve
 - tcp lookups
 - too many tags - rules.ml / firewall.ml
 - ipv6 (out of scope)
+- make state of dns transactions more explicit
+- attempt retries when DNS lookups fail? (if it's important the user will probably retry, which will make us retry automatically)
+  - the log gets really spammy - maybe we should keep retrying, but not keep logging each retry?

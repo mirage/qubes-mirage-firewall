@@ -109,33 +109,35 @@ let get_cache_response_or_queries t name =
 
 let ip_of_reply_packet (name : [`host] Domain_name.t) dns_packet =
   Log.debug (fun f -> f "DNS reply packet: %a" Dns.Packet.pp dns_packet);
+  let open Rresult in
+  let open Dns in
+  (* begin copied code from ocaml-dns client library for following cnames *)
+  let rec follow_cname counter q_name answer =
+    if counter <= 0 then Error (`Msg "CNAME recursion too deep")
+    else
+      Domain_name.Map.find_opt q_name answer
+      |> R.of_option ~none:(fun () ->
+          R.error_msgf "Can't find relevant map in response:@ \
+                        %a in [%a]"
+            Domain_name.pp q_name
+            Name_rr_map.pp answer
+        ) >>= fun relevant_map ->
+      begin match Rr_map.find A relevant_map with
+        | Some response -> Ok response
+        | None ->
+          begin match Rr_map.(find Cname relevant_map) with
+            | None -> Error (`Msg "Invalid DNS response")
+            | Some (_ttl, redirected_host) ->
+              follow_cname (pred counter) redirected_host answer
+          end
+      end
+      (* end copied code *)
+  in
   match dns_packet.Dns.Packet.data with
   (* TODO: how should we handle authority? *)
-  (* TODO: we need to handle other record types (CNAME, MX) ... *)
+  | `Rcode_error (NXDomain, _, _) ->
+    Log.err (fun f -> f "No DNS record exists for %a. Please manually set an IP address for this rule." Domain_name.pp name);
+    Error `Nxdomain
   | `Answer (answer, _authority) ->
-        let open Rresult in
-        let open Dns in
-    (* begin copied code from ocaml-dns client library for following cnames *)
-        let rec follow_cname counter q_name =
-          if counter <= 0 then Error (`Msg "CNAME recursion too deep")
-          else
-            Domain_name.Map.find_opt q_name answer
-            |> R.of_option ~none:(fun () ->
-                R.error_msgf "Can't find relevant map in response:@ \
-                              %a in [%a]"
-                  Domain_name.pp q_name
-                  (* TODO Mindy finds out if we need to deal with mx records *)
-                  Name_rr_map.pp answer
-              ) >>= fun relevant_map ->
-            begin match Rr_map.find A relevant_map with
-              | Some response -> Ok response
-              | None ->
-                begin match Rr_map.(find Cname relevant_map) with
-                  | None -> Error (`Msg "Invalid DNS response")
-                  | Some (_ttl, redirected_host) ->
-                    follow_cname (pred counter) redirected_host
-                end
-            end
-        in
-        follow_cname 20 (Domain_name.raw name)
-    (* end copied code *)
+    follow_cname 20 (Domain_name.raw name) answer
+  | _ -> Error `Not_answer
