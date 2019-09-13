@@ -7,7 +7,11 @@ module NameMvar = Map.Make(struct
   end)
 
 type t = {
-  resolver : Dns_resolver.t;
+  (* NOTE: do not try to make this pure; the listen function passed to Netback (and therefore
+     constrained to its type interface) needs to return unit, and also can modify this
+     resolver state
+  *)
+  resolver : Dns_resolver.t ref;
   (* NOTE: do not try to make this pure, it relies on mvars / side effects *)
   dns_ports : Ports.PortSet.t ref;
   uplink_ip : Ipaddr.V4.t ;
@@ -18,7 +22,7 @@ type t = {
 }
 
 let handle_buf t proto sender src_port query =
-  Dns_resolver.handle_buf t.resolver (t.get_ptime ()) (t.get_mtime ()) true proto sender src_port query
+  Dns_resolver.handle_buf !(t.resolver) (t.get_ptime ()) (t.get_mtime ()) true proto sender src_port query
 
 let pick_free_port ~nat_ports ~dns_ports =
   Ports.pick_free_port ~add_list:dns_ports ~consult_list:nat_ports
@@ -94,8 +98,10 @@ let get_cache_response_or_queries t name =
   let query_cstruct, _ = Dns_client.make_query t.get_random `Udp name Dns.Rr_map.A in
 
   let sender = t.uplink_ip in
-  let new_resolver, answers', upstream_queries = Dns_resolver.handle_buf t.resolver p_now ts query_or_reply proto sender src_port query_cstruct in
-  let t = { t with resolver = new_resolver } in
+  let new_resolver, answers', upstream_queries =
+    Dns_resolver.handle_buf !(t.resolver) p_now ts query_or_reply proto
+      sender src_port query_cstruct in
+  t.resolver := new_resolver;
   let answers = handle_answers name answers' in
   if answers <> []
   then
