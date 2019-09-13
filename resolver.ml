@@ -29,11 +29,15 @@ let pick_free_port ~nat_ports ~dns_ports =
 
 let get_mvars_from_packet t (packet : Dns.Packet.t) =
   match packet.data with
-  | `Answer ((answers : Dns.Rr_map.t Domain_name.Map.t) , _authorities) ->
+  | `Rcode_error (NXDomain, _, Some (answers, _)) ->
+    Log.err (fun f -> f "we are in the Rcode case %a" Dns.Packet.pp packet);
+    []
+  | `Answer ((answers : Dns.Rr_map.t Domain_name.Map.t) , _) ->
     let open Dns in
     let bindings = Domain_name.Map.bindings answers in
     let find_mvar name = NameMvar.find_opt name !(t.unknown_names) in
     (* Return the list of mvars that can be resolved with these answers *)
+    Log.err (fun f -> f "folding bindings from domain name map %a"  (Fmt.list Domain_name.pp) (List.map fst bindings));
     List.fold_left (fun acc (k, _) ->
         match Domain_name.host k with
         | Error _ -> acc
@@ -42,7 +46,9 @@ let get_mvars_from_packet t (packet : Dns.Packet.t) =
           | Some mvar -> (name, mvar) :: acc
           | None -> acc
       ) [] bindings
-  | _ -> []
+  | _ ->
+    Log.err (fun f -> f "we are in the _ case %a" Dns.Packet.pp packet);
+    []
 
 let answers_for_name name records : (int32 * Dns.Rr_map.Ipv4_set.t) list =
   let open Dns.Packet in
@@ -83,6 +89,7 @@ let handle_answers_and_notify t answers =
   let (names_and_mvars : ('a Domain_name.t * 'b Lwt_mvar.t) list) =
     List.flatten @@ List.map (get_mvars_from_packet t) packets
   in
+  Log.debug (fun f -> f "names_and_mvars has len %d " (List.length names_and_mvars));
   Lwt_list.iter_p (fun (name, mvar) ->
       let answer = answers_for_name name packets in
       Lwt_mvar.put mvar answer
