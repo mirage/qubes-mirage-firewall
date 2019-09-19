@@ -28,49 +28,70 @@ let pick_free_port ~nat_ports ~dns_ports =
   Ports.pick_free_port ~add_list:dns_ports ~consult_list:nat_ports
 
 let get_mvars_from_packet t (packet : Dns.Packet.t) =
-  match packet.data with
-  | `Rcode_error (NXDomain, _, Some (answers, _)) ->
-    Log.err (fun f -> f "we are in the Rcode case %a" Dns.Packet.pp packet);
-    []
-  | `Answer ((answers : Dns.Rr_map.t Domain_name.Map.t) , _) ->
-    let open Dns in
-    let bindings = Domain_name.Map.bindings answers in
-    let find_mvar name = NameMvar.find_opt name !(t.unknown_names) in
-    (* Return the list of mvars that can be resolved with these answers *)
-    Log.err (fun f -> f "folding bindings from domain name map %a"  (Fmt.list Domain_name.pp) (List.map fst bindings));
-    List.fold_left (fun acc (k, _) ->
-        match Domain_name.host k with
-        | Error _ -> acc
-        | Ok name ->
-          match find_mvar name with
-          | Some mvar -> (name, mvar) :: acc
-          | None -> acc
-      ) [] bindings
-  | _ ->
-    Log.err (fun f -> f "we are in the _ case %a" Dns.Packet.pp packet);
-    []
+  let find_mvar name = NameMvar.find_opt name !(t.unknown_names) in
+  let (name, _) = packet.question in
+  Log.debug (fun f -> f "got a response packet with info for name %a" Domain_name.pp name);
+  match Domain_name.host name with
+  | Error _ -> []
+  | Ok name ->
+    match packet.data, find_mvar name with
+    | `Rcode_error (NXDomain, _opcode, _), Some mvar ->
+      Log.debug (fun f -> f "NXDomain for name %a" Domain_name.pp name);
+      Log.debug (fun f -> f "found an mvar for NXDomain %a" Domain_name.pp name);
+      Log.err (fun f -> f "Name %a does not exist.  Please replace it with an IP address in the ruleset." Domain_name.pp name);
+      (name, mvar) :: []
+    | `Rcode_error (NXDomain, _opcode, _), None ->
+      Log.debug (fun f -> f "no mvar found for NXDomain %a" Domain_name.pp name);
+      []
+    | `Answer (answers, _auth) , Some mvar ->
+      Log.debug (fun f -> f "found an mvar for A record %a" Domain_name.pp name);
+      (name, mvar) :: []
+    | `Answer (answers, _auth) , None ->
+      Log.debug (fun f -> f "no mvar found for A record %a" Domain_name.pp name);
+      []
+    | _ -> []
 
 let answers_for_name name records : (int32 * Dns.Rr_map.Ipv4_set.t) list =
   let open Dns.Packet in
   let get_ip_set acc record =
-    let find_me (answer, _authority) =
-      Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A answer
+    let find_me record_type (answer, _authority) =
+      Dns.Name_rr_map.find (Domain_name.raw name) record_type answer
     in
 
     match record.data with
-    | `Answer maps -> begin match find_me maps with
-        | Some q -> q :: acc
-        | None -> acc
+    | `Answer maps -> begin match find_me Dns.Rr_map.A maps with
+        | Some q ->
+          q :: acc
+        | None ->  acc
       end
+(* TODO: under what circumstances would we get >1 answer for NXDomain?
+   Probably in this case we need to sift through the answers for those which
+   match the name we looked up. *)
+    | `Rcode_error (NXDomain, _, Some (answers, _authorities)) ->
+      let (name, _) = record.question in
+      Log.debug (fun f -> f "got an NXDomain for name %a" Domain_name.pp name);
+      begin
+        match Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A answers with
+        | Some (ttl, _) ->
+          (ttl, Dns.Rr_map.Ipv4_set.empty) :: acc
+        | None ->
+          let ttl = 0l in
+          (ttl, Dns.Rr_map.Ipv4_set.empty) :: acc
+      end
+    | `Rcode_error (NXDomain, _, None) ->
+      let (name, _) = record.question in
+      Log.debug (fun f -> f "got an NXDomain for name %a with no answers -- faking the TTL" Domain_name.pp name);
+      let ttl = 0l in
+      (ttl, Dns.Rr_map.Ipv4_set.empty) :: acc
     | _ -> acc
   in
   let replies = List.fold_left get_ip_set [] records in
   replies
 
 let handle_answers name answers =
-  let records = List.map (fun (_, _, _, record) -> record) answers in
+  let records = List.map (fun (_proto, _ip, _port, record) -> record) answers in
   let decode acc packet = match Dns.Packet.decode packet with
-    | Error _ -> acc
+    | Error _ -> Log.debug (fun f -> f "unparseable packet %a in answers; ignoring it" Cstruct.hexdump_pp packet); acc
     | Ok decoded -> decoded :: acc
   in
   let arecord_map = List.fold_left decode [] records in
@@ -87,9 +108,14 @@ let handle_answers_and_notify t answers =
   let packets : Dns.Packet.t list = List.fold_left decode [] records in
   (* TODO: remove duplicates from this list, to avoid putting into the same mvar multiple times *)
   let (names_and_mvars : ('a Domain_name.t * 'b Lwt_mvar.t) list) =
-    List.flatten @@ List.map (get_mvars_from_packet t) packets
+    (* I think the resolver needs to help us in this case, and tell us who this NXDomain is associated with. *)
+    let the_mvars = List.map (get_mvars_from_packet t) packets in
+    List.iter (fun m ->
+        Log.debug (fun f -> f "we found %d relevant mvars from the response" (List.length m));
+      ) the_mvars;
+    List.flatten @@ the_mvars
   in
-  Log.debug (fun f -> f "names_and_mvars has len %d " (List.length names_and_mvars));
+  Log.debug (fun f -> f "names_and_mvars has len %d, derived from a list of answers of length %d" (List.length names_and_mvars) (List.length answers));
   Lwt_list.iter_p (fun (name, mvar) ->
       let answer = answers_for_name name packets in
       Lwt_mvar.put mvar answer
@@ -102,6 +128,7 @@ let get_cache_response_or_queries t name =
   let ts = t.get_mtime () in
   let query_or_reply = true in
   let proto = `Udp in
+  (* TODO: check to make sure we're not already waiting to find out about this name, before we potentially make a duplicate mvar *)
   let query_cstruct, _ = Dns_client.make_query t.get_random `Udp name Dns.Rr_map.A in
 
   let sender = t.uplink_ip in
@@ -115,9 +142,14 @@ let get_cache_response_or_queries t name =
     t, `Known answers
   else
     begin
-      let mvar = Lwt_mvar.create_empty () in
-      t.unknown_names := NameMvar.add name mvar !(t.unknown_names);
-      t, `Unknown (mvar, upstream_queries)
+      match NameMvar.find_opt name !(t.unknown_names) with
+      | Some mvar -> 
+        Log.debug (fun f -> f "There is already an mvar for %a.  Sending %d more packets to try to resolve it..." Domain_name.pp name (List.length upstream_queries));
+        (t, `Unknown (mvar, upstream_queries))
+      | None ->
+        let mvar = Lwt_mvar.create_empty () in
+        t.unknown_names := NameMvar.add name mvar !(t.unknown_names);
+        t, `Unknown (mvar, upstream_queries)
     end
 
 let ip_of_reply_packet (name : [`host] Domain_name.t) dns_packet =

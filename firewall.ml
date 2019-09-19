@@ -72,25 +72,37 @@ let nat_to t dns_resolver ~host ~port packet =
       Log.warn (fun f -> f "Failed to add NAT redirect rule: %s (%a)" e Nat_packet.pp packet);
       Lwt.return ()
 
-(* Handle incoming packets *)
 let lookup t resolver mvar outgoing_queries =
   Log.debug (fun f -> f "sending %d dns requests to figure out whether a rule matches" @@ List.length outgoing_queries);
-  Lwt_list.iter_s (fun query ->
+  Lwt_list.iter_p (fun query ->
       let src_port = Resolver.pick_free_port
           ~nat_ports:t.Router.ports
           ~dns_ports:resolver.Resolver.dns_ports
       in
-      t.Router.dns_sender src_port query) outgoing_queries >>= fun () ->
+      t.Router.dns_sender src_port query
+    ) outgoing_queries >>= fun () ->
   Log.debug (fun f -> f "waiting on response for dns requests...");
   let try_take mvar =
-    Lwt_mvar.take mvar >>= fun _ ->
-    Log.debug (fun f -> f "got a response to dns stuff; shouldn't time out");
+    Lwt_mvar.take mvar >>= fun answers ->
+    Log.debug (fun f -> f "got responses to dns queries %a; shouldn't time out" Fmt.(list (list Ipaddr.V4.pp)) (List.map (fun (_, a) -> Dns.Rr_map.Ipv4_set.elements a) answers));
     Lwt.return (Ok ())
   in
   let timeout () =
-    OS.Time.sleep_ns 10_000_000_000L >>= fun () ->
-    Log.err (fun f -> f "Timed out waiting for DNS replies.  Please check sys-net's DNS settings, or set the IP addresses for remote hosts in the firewall rules.");
-    Lwt.return (Error `Timeout);
+    OS.Time.sleep_ns 2_000_000_000L >>= fun () ->
+    Log.debug (fun f -> f "timer fired - seeing whether there is more stuff to send");
+    let (new_resolver, answers, more_queries) = Dns_resolver.timer !(resolver.resolver) (resolver.get_mtime ()) in
+    resolver.resolver := new_resolver;
+    Lwt_list.iter_p (fun query ->
+        let src_port = Resolver.pick_free_port
+            ~nat_ports:t.Router.ports
+            ~dns_ports:resolver.Resolver.dns_ports
+        in
+        t.Router.dns_sender src_port query
+      ) more_queries >>= fun () ->
+    Log.debug (fun f -> f "send %d additional queries after timeout" (List.length more_queries));
+    Log.debug (fun f -> f "handling %d new answers after timeout" (List.length answers));
+    Resolver.handle_answers_and_notify resolver answers >>= fun () ->
+    Lwt.return (Ok ())
   in
   Lwt.pick [
     (* TODO Q: can there be multiple response packets/mvars? Do we need to loop? *)
@@ -114,8 +126,12 @@ let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst
     lookup t resolver mvar outgoing_queries >>= fun result ->
     begin
       match result with
-      | Ok () -> apply_rules t resolver rules ~dst annotated_packet
-      | Error `Timeout -> Lwt.return_unit
+      | Ok () ->
+        Log.debug (fun f -> f "got a result from our DNS lookup; applying the rules to the packet again...");
+        apply_rules t resolver rules ~dst annotated_packet
+      | Error `Timeout ->
+        Log.debug (fun f -> f "Dropped packet; DNS resolution timed out");
+        Lwt.return_unit
     end
   | `Drop reason, _ ->
       Log.debug (fun f -> f "Dropped packet (%s) %a" reason Nat_packet.pp packet);

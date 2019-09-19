@@ -101,8 +101,8 @@ pretest "tcp" "$tcp_echo_port_upper"
 echo "We're gonna set up a unikernel for the mirage-fw-test qube"
 cd ..
 make clean && \
-mirage configure -t xen -l "net-xen xenstore:error,firewall:debug,frameQ:debug,uplink:debug,rules:debug,udp:debug,ipv4:debug,fw-resolver:debug" && \
-#mirage configure -t xen -l "net-xen xenstore:error,application:error" && \
+#mirage configure -t xen -l "application:error,net-xen xenstore:error,firewall:debug,frameQ:debug,uplink:debug,rules:debug,udp:debug,ipv4:debug,fw-resolver:debug" && \
+mirage configure -t xen -l "net-xen xenstore:error,application:error" && \
 #mirage configure -t xen -l "*:debug" && \
 make depend && \
 make
@@ -115,6 +115,7 @@ cd test
 echo "We're gonna set up a unikernel for fetchmotron qube"
 make clean && \
 mirage configure -t qubes -l "net-xen frontend:error,firewall test:debug" && \
+#mirage configure -t qubes -l "*:error" && \
 make depend && \
 make
 if [ $? -ne 0 ]; then

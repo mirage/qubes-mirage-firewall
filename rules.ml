@@ -58,8 +58,9 @@ module Classifier = struct
       match Resolver.get_cache_response_or_queries resolver name with
       | t, `Unknown (mvar, queries) -> `Lookup_and_retry (t, mvar, queries)
       | t, `Known answers ->
-        Log.debug (fun f -> f "resolver knew some IPs for %a already" Domain_name.pp name);
+        Log.debug (fun f -> f "resolver has cache entries for %a" Domain_name.pp name);
         let find = Dns.Rr_map.Ipv4_set.mem in
+        (* we don't need to check the ttl ourselves, because the resolver expires it given the information that Resolver.get_cache_response_or_queries passes to it *)
         if List.exists (fun (_ttl, ipset) -> find ip ipset) answers
         then `Match rule
         else `No_match
