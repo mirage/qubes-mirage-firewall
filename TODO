@@ -1,5 +1,6 @@
 x dns itself: what to do when a dns server does not reply?
-  ? nx domain - type of reply for domain does not exist - drop packet, error message should be different though
+  x nx domain - type of reply for domain does not exist - drop packet, error message should be different thoughE
+- change lwt_mvar to lwt_condition, so we can broadcast successful lookup to multiple waiting tasks
 - need to change debug output to not refer to rule numbers -- the relationship between those and the GUI is basically unguessable
 - tcp lookups
 - too many tags - rules.ml / firewall.ml
