@@ -88,7 +88,7 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
                      get_mtime = (fun () -> Clock.elapsed_ns clock);
                      get_random = R.generate;
                      dns_ports = ref Ports.PortSet.empty;
-                     unknown_names = ref Resolver.NameMvar.empty;
+                     unknown_names = ref Resolver.UnknownNames.empty;
                    } in
 
     let net_listener = network ~clock config resolver nat qubesDB in

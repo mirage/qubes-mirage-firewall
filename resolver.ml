@@ -1,7 +1,7 @@
 let src = Logs.Src.create "fw-resolver" ~doc:"Firewall's DNS resolver module"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module NameMvar = Map.Make(struct
+module UnknownNames = Map.Make(struct
    type t = [`host] Domain_name.t
    let compare = Domain_name.compare
   end)
@@ -18,7 +18,7 @@ type t = {
   get_ptime : unit -> Ptime.t;
   get_mtime : unit -> int64;
   get_random : int -> Cstruct.t;
-  unknown_names : (int32 * Dns.Rr_map.Ipv4_set.t) list Lwt_mvar.t NameMvar.t ref;
+  unknown_names : (int32 * Dns.Rr_map.Ipv4_set.t) list Lwt_condition.t UnknownNames.t ref;
 }
 
 let handle_buf t proto sender src_port query =
@@ -27,25 +27,25 @@ let handle_buf t proto sender src_port query =
 let pick_free_port ~nat_ports ~dns_ports =
   Ports.pick_free_port ~add_list:dns_ports ~consult_list:nat_ports
 
-let get_mvars_from_packet t (packet : Dns.Packet.t) =
-  let find_mvar name = NameMvar.find_opt name !(t.unknown_names) in
+let waiters_of_packet t (packet : Dns.Packet.t) =
+  let find_waiters name = UnknownNames.find_opt name !(t.unknown_names) in
   let (name, _) = packet.question in
   Log.debug (fun f -> f "got a response packet with info for name %a" Domain_name.pp name);
   match Domain_name.host name with
   | Error _ -> []
   | Ok name ->
-    match packet.data, find_mvar name with
-    | `Rcode_error (NXDomain, _opcode, _), Some mvar ->
+    match packet.data, find_waiters name with
+    | `Rcode_error (NXDomain, _opcode, _), Some waiters ->
       Log.debug (fun f -> f "NXDomain for name %a" Domain_name.pp name);
       Log.debug (fun f -> f "found an mvar for NXDomain %a" Domain_name.pp name);
       Log.err (fun f -> f "Name %a does not exist.  Please replace it with an IP address in the ruleset." Domain_name.pp name);
-      (name, mvar) :: []
+      (name, waiters) :: []
     | `Rcode_error (NXDomain, _opcode, _), None ->
       Log.debug (fun f -> f "no mvar found for NXDomain %a" Domain_name.pp name);
       []
-    | `Answer (answers, _auth) , Some mvar ->
+    | `Answer (answers, _auth) , Some waiters ->
       Log.debug (fun f -> f "found an mvar for A record %a" Domain_name.pp name);
-      (name, mvar) :: []
+      (name, waiters) :: []
     | `Answer (answers, _auth) , None ->
       Log.debug (fun f -> f "no mvar found for A record %a" Domain_name.pp name);
       []
@@ -107,19 +107,18 @@ let handle_answers_and_notify t answers =
   in
   let packets : Dns.Packet.t list = List.fold_left decode [] records in
   (* TODO: remove duplicates from this list, to avoid putting into the same mvar multiple times *)
-  let (names_and_mvars : ('a Domain_name.t * 'b Lwt_mvar.t) list) =
-    (* I think the resolver needs to help us in this case, and tell us who this NXDomain is associated with. *)
-    let the_mvars = List.map (get_mvars_from_packet t) packets in
+  let (names_and_waiters : ('a Domain_name.t * 'b Lwt_condition.t) list) =
+    let waiters = List.map (waiters_of_packet t) packets in
     List.iter (fun m ->
-        Log.debug (fun f -> f "we found %d relevant mvars from the response" (List.length m));
-      ) the_mvars;
-    List.flatten @@ the_mvars
+        Log.debug (fun f -> f "we found %d relevant waiters from the response" (List.length m));
+      ) waiters;
+    List.flatten @@ waiters
   in
-  Log.debug (fun f -> f "names_and_mvars has len %d, derived from a list of answers of length %d" (List.length names_and_mvars) (List.length answers));
-  Lwt_list.iter_p (fun (name, mvar) ->
+  Log.debug (fun f -> f "names_and_waiters has len %d, derived from a list of answers of length %d" (List.length names_and_waiters) (List.length answers));
+  List.iter (fun (name, waiters) ->
       let answer = answers_for_name name packets in
-      Lwt_mvar.put mvar answer
-    ) names_and_mvars
+      Lwt_condition.broadcast waiters answer
+    ) names_and_waiters
 
 let get_cache_response_or_queries t name =
   (* listener needs no bookkeeping of port number as there is no real network interface traffic, just an in memory call *)
@@ -142,14 +141,14 @@ let get_cache_response_or_queries t name =
     t, `Known answers
   else
     begin
-      match NameMvar.find_opt name !(t.unknown_names) with
-      | Some mvar -> 
+      match UnknownNames.find_opt name !(t.unknown_names) with
+      | Some waiters -> 
         Log.debug (fun f -> f "There is already an mvar for %a.  Sending %d more packets to try to resolve it..." Domain_name.pp name (List.length upstream_queries));
-        (t, `Unknown (mvar, upstream_queries))
+        (t, `Unknown (waiters, upstream_queries))
       | None ->
-        let mvar = Lwt_mvar.create_empty () in
-        t.unknown_names := NameMvar.add name mvar !(t.unknown_names);
-        t, `Unknown (mvar, upstream_queries)
+        let condition = Lwt_condition.create () in
+        t.unknown_names := UnknownNames.add name condition !(t.unknown_names);
+        t, `Unknown (condition, upstream_queries)
     end
 
 let ip_of_reply_packet (name : [`host] Domain_name.t) dns_packet =

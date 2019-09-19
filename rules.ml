@@ -56,7 +56,7 @@ module Classifier = struct
       if (Ipaddr.Prefix.mem Ipaddr.(V4 ip) subnet) then `Match rule else `No_match
     | `dnsname name ->
       match Resolver.get_cache_response_or_queries resolver name with
-      | t, `Unknown (mvar, queries) -> `Lookup_and_retry (t, mvar, queries)
+      | t, `Unknown (condition, queries) -> `Lookup_and_retry (t, condition, queries)
       | t, `Known answers ->
         Log.debug (fun f -> f "resolver has cache entries for %a" Domain_name.pp name);
         let find = Dns.Rr_map.Ipv4_set.mem in

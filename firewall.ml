@@ -82,8 +82,8 @@ let lookup t resolver mvar outgoing_queries =
       t.Router.dns_sender src_port query
     ) outgoing_queries >>= fun () ->
   Log.debug (fun f -> f "waiting on response for dns requests...");
-  let try_take mvar =
-    Lwt_mvar.take mvar >>= fun answers ->
+  let try_take condition =
+    Lwt_condition.wait condition >>= fun answers ->
     Log.debug (fun f -> f "got responses to dns queries %a; shouldn't time out" Fmt.(list (list Ipaddr.V4.pp)) (List.map (fun (_, a) -> Dns.Rr_map.Ipv4_set.elements a) answers));
     Lwt.return (Ok ())
   in
@@ -101,7 +101,7 @@ let lookup t resolver mvar outgoing_queries =
       ) more_queries >>= fun () ->
     Log.debug (fun f -> f "send %d additional queries after timeout" (List.length more_queries));
     Log.debug (fun f -> f "handling %d new answers after timeout" (List.length answers));
-    Resolver.handle_answers_and_notify resolver answers >>= fun () ->
+    Resolver.handle_answers_and_notify resolver answers;
     Lwt.return (Ok ())
   in
   Lwt.pick [
