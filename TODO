@@ -3,6 +3,7 @@
 - tcp lookups: don't assume UDP; correctly move to TCP for large records
   the usual way this works is DNS is UDP by default, but UDP only allows packets up to a certain size, and the response might be bigger than that.  so in that case you're supposed to try the same query again over TCP.  this is what "truncated UDP response" means -- the answer was too long, so the reply you got over UDP is truncated
   Dns_client_flow.ml is using TCP by default, which I thought was strange but might not be that weird...?  @linse's provider DNS doesn't allow it, so it might not be super widespread?
+  follow up on "the Recursive mode of the resolver in ocaml-dns is not working" as mentioned by @hannesm in ocaml-dns issue 168 -- in what way is it not working, and are we incorrectly working around it?
 
 # code quality
 
@@ -13,7 +14,7 @@
 - make state of dns transactions more explicit
   - making the mutable fields of the resolver record immutable wasn't successful; are there other strategies we can take to make this code more readable or easier to modify?
 - think about the experience of users reading the logs; are the messages useful in solving common problems?
-- follow up on "the Recursive mode of the resolver in ocaml-dns is not working" as mentioned by @hannesm in ocaml-dns issue 168 -- in what way is it not working, and are we incorrectly working around it?
+- fix warnings :)
 
 # distribution
 

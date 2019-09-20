@@ -57,7 +57,7 @@ module Classifier = struct
     | `dnsname name ->
       match Resolver.get_cache_response_or_queries resolver name with
       | t, `Unknown (condition, queries) -> `Lookup_and_retry (t, condition, queries)
-      | t, `Known answers ->
+      | _t, `Known answers ->
         Log.debug (fun f -> f "resolver has cache entries for %a" Domain_name.pp name);
         let find = Dns.Rr_map.Ipv4_set.mem in
         (* we don't need to check the ttl ourselves, because the resolver expires it given the information that Resolver.get_cache_response_or_queries passes to it *)
@@ -68,7 +68,7 @@ module Classifier = struct
 end
 
 (* Does the packet match our rules? *)
-let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  : Packet.action =
+let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  =
   let (`Client client_link) = packet.src in
   let rules = snd client_link#get_rules in
   Log.debug (fun f -> f "checking %d rules for a match" (List.length rules));
@@ -91,23 +91,24 @@ let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link]
                             will attempt and then try again to find matching rules");
     `Lookup_and_retry q
 
-(** Packets from the outside world that don't match any NAT table entry are being checked against the fw rules here *)
-let from_client resolver router (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action =
+(** Packets from the private interface that don't match any NAT table entry are being checked against the fw rules here *)
+let from_client resolver _router (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action =
   match packet with
-  | { dst = (`External _ | `NetVM); _ } -> begin
+  | { dst = `Client_gateway; transport_header = `UDP header; _ } ->
+    if header.Udp_packet.dst_port = dns_port
+    then `NAT_to (`NetVM, dns_port)
+    else `Drop "packet addressed to client gateway"
+  | { dst = `External _ ; _ } | { dst = `NetVM; _ }-> begin
     (* see whether this traffic is allowed *)
     match classify_client_packet resolver packet with
     | `Accept -> `NAT
     | `Drop s -> `Drop s
     | `Lookup_and_retry q -> `Lookup_and_retry q
   end
-  | { dst = `Client_gateway; transport_header = `UDP header; _ } ->
-    if header.Udp_packet.dst_port = dns_port
-    then `NAT_to (`NetVM, dns_port)
-    else `Drop "packet addressed to client gateway"
   | { dst = (`Client_gateway | `Firewall_uplink) ; _ } -> `Drop "packet addressed to firewall itself"
   | { dst = `Client _ ; _ } -> classify_client_packet resolver packet
+  | _ -> `Drop "could not classify packet"
 
 (** Packets from the outside world that don't match any NAT table entry are being dropped by default *)
-let from_netvm (packet : ([`NetVM | `External of _], _) Packet.t) : Packet.action =
+let from_netvm (_packet : ([`NetVM | `External of _], _) Packet.t) : Packet.action =
   `Drop "drop by default"

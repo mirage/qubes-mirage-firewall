@@ -28,13 +28,14 @@ let pick_free_port ~nat_ports ~dns_ports =
   Ports.pick_free_port ~add_list:dns_ports ~consult_list:nat_ports
 
 let waiters_of_packet t (packet : Dns.Packet.t) =
+  let open Dns.Rcode in
   let find_waiters name = UnknownNames.find_opt name !(t.unknown_names) in
-  let (name, _) = packet.question in
+  let (name, _) = packet.Dns.Packet.question in
   Log.debug (fun f -> f "got a response packet with info for name %a" Domain_name.pp name);
   match Domain_name.host name with
   | Error _ -> []
   | Ok name ->
-    match packet.data, find_waiters name with
+    match packet.Dns.Packet.data, find_waiters name with
     | `Rcode_error (NXDomain, _opcode, _), Some waiters ->
       Log.debug (fun f -> f "NXDomain for name %a" Domain_name.pp name);
       Log.debug (fun f -> f "found an mvar for NXDomain %a" Domain_name.pp name);
@@ -43,10 +44,10 @@ let waiters_of_packet t (packet : Dns.Packet.t) =
     | `Rcode_error (NXDomain, _opcode, _), None ->
       Log.debug (fun f -> f "no mvar found for NXDomain %a" Domain_name.pp name);
       []
-    | `Answer (answers, _auth) , Some waiters ->
+    | `Answer (_answers, _auth) , Some waiters ->
       Log.debug (fun f -> f "found an mvar for A record %a" Domain_name.pp name);
       (name, waiters) :: []
-    | `Answer (answers, _auth) , None ->
+    | `Answer (_answers, _auth) , None ->
       Log.debug (fun f -> f "no mvar found for A record %a" Domain_name.pp name);
       []
     | _ -> []
@@ -67,7 +68,7 @@ let answers_for_name name records : (int32 * Dns.Rr_map.Ipv4_set.t) list =
 (* TODO: under what circumstances would we get >1 answer for NXDomain?
    Probably in this case we need to sift through the answers for those which
    match the name we looked up. *)
-    | `Rcode_error (NXDomain, _, Some (answers, _authorities)) ->
+    | `Rcode_error (Dns.Rcode.NXDomain, _, Some (answers, _authorities)) ->
       let (name, _) = record.question in
       Log.debug (fun f -> f "got an NXDomain for name %a" Domain_name.pp name);
       begin
@@ -78,7 +79,7 @@ let answers_for_name name records : (int32 * Dns.Rr_map.Ipv4_set.t) list =
           let ttl = 0l in
           (ttl, Dns.Rr_map.Ipv4_set.empty) :: acc
       end
-    | `Rcode_error (NXDomain, _, None) ->
+    | `Rcode_error (Dns.Rcode.NXDomain, _, None) ->
       let (name, _) = record.question in
       Log.debug (fun f -> f "got an NXDomain for name %a with no answers -- faking the TTL" Domain_name.pp name);
       let ttl = 0l in
@@ -166,7 +167,7 @@ let ip_of_reply_packet (name : [`host] Domain_name.t) dns_packet =
             Domain_name.pp q_name
             Name_rr_map.pp answer
         ) >>= fun relevant_map ->
-      begin match Rr_map.find A relevant_map with
+      begin match Rr_map.find Rr_map.A relevant_map with
         | Some response -> Ok response
         | None ->
           begin match Rr_map.(find Cname relevant_map) with
@@ -179,7 +180,7 @@ let ip_of_reply_packet (name : [`host] Domain_name.t) dns_packet =
   in
   match dns_packet.Dns.Packet.data with
   (* TODO: how should we handle authority? *)
-  | `Rcode_error (NXDomain, _, _) ->
+  | `Rcode_error (Dns.Rcode.NXDomain, _, _) ->
     Log.err (fun f -> f "No DNS record exists for %a. Please manually set an IP address for this rule." Domain_name.pp name);
     Error `Nxdomain
   | `Answer (answer, _authority) ->

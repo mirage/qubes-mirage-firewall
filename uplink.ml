@@ -68,7 +68,7 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
         Lwt_list.iter_p (send_dns_query t @@ pick_port ()) queries >>= fun () ->
         Resolver.handle_answers_and_notify resolver answers;
         Lwt.return_unit
-      | `UDP (header, packet) ->
+      | `UDP (header, _packet) ->
         Log.debug (fun f -> f "UDP dst_port port %d isn't in the list of resolver ports" header.dst_port);
         Firewall.ipv4_from_netvm resolver router (`IPv4 (ip_header, ip_packet))
       | _ ->

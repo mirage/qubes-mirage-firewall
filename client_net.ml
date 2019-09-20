@@ -93,7 +93,7 @@ let add_vif { Dao.ClientVif.domid; device_id } (resolver : Resolver.t) ~client_i
         Qubes.DB.after qubesDB (fst iface#get_rules) >>= fun new_rules ->
         iface#set_rules new_rules;
         (* empty the nat table, since new rules might deny traffic that's already in the nat table *)
-        My_nat.reset router.nat router.ports >>= fun () ->
+        My_nat.reset router.Router.nat router.Router.ports >>= fun () ->
         update ()
       in
       update ()

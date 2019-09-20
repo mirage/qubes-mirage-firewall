@@ -90,8 +90,8 @@ let lookup t resolver mvar outgoing_queries =
   let timeout () =
     OS.Time.sleep_ns 2_000_000_000L >>= fun () ->
     Log.debug (fun f -> f "timer fired - seeing whether there is more stuff to send");
-    let (new_resolver, answers, more_queries) = Dns_resolver.timer !(resolver.resolver) (resolver.get_mtime ()) in
-    resolver.resolver := new_resolver;
+    let (new_resolver, answers, more_queries) = Dns_resolver.timer !(resolver.Resolver.resolver) (resolver.Resolver.get_mtime ()) in
+    resolver.Resolver.resolver := new_resolver;
     Lwt_list.iter_p (fun query ->
         let src_port = Resolver.pick_free_port
             ~nat_ports:t.Router.ports
