@@ -23,7 +23,7 @@ module Classifier = struct
     | None -> true
     | Some (Q.Range_inclusive (min, max)) -> min <= port && port <= max
 
-  let matches_proto rule packet = match rule.Pf_qubes.Parse_qubes.proto, rule.Pf_qubes.Parse_qubes.specialtarget with
+  let matches_proto rule packet = match rule.Q.proto, rule.Q.specialtarget with
     | None, None -> true
     | None, Some `dns when List.mem packet.ipv4_header.Ipv4_packet.dst default_dns_servers -> begin
       (* specialtarget=dns applies only to the specialtarget destination IPs, and
@@ -41,7 +41,7 @@ module Classifier = struct
       | `udp, `UDP header -> matches_port rule.Q.dstports header.Udp_packet.dst_port
       | `icmp, `ICMP header ->
       begin
-        match rule.Pf_qubes.Parse_qubes.icmp_type with
+        match rule.Q.icmp_type with
         | None -> true
         | Some rule_icmp_type ->
           0 = compare rule_icmp_type @@ Icmpv4_wire.ty_to_int header.Icmpv4_packet.ty
@@ -50,7 +50,7 @@ module Classifier = struct
 
   let matches_dest resolver rule packet =
     let ip = packet.ipv4_header.Ipv4_packet.dst in
-    match rule.Pf_qubes.Parse_qubes.dst with
+    match rule.Q.dst with
     | `any ->  `Match rule
     | `hosts subnet ->
       if (Ipaddr.Prefix.mem Ipaddr.(V4 ip) subnet) then `Match rule else `No_match
@@ -68,12 +68,12 @@ module Classifier = struct
 end
 
 let find_first_match resolver packet acc rule =
-  match acc with | `No_match ->
-                   if Classifier.matches_proto rule packet then Classifier.matches_dest resolver rule packet else begin
-                     Log.debug (fun f -> f "rule %d is not a match - proto" rule.Q.number);
-                     `No_match
-                   end
-                 | q -> q
+  match acc with 
+  | `No_match -> 
+    if Classifier.matches_proto rule packet 
+    then Classifier.matches_dest resolver rule packet 
+    else `No_match
+  | q -> q
  
 (* Does the packet match our rules? *)
 let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  =
@@ -82,8 +82,14 @@ let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link]
   match List.fold_left (find_first_match resolver packet) `No_match rules with
   | `No_match -> `Drop "No matching rule; assuming default drop"
   | `Match {Q.action = Q.Accept; _} -> `Accept
-  | `Match ({Q.action = Q.Drop; number; _} as rule) -> 
+  | `Match ({Q.action = Q.Drop; _} as rule) -> 
     `Drop (Format.asprintf "rule number %a explicitly drops this packet" Q.pp_rule rule)
+  | `Lookup_and_retry q -> `Lookup_and_retry q
+
+let translate_accepted_packets resolver packet =
+  match classify_client_packet resolver packet with
+  | `Accept -> `NAT
+  | `Drop s -> `Drop s
   | `Lookup_and_retry q -> `Lookup_and_retry q
 
 (** Packets from the private interface that don't match any NAT table entry are being checked against the fw rules here *)
@@ -93,13 +99,7 @@ let from_client resolver (packet : ([`Client of Fw_utils.client_link], _) Packet
     if header.Udp_packet.dst_port = dns_port
     then `NAT_to (`NetVM, dns_port)
     else `Drop "packet addressed to client gateway"
-  | { dst = `External _ ; _ } | { dst = `NetVM; _ }-> begin
-    (* see whether this traffic is allowed *)
-    match classify_client_packet resolver packet with
-    | `Accept -> `NAT
-    | `Drop s -> `Drop s
-    | `Lookup_and_retry q -> `Lookup_and_retry q
-  end
+  | { dst = `External _ ; _ } | { dst = `NetVM; _ } -> translate_accepted_packets resolver packet
   | { dst = (`Client_gateway | `Firewall_uplink) ; _ } -> `Drop "packet addressed to firewall itself"
   | { dst = `Client _ ; _ } -> classify_client_packet resolver packet
   | _ -> `Drop "could not classify packet"

@@ -11,34 +11,25 @@ module Log = (val Logs.src_log src : Logs.LOG)
 (* Transmission *)
 
 let transmit_ipv4 packet iface =
-  Lwt.catch
-    (fun () ->
-       Lwt.catch
-         (fun () ->
-            iface#writev `IPv4 (fun b ->
-                match Nat_packet.into_cstruct packet b with
-                | Error e ->
-                  Log.warn (fun f -> f "Failed to write packet to %a: %a"
-                               Ipaddr.V4.pp iface#other_ip
-                               Nat_packet.pp_error e);
-                  0
-                | Ok n -> n
-              )
-         )
-         (fun ex ->
-            Log.warn (fun f -> f "Failed to write packet to %a: %s"
-                         Ipaddr.V4.pp iface#other_ip
-                         (Printexc.to_string ex));
-            Lwt.return ()
-         )
+  Lwt.catch (fun () ->
+    Lwt.catch (fun () ->
+      iface#writev `IPv4 (fun b ->
+        match Nat_packet.into_cstruct packet b with
+        | Error e ->
+          Log.warn (fun f -> f "Failed to write packet to %a: %a" Ipaddr.V4.pp iface#other_ip Nat_packet.pp_error e);
+          0
+        | Ok n -> n
+      )
     )
     (fun ex ->
-       Log.err (fun f -> f "Exception in transmit_ipv4: %s for:@.%a"
-                   (Printexc.to_string ex)
-                   Nat_packet.pp packet
-               );
+       Log.warn (fun f -> f "Failed to write packet to %a: %s" Ipaddr.V4.pp iface#other_ip (Printexc.to_string ex));
        Lwt.return ()
     )
+  )
+  (fun ex ->
+    Log.err (fun f -> f "Exception in transmit_ipv4: %s for:@.%a" (Printexc.to_string ex) Nat_packet.pp packet);
+    Lwt.return ()
+  )
 
 let forward_ipv4 t packet =
   let `IPv4 (ip, _) = packet in
@@ -73,7 +64,6 @@ let nat_to t dns_resolver ~host ~port packet =
       Lwt.return ()
 
 let lookup t resolver mvar outgoing_queries =
-  Log.debug (fun f -> f "sending %d dns requests to figure out whether a rule matches" @@ List.length outgoing_queries);
   Lwt_list.iter_p (fun query ->
       let src_port = Resolver.pick_free_port
           ~nat_ports:t.Router.ports
@@ -81,15 +71,12 @@ let lookup t resolver mvar outgoing_queries =
       in
       t.Router.dns_sender src_port query
     ) outgoing_queries >>= fun () ->
-  Log.debug (fun f -> f "waiting on response for dns requests...");
   let try_take condition =
     Lwt_condition.wait condition >>= fun answers ->
-    Log.debug (fun f -> f "got responses to dns queries %a; shouldn't time out" Fmt.(list (list Ipaddr.V4.pp)) (List.map (fun (_, a) -> Dns.Rr_map.Ipv4_set.elements a) answers));
     Lwt.return (Ok ())
   in
   let timeout () =
     OS.Time.sleep_ns 2_000_000_000L >>= fun () ->
-    Log.debug (fun f -> f "timer fired - seeing whether there is more stuff to send");
     let (new_resolver, answers, more_queries) = Dns_resolver.timer !(resolver.Resolver.resolver) (resolver.Resolver.get_mtime ()) in
     resolver.Resolver.resolver := new_resolver;
     Lwt_list.iter_p (fun query ->
@@ -99,8 +86,6 @@ let lookup t resolver mvar outgoing_queries =
         in
         t.Router.dns_sender src_port query
       ) more_queries >>= fun () ->
-    Log.debug (fun f -> f "send %d additional queries after timeout" (List.length more_queries));
-    Log.debug (fun f -> f "handling %d new answers after timeout" (List.length answers));
     Resolver.handle_answers_and_notify resolver answers;
     Lwt.return (Ok ())
   in
