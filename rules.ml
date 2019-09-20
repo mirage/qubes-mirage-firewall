@@ -67,32 +67,27 @@ module Classifier = struct
 
 end
 
+let find_first_match resolver packet acc rule =
+  match acc with | `No_match ->
+                   if Classifier.matches_proto rule packet then Classifier.matches_dest resolver rule packet else begin
+                     Log.debug (fun f -> f "rule %d is not a match - proto" rule.Q.number);
+                     `No_match
+                   end
+                 | q -> q
+ 
 (* Does the packet match our rules? *)
 let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  =
   let (`Client client_link) = packet.src in
   let rules = snd client_link#get_rules in
-  Log.debug (fun f -> f "checking %d rules for a match" (List.length rules));
-  List.fold_left (fun acc rule ->
-      match acc with | `No_match ->
-                       if Classifier.matches_proto rule packet then Classifier.matches_dest resolver rule packet else begin
-                         Log.debug (fun f -> f "rule %d is not a match - proto" rule.Q.number);
-                         `No_match
-                       end
-                     | q -> q
-    ) `No_match rules |> function
+  match List.fold_left (find_first_match resolver packet) `No_match rules with
   | `No_match -> `Drop "No matching rule; assuming default drop"
-  | `Match {Q.action = Q.Accept; number; _} ->
-    Log.debug (fun f -> f "allowing packet matching rule %d" number);
-    `Accept
-  | `Match {Q.action = Q.Drop; number; _} ->
-    `Drop (Printf.sprintf "rule number %d explicitly drops this packet" number)
-  | `Lookup_and_retry q ->
-    Log.debug ( fun f -> f "packet requires a DNS lookup - \
-                            will attempt and then try again to find matching rules");
-    `Lookup_and_retry q
+  | `Match {Q.action = Q.Accept; _} -> `Accept
+  | `Match ({Q.action = Q.Drop; number; _} as rule) -> 
+    `Drop (Format.asprintf "rule number %a explicitly drops this packet" Q.pp_rule rule)
+  | `Lookup_and_retry q -> `Lookup_and_retry q
 
 (** Packets from the private interface that don't match any NAT table entry are being checked against the fw rules here *)
-let from_client resolver _router (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action =
+let from_client resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action =
   match packet with
   | { dst = `Client_gateway; transport_header = `UDP header; _ } ->
     if header.Udp_packet.dst_port = dns_port

@@ -158,7 +158,7 @@ let ipv4_from_client resolver t ~src packet =
   let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
   match of_mirage_nat_packet ~src:(`Client src) ~dst packet with
   | None -> return ()
-  | Some firewall_packet -> apply_rules t resolver (Rules.from_client resolver t) ~dst firewall_packet
+  | Some firewall_packet -> apply_rules t resolver (Rules.from_client resolver) ~dst firewall_packet
 
 let ipv4_from_netvm resolver t packet =
   handle_low_memory t >>= function

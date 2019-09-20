@@ -44,16 +44,17 @@ let waiters_of_packet t (packet : Dns.Packet.t) =
     | `Rcode_error (NXDomain, _opcode, _), None ->
       Log.debug (fun f -> f "no mvar found for NXDomain %a" Domain_name.pp name);
       []
-    | `Answer (_answers, _auth) , Some waiters ->
+    | `Answer _ , Some waiters ->
       Log.debug (fun f -> f "found an mvar for A record %a" Domain_name.pp name);
       (name, waiters) :: []
-    | `Answer (_answers, _auth) , None ->
+    | `Answer _ , None ->
       Log.debug (fun f -> f "no mvar found for A record %a" Domain_name.pp name);
       []
     | _ -> []
 
 let answers_for_name name records : (int32 * Dns.Rr_map.Ipv4_set.t) list =
   let open Dns.Packet in
+  let open Dns.Rr_map in
   let get_ip_set acc record =
     let find_me record_type (answer, _authority) =
       Dns.Name_rr_map.find (Domain_name.raw name) record_type answer
@@ -72,18 +73,18 @@ let answers_for_name name records : (int32 * Dns.Rr_map.Ipv4_set.t) list =
       let (name, _) = record.question in
       Log.debug (fun f -> f "got an NXDomain for name %a" Domain_name.pp name);
       begin
-        match Dns.Name_rr_map.find (Domain_name.raw name) Dns.Rr_map.A answers with
+        match Dns.Name_rr_map.find (Domain_name.raw name) A answers with
         | Some (ttl, _) ->
-          (ttl, Dns.Rr_map.Ipv4_set.empty) :: acc
+          (ttl, Ipv4_set.empty) :: acc
         | None ->
           let ttl = 0l in
-          (ttl, Dns.Rr_map.Ipv4_set.empty) :: acc
+          (ttl, Ipv4_set.empty) :: acc
       end
     | `Rcode_error (Dns.Rcode.NXDomain, _, None) ->
       let (name, _) = record.question in
       Log.debug (fun f -> f "got an NXDomain for name %a with no answers -- faking the TTL" Domain_name.pp name);
       let ttl = 0l in
-      (ttl, Dns.Rr_map.Ipv4_set.empty) :: acc
+      (ttl, Ipv4_set.empty) :: acc
     | _ -> acc
   in
   let replies = List.fold_left get_ip_set [] records in
