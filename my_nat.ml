@@ -53,7 +53,7 @@ let add_nat_rule_and_translate t nat_ports resolver ~xl_host action packet =
       )
   in
   let rec aux ~retries =
-    let xl_port = pick_free_port ~nat_ports ~dns_ports:resolver.Resolver.dns_ports in
+    let xl_port = pick_free_port ~nat_ports ~dns_ports:(ref (Ports.PortSet.singleton 1053)) in
     apply_action xl_port >>= function
     | Error `Out_of_memory ->
       (* Because hash tables resize in big steps, this can happen even if we have a fair

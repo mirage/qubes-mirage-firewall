@@ -262,7 +262,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
   let dns_expect_failure ~nameserver ~hostname stack () =
     let lookup = Domain_name.(of_string_exn hostname |> host_exn) in
     let nameserver' = `UDP, (Ipaddr.V4.of_string_exn nameserver, 53) in
-    let dns = Dns.create ~nameserver:nameserver' stack in
+    let dns = Dns.create ~nameserver:nameserver' ~clock:Clock.elapsed_ns stack in
     Dns.gethostbyname dns lookup >>= function
     | Error (`Msg s) when String.compare s "Truncated UDP response" <> 0 -> Log.debug (fun f -> f "DNS test to %s failed as expected: %s"
                                       nameserver s);
@@ -275,7 +275,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
     let parsed_server = Domain_name.(of_string_exn server |> host_exn) in
     (* ask dns about server *)
     Log.debug (fun f -> f "going to make a dns thing using nameserver %s" nameserver_1);
-    let dns = Dns.create ~nameserver:(`UDP, ((Ipaddr.V4.of_string_exn nameserver_1), 53)) stack in
+    let dns = Dns.create ~nameserver:(`UDP, ((Ipaddr.V4.of_string_exn nameserver_1), 53)) ~clock:Clock.elapsed_ns stack in
     Log.debug (fun f -> f "OK, going to look up %s now" server);
     Dns.gethostbyname dns parsed_server >>= function
     | Error (`Msg s) -> Log.err (fun f -> f "couldn't look up ip for %s: %s" server s); Lwt.return_unit
@@ -306,7 +306,7 @@ module Client (R: RANDOM) (Time: TIME) (Clock : MCLOCK) (C: CONSOLE) (NET: NETWO
         ("TCP connect", `Quick, tcp_connect "when trying lower bound in range" netvm 6668 tcp);
         ("TCP connect", `Quick, tcp_connect "when trying upper bound in range" netvm 6670 tcp);
         ("TCP connect", `Quick, tcp_connect_denied "when trying above range" netvm 6671 tcp);
-        ("TCP connect", `Quick, tcp_connect_denied "" netvm 8082 tcp); 
+        ("TCP connect", `Quick, tcp_connect_denied "" netvm 8082 tcp);
       ] ) in
 
     (* replace the udp-related listeners with the right one for tcp *)

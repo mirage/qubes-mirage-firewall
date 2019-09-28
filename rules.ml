@@ -4,6 +4,7 @@
 (** This module applies firewall rules from QubesDB. *)
 
 open Packet
+open Lwt.Infix
 module Q = Pf_qubes.Parse_qubes
 
 let src = Logs.Src.create "rules" ~doc:"Firewall rules"
@@ -48,60 +49,59 @@ module Classifier = struct
       end
       | _, _ -> false
 
-  let matches_dest resolver rule packet =
+  let matches_dest dns_client rule packet =
     let ip = packet.ipv4_header.Ipv4_packet.dst in
     match rule.Q.dst with
-    | `any ->  `Match rule
+    | `any ->  Lwt.return @@ `Match rule
     | `hosts subnet ->
-      if (Ipaddr.Prefix.mem Ipaddr.(V4 ip) subnet) then `Match rule else `No_match
+      Lwt.return @@ if (Ipaddr.Prefix.mem Ipaddr.(V4 ip) subnet) then `Match rule else `No_match
     | `dnsname name ->
-      match Resolver.get_cache_response_or_queries resolver name with
-      | t, `Unknown (condition, queries) -> `Lookup_and_retry (t, condition, queries)
-      | _t, `Known answers ->
-        Log.debug (fun f -> f "resolver has cache entries for %a" Domain_name.pp name);
-        let find = Dns.Rr_map.Ipv4_set.mem in
-        (* we don't need to check the ttl ourselves, because the resolver expires it given the information that Resolver.get_cache_response_or_queries passes to it *)
-        if List.exists (fun (_ttl, ipset) -> find ip ipset) answers
+      Log.warn (fun f -> f "Resolving %a" Domain_name.pp name);
+      My_dns_client.Dns_client.getaddrinfo dns_client Dns.Rr_map.A name >|= function
+      | Ok (_ttl, found_ips) ->
+        Log.warn (fun f -> f "Resolved %a" Domain_name.pp name);
+        if Dns.Rr_map.Ipv4_set.mem ip found_ips
         then `Match rule
         else `No_match
+      | Error (`Msg m) ->
+        Log.debug (fun f -> f "Could not resolve %a: %s" Domain_name.pp name m);
+        `No_match
 
 end
 
-let find_first_match resolver packet acc rule =
+let find_first_match dns_client packet acc rule =
   match acc with
   | `No_match ->
     if Classifier.matches_proto rule packet
-    then Classifier.matches_dest resolver rule packet
-    else `No_match
-  | q -> q
+    then Classifier.matches_dest dns_client rule packet
+    else Lwt.return `No_match
+  | q -> Lwt.return q
 
 (* Does the packet match our rules? *)
-let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  =
+let classify_client_packet dns_client (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  =
   let (`Client client_link) = packet.src in
   let rules = snd client_link#get_rules in
-  match List.fold_left (find_first_match resolver packet) `No_match rules with
+  Lwt_list.fold_left_s (find_first_match dns_client packet) `No_match rules >|= function
   | `No_match -> `Drop "No matching rule; assuming default drop"
   | `Match {Q.action = Q.Accept; _} -> `Accept
   | `Match ({Q.action = Q.Drop; _} as rule) ->
     `Drop (Format.asprintf "rule number %a explicitly drops this packet" Q.pp_rule rule)
-  | `Lookup_and_retry q -> `Lookup_and_retry q
 
-let translate_accepted_packets resolver packet =
-  match classify_client_packet resolver packet with
+let translate_accepted_packets dns_client packet =
+  classify_client_packet dns_client packet >|= function
   | `Accept -> `NAT
   | `Drop s -> `Drop s
-  | `Lookup_and_retry q -> `Lookup_and_retry q
 
 (** Packets from the private interface that don't match any NAT table entry are being checked against the fw rules here *)
-let from_client resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action Lwt.t =
+let from_client dns_client (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action Lwt.t =
   match packet with
   | { dst = `Client_gateway; transport_header = `UDP header; _ } ->
     if header.Udp_packet.dst_port = dns_port
     then Lwt.return @@ `NAT_to (`NetVM, dns_port)
     else Lwt.return @@ `Drop "packet addressed to client gateway"
-  | { dst = `External _ ; _ } | { dst = `NetVM; _ } -> Lwt.return @@ translate_accepted_packets resolver packet
+  | { dst = `External _ ; _ } | { dst = `NetVM; _ } -> translate_accepted_packets dns_client packet
   | { dst = (`Client_gateway | `Firewall_uplink) ; _ } -> Lwt.return @@ `Drop "packet addressed to firewall itself"
-  | { dst = `Client _ ; _ } -> Lwt.return @@ classify_client_packet resolver packet
+  | { dst = `Client _ ; _ } -> classify_client_packet dns_client packet
   | _ -> Lwt.return @@ `Drop "could not classify packet"
 
 (** Packets from the outside world that don't match any NAT table entry are being dropped by default *)

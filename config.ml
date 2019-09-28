@@ -35,10 +35,7 @@ let main =
       package "mirage-nat" ~min:"1.2.0";
       package "mirage-logs";
       package "dns";
-      package "dns-mirage";
-      package "dns-resolver";
       package "dns-client";
-      package "dns-server"; (* dependency of dns-resolver *)
       package "pf" ~pin:"git+https://github.com/yomimono/ocaml-pf.git#just-qubes";
     ]
     "Unikernel.Main" (random @-> mclock @-> job)

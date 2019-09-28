@@ -3,18 +3,19 @@
 - tcp lookups: don't assume UDP; correctly move to TCP for large records
   the usual way this works is DNS is UDP by default, but UDP only allows packets up to a certain size, and the response might be bigger than that.  so in that case you're supposed to try the same query again over TCP.  this is what "truncated UDP response" means -- the answer was too long, so the reply you got over UDP is truncated
   Dns_client_flow.ml is using TCP by default, which I thought was strange but might not be that weird...?  @linse's provider DNS doesn't allow it, so it might not be super widespread?
-  follow up on "the Recursive mode of the resolver in ocaml-dns is not working" as mentioned by @hannesm in ocaml-dns issue 168 -- in what way is it not working, and are we incorrectly working around it?
 
 # code quality
 
+- dns client should accept a timeout from us
+- query caching in the dns client
+
+- src port hardcoded to 1053
 - refactoring for PR to qubes-mirage-firewall:
-  - too many tags - rules.ml / firewall.ml (e.g., `Lookup_and_retry vs `Needs_lookup, etc)
   - program flow through rules.ml/firewall.ml/resolver.ml/uplink.ml is hard to follow -- is there a good way to fix it?
-  - outstanding issue in ocaml-dns: we'd like to use a more `gethostbyname`-like interface, but we can't (see https://github.com/mirage/ocaml-dns/issues/168 )
-- make state of dns transactions more explicit
-  - making the mutable fields of the resolver record immutable wasn't successful; are there other strategies we can take to make this code more readable or easier to modify?
 - think about the experience of users reading the logs; are the messages useful in solving common problems?
 - fix warnings :)
+
+- test a rule that does not resolve
 
 # distribution
 
@@ -24,6 +25,7 @@
 # improvements/future features
 
 - ipv6 is out of scope; can we make it easier to add later?
+- whitelist of destinations by snooping dns resolver (only allow resolved destinations)
 - snoop on client traffic to get DNS information
   - in other words: we can see the clients' DNS traffic; we could use that information.  the client has to do all the same DNS lookups the firewall does (unless it has hardcoded IPs for stuff), and all that traffic goes through the firewall.  we could act as if the client's traffic and the replies to it came from us, and put that information in the resolver cache; then we don't have to do our own lookups (or at least, we don't have to do as many), so the first packet that might match a rule wouldn't have to trigger a DNS lookup, and the firewall will be faster.  also this helps with some issues with round-robin DNS, where the server gives different responses to subsequent queries.
   (more on round robin: this is a form of load balancing where the name server gives different responses to queries in order to assign a specific instance to a client.  So client A might ask for linse.me and get 1.1.1.1, and client B might ask for linse.me and get 1.1.1.2, and client C get 1.1.1.1, client D 1.1.1.2, etc.  If a client VM and the firewall get different A records, the user might have the experience that they can't get to linse.me even if they should be able to. using the client's DNS traffic ensures that the firewall and the client VM have the same map from linse.me to whatever IP the client got.)

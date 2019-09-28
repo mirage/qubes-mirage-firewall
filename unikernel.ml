@@ -11,9 +11,7 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
   module Uplink = Uplink.Make(R)(Clock)
 
   (* Set up networking and listen for incoming packets. *)
-  let network ~clock config (resolver : Resolver.t) nat qubesDB =
-    (* Initialise connection to NetVM *)
-    Uplink.connect ~clock config >>= fun uplink ->
+  let network ~clock config dns_client dns_responses uplink nat qubesDB =
     (* Report success *)
     Dao.set_iptables_error qubesDB "" >>= fun () ->
     (* Set up client-side networking *)
@@ -28,8 +26,8 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
     in
     (* Handle packets from both networks *)
     Lwt.choose [
-      Client_net.listen resolver qubesDB router;
-      Uplink.listen uplink resolver router
+      Client_net.listen dns_client qubesDB router;
+      Uplink.listen uplink dns_client dns_responses router
     ]
 
   (* We don't use the GUI, but it's interesting to keep an eye on it.
@@ -80,19 +78,14 @@ module Main (R : Mirage_types_lwt.RANDOM)(Clock : Mirage_clock_lwt.MCLOCK) = str
     Dao.read_network_config qubesDB >>= fun config ->
 
     let rng i = R.generate i in
-    let server = Dns_server.Primary.create ~rng Dns_resolver_root.reserved in
 
-    let resolver = { Resolver.resolver = ref
-                     (Dns_resolver.create ~mode:(`Recursive) start_time rng server);
-                     uplink_ip = config.Dao.uplink_our_ip;
-                     get_ptime = (fun _unit -> Ptime.min); (* TODO get pclock from config *)
-                     get_mtime = (fun () -> Clock.elapsed_ns clock);
-                     get_random = rng;
-                     dns_ports = ref Ports.PortSet.empty;
-                     unknown_names = ref Resolver.UnknownNames.empty;
-                   } in
+    Uplink.connect ~clock config >>= fun uplink ->
 
-    let net_listener = network ~clock config resolver nat qubesDB in
+    let uplink' = Uplink.send_dns_client_query uplink in
+    let stack = (uplink', Lwt_mvar.create_empty ()) in
+    let dns_client = My_dns_client.Dns_client.create ~rng ~clock:Clock.elapsed_ns stack in
+
+    let net_listener = network ~clock config dns_client (snd stack) uplink nat qubesDB in
 
     (* Report memory usage to XenStore *)
     Memory_pressure.init ();

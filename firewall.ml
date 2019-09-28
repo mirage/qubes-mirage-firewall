@@ -63,38 +63,6 @@ let nat_to t dns_resolver ~host ~port packet =
       Log.warn (fun f -> f "Failed to add NAT redirect rule: %s (%a)" e Nat_packet.pp packet);
       Lwt.return ()
 
-let lookup t resolver mvar outgoing_queries =
-  Lwt_list.iter_p (fun query ->
-      let src_port = Resolver.pick_free_port
-          ~nat_ports:t.Router.ports
-          ~dns_ports:resolver.Resolver.dns_ports
-      in
-      t.Router.dns_sender src_port query
-    ) outgoing_queries >>= fun () ->
-  let try_take condition =
-    Lwt_condition.wait condition >>= fun answers ->
-    Lwt.return (Ok ())
-  in
-  let timeout () =
-    OS.Time.sleep_ns 2_000_000_000L >>= fun () ->
-    let (new_resolver, answers, more_queries) = Dns_resolver.timer !(resolver.Resolver.resolver) (resolver.Resolver.get_mtime ()) in
-    resolver.Resolver.resolver := new_resolver;
-    Lwt_list.iter_p (fun query ->
-        let src_port = Resolver.pick_free_port
-            ~nat_ports:t.Router.ports
-            ~dns_ports:resolver.Resolver.dns_ports
-        in
-        t.Router.dns_sender src_port query
-      ) more_queries >>= fun () ->
-    Resolver.handle_answers_and_notify resolver answers;
-    Lwt.return (Ok ())
-  in
-  Lwt.pick [
-    (* TODO Q: can there be multiple response packets/mvars? Do we need to loop? *)
-    try_take mvar;
-    timeout ();
-  ]
-
 let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action Lwt.t) ~dst (annotated_packet : ('a, 'b) Packet.t) : unit Lwt.t =
   let packet = to_mirage_nat_packet annotated_packet in
   rules annotated_packet >>= fun action ->
@@ -108,17 +76,6 @@ let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action Lwt.t
       Log.debug (fun f -> f "adding NAT rule for %a" Nat_packet.pp packet);
       add_nat_and_forward_ipv4 t resolver packet
   | `NAT_to (host, port), _ -> nat_to t resolver packet ~host ~port
-  | `Lookup_and_retry (resolver, mvar, outgoing_queries), _ ->
-    lookup t resolver mvar outgoing_queries >>= fun result ->
-    begin
-      match result with
-      | Ok () ->
-        Log.debug (fun f -> f "got a result from our DNS lookup; applying the rules to the packet again...");
-        apply_rules t resolver rules ~dst annotated_packet
-      | Error `Timeout ->
-        Log.debug (fun f -> f "Dropped packet; DNS resolution timed out");
-        Lwt.return_unit
-    end
   | `Drop reason, _ ->
       Log.debug (fun f -> f "Dropped packet (%s) %a" reason Nat_packet.pp packet);
       return ()

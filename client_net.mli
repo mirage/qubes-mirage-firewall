@@ -3,7 +3,7 @@
 
 (** Handling client VMs. *)
 
-val listen : Resolver.t -> Qubes.DB.t -> Router.t -> 'a Lwt.t
+val listen : My_dns_client.Dns_client.t -> Qubes.DB.t -> Router.t -> 'a Lwt.t
 (** [listen resolver db router] is a thread that watches for clients being added to and
     removed from XenStore. Clients are connected to the client network and
     packets are sent via [router]. We ensure the source IP address is correct

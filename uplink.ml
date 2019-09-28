@@ -47,32 +47,28 @@ module Make (R:Mirage_random.C) (Clock : Mirage_clock_lwt.MCLOCK) = struct
     | Error s -> Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s); Lwt.return_unit
     | Ok () -> Lwt.return_unit
 
+  let send_dns_client_query t ~src_port ~dst ~dst_port buf =
+    U.write ~src_port ~dst ~dst_port t.udp buf >|= function
+    | Error s -> Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s); Error (`Msg "failure")
+    | Ok () -> Ok ()
 
-  let listen t resolver router =
+  let listen t dns_client dns_responses router =
 
     let ok_packet ip_header ip_packet =
       let open Udp_packet in
-      let open Resolver in
       let open Router in
       let module Ports = Ports.PortSet in
 
       Log.debug (fun f -> f "received ipv4 packet from %a on uplink" Ipaddr.V4.pp ip_header.Ipv4_packet.src);
       match ip_packet with
-      | `UDP (header, packet) when Ports.mem header.dst_port !(resolver.dns_ports) ->
-        let state, answers, queries = Resolver.handle_buf resolver `Udp ip_header.Ipv4_packet.src header.src_port packet in
-        Log.debug (fun f -> f "found a DNS packet whose dst_port (%d) was in the list of resolver ports" header.dst_port);
-        resolver.resolver := state;
-        resolver.dns_ports := Ports.remove header.dst_port !(resolver.dns_ports);
-        Log.debug (fun f -> f "%d further queries needed and %d answers ready" (List.length queries) (List.length answers));
-        let pick_port () = pick_free_port ~dns_ports:resolver.dns_ports ~nat_ports:router.ports in
-        Lwt_list.iter_p (send_dns_query t @@ pick_port ()) queries >>= fun () ->
-        Resolver.handle_answers_and_notify resolver answers;
-        Lwt.return_unit
+      | `UDP (header, packet) when header.dst_port = 1053 ->
+        Log.debug (fun f -> f "found a DNS packet whose dst_port (%d) was in the list of dns_client ports" header.dst_port);
+        Lwt_mvar.put dns_responses packet
       | `UDP (header, _packet) ->
-        Log.debug (fun f -> f "UDP dst_port port %d isn't in the list of resolver ports" header.dst_port);
-        Firewall.ipv4_from_netvm resolver router (`IPv4 (ip_header, ip_packet))
+        Log.debug (fun f -> f "UDP dst_port port %d isn't in the list of dns_client ports" header.dst_port);
+        Firewall.ipv4_from_netvm dns_client router (`IPv4 (ip_header, ip_packet))
       | _ ->
-        Firewall.ipv4_from_netvm resolver router (`IPv4 (ip_header, ip_packet))
+        Firewall.ipv4_from_netvm dns_client router (`IPv4 (ip_header, ip_packet))
     in
 
     Netif.listen t.net ~header_size:Ethernet_wire.sizeof_ethernet (fun frame ->
