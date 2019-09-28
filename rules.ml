@@ -68,13 +68,13 @@ module Classifier = struct
 end
 
 let find_first_match resolver packet acc rule =
-  match acc with 
-  | `No_match -> 
-    if Classifier.matches_proto rule packet 
-    then Classifier.matches_dest resolver rule packet 
+  match acc with
+  | `No_match ->
+    if Classifier.matches_proto rule packet
+    then Classifier.matches_dest resolver rule packet
     else `No_match
   | q -> q
- 
+
 (* Does the packet match our rules? *)
 let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  =
   let (`Client client_link) = packet.src in
@@ -82,7 +82,7 @@ let classify_client_packet resolver (packet : ([`Client of Fw_utils.client_link]
   match List.fold_left (find_first_match resolver packet) `No_match rules with
   | `No_match -> `Drop "No matching rule; assuming default drop"
   | `Match {Q.action = Q.Accept; _} -> `Accept
-  | `Match ({Q.action = Q.Drop; _} as rule) -> 
+  | `Match ({Q.action = Q.Drop; _} as rule) ->
     `Drop (Format.asprintf "rule number %a explicitly drops this packet" Q.pp_rule rule)
   | `Lookup_and_retry q -> `Lookup_and_retry q
 
@@ -93,17 +93,17 @@ let translate_accepted_packets resolver packet =
   | `Lookup_and_retry q -> `Lookup_and_retry q
 
 (** Packets from the private interface that don't match any NAT table entry are being checked against the fw rules here *)
-let from_client resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action =
+let from_client resolver (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action Lwt.t =
   match packet with
   | { dst = `Client_gateway; transport_header = `UDP header; _ } ->
     if header.Udp_packet.dst_port = dns_port
-    then `NAT_to (`NetVM, dns_port)
-    else `Drop "packet addressed to client gateway"
-  | { dst = `External _ ; _ } | { dst = `NetVM; _ } -> translate_accepted_packets resolver packet
-  | { dst = (`Client_gateway | `Firewall_uplink) ; _ } -> `Drop "packet addressed to firewall itself"
-  | { dst = `Client _ ; _ } -> classify_client_packet resolver packet
-  | _ -> `Drop "could not classify packet"
+    then Lwt.return @@ `NAT_to (`NetVM, dns_port)
+    else Lwt.return @@ `Drop "packet addressed to client gateway"
+  | { dst = `External _ ; _ } | { dst = `NetVM; _ } -> Lwt.return @@ translate_accepted_packets resolver packet
+  | { dst = (`Client_gateway | `Firewall_uplink) ; _ } -> Lwt.return @@ `Drop "packet addressed to firewall itself"
+  | { dst = `Client _ ; _ } -> Lwt.return @@ classify_client_packet resolver packet
+  | _ -> Lwt.return @@ `Drop "could not classify packet"
 
 (** Packets from the outside world that don't match any NAT table entry are being dropped by default *)
-let from_netvm (_packet : ([`NetVM | `External of _], _) Packet.t) : Packet.action =
-  `Drop "drop by default"
+let from_netvm (_packet : ([`NetVM | `External of _], _) Packet.t) : Packet.action Lwt.t =
+  Lwt.return @@ `Drop "drop by default"

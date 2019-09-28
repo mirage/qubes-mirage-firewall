@@ -95,9 +95,10 @@ let lookup t resolver mvar outgoing_queries =
     timeout ();
   ]
 
-let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action) ~dst (annotated_packet : ('a, 'b) Packet.t) : unit Lwt.t =
+let rec apply_rules t resolver (rules : ('a, 'b) Packet.t -> Packet.action Lwt.t) ~dst (annotated_packet : ('a, 'b) Packet.t) : unit Lwt.t =
   let packet = to_mirage_nat_packet annotated_packet in
-  match rules annotated_packet, dst with
+  rules annotated_packet >>= fun action ->
+  match action, dst with
   | `Accept, `Client client_link -> transmit_ipv4 packet client_link
   | `Accept, (`External _ | `NetVM) -> transmit_ipv4 packet t.Router.uplink
   | `Accept, (`Firewall_uplink | `Client_gateway) ->

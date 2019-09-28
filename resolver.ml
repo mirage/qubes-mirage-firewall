@@ -130,7 +130,7 @@ let get_cache_response_or_queries t name =
   let query_or_reply = true in
   let proto = `Udp in
   (* TODO: check to make sure we're not already waiting to find out about this name, before we potentially make a duplicate mvar *)
-  let query_cstruct, _ = Dns_client.make_query t.get_random `Udp name Dns.Rr_map.A in
+  let query_cstruct, _ = Dns_client.Pure.make_query t.get_random `Udp name Dns.Rr_map.A in
 
   let sender = t.uplink_ip in
   let new_resolver, answers', upstream_queries =
@@ -144,7 +144,7 @@ let get_cache_response_or_queries t name =
   else
     begin
       match UnknownNames.find_opt name !(t.unknown_names) with
-      | Some waiters -> 
+      | Some waiters ->
         Log.debug (fun f -> f "There is already an mvar for %a.  Sending %d more packets to try to resolve it..." Domain_name.pp name (List.length upstream_queries));
         (t, `Unknown (waiters, upstream_queries))
       | None ->
