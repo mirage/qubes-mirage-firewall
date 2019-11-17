@@ -2,14 +2,14 @@
 # It will probably still work on newer images, though, unless Debian
 # changes some compiler optimisations (unlikely).
 #FROM ocurrent/opam:alpine-3.10-ocaml-4.08
-FROM ocurrent/opam@sha256:4cf6f8a427e7f65a250cd5dbc9f5069e8f8213467376af5136bf67a21d39d6ec
+FROM ocurrent/opam@sha256:3f3ce7e577a94942c7f9c63cbdd1ecbfe0ea793f581f69047f3155967bba36f6
 
 # Pin last known-good version for reproducible builds.
 # Remove this line (and the base image pin above) if you want to test with the
 # latest versions.
-RUN cd ~/opam-repository && git fetch origin master && git reset --hard a83bd077e4e54c41b0664a2e1618670d57b7c79d && opam update
+RUN cd ~/opam-repository && git fetch origin master && git reset --hard 5eed470abc5c7991e448c9653698c03d6ea146d1 && opam update
 
-RUN opam depext -i -y mirage lwt
+RUN opam depext -i -y mirage.3.5.2 lwt
 RUN mkdir /home/opam/qubes-mirage-firewall
 ADD config.ml /home/opam/qubes-mirage-firewall/config.ml
 WORKDIR /home/opam/qubes-mirage-firewall
