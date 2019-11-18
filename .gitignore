@@ -7,3 +7,4 @@ main.native
 mir-qubes-test
 qubes-firewall.xl.in
 qubes-firewall_libvirt.xml
+.merlin

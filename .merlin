@@ -1,3 +1,0 @@
-S .
-B _build
-PKG vchan.xen lwt mirage mirage-net-xen tcpip mirage-nat
