@@ -16,6 +16,9 @@ See the [Deploy](#deploy) section below for installation instructions.
 ## Build from source
 
 Create a new Fedora-29 AppVM (or reuse an existing one). Open a terminal.
+Note that you may need more than the default 2GB (2048MB) of storage in the private 
+image of the AppVM, so you may need to increase the size in the Qube's Settings.
+
 Clone this Git repository and run the `build-with-docker.sh` script:
 
     mkdir /home/user/docker
