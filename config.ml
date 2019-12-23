@@ -15,7 +15,6 @@ let table_size =
   create "nat_table_size" key
 
 let main =
-  let pin = "git+https://github.com/mirage/ocaml-dns.git" in
   foreign
     ~keys:[Functoria_key.abstract table_size]
     ~packages:[
@@ -28,15 +27,15 @@ let main =
       package "ethernet";
       package "mirage-protocols";
       package "shared-memory-ring" ~min:"3.0.0";
-      package "netchannel" ~min:"1.11.0" (* ~pin:"git+https://github.com/mirage/mirage-net-xen.git" *);
+      package "netchannel" ~min:"1.11.0";
       package "mirage-net-xen";
       package "ipaddr" ~min:"3.0.0";
       package "mirage-qubes";
       package "mirage-nat" ~min:"1.2.0";
       package "mirage-logs";
       package "dns";
-      package "dns-client";
-      package "pf" ~pin:"git+https://github.com/yomimono/ocaml-pf.git#just-qubes";
+      package ~min:"4.2.0" "dns-client";
+      package "pf-qubes";
     ]
     "Unikernel.Main" (random @-> mclock @-> job)
 
