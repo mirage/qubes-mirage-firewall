@@ -3,7 +3,6 @@
 
 open Lwt.Infix
 open Qubes
-open Fw_utils
 open Astring
 
 let src = Logs.Src.create "dao" ~doc:"QubesDB data access"
@@ -68,13 +67,13 @@ let watch_clients fn =
     begin Lwt.catch
       (fun () -> directory ~handle backend_vifs)
       (function
-        | Xs_protocol.Enoent _ -> return []
-        | ex -> fail ex)
+        | Xs_protocol.Enoent _ -> Lwt.return []
+        | ex -> Lwt.fail ex)
     end >>= fun items ->
     Lwt_list.map_p (vifs ~handle) items >>= fun items ->
     fn (List.concat items |> VifMap.of_list);
     (* Wait for further updates *)
-    fail Xs_protocol.Eagain
+    Lwt.fail Xs_protocol.Eagain
   )
 
 type network_config = {

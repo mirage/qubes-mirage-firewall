@@ -46,7 +46,7 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
         (fun `Cant_happen -> assert false)
         (fun ex ->
           Log.warn (fun f -> f "GUI thread failed: %s" (Printexc.to_string ex));
-          return ()
+          Lwt.return_unit
         )
     )
 
@@ -70,7 +70,7 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
     (* Watch for shutdown requests from Qubes *)
     let shutdown_rq =
       OS.Lifecycle.await_shutdown_request () >>= fun (`Poweroff | `Reboot) ->
-      return () in
+      Lwt.return_unit in
     (* Set up networking *)
     let max_entries = Key_gen.nat_table_size () in
     My_nat.create ~max_entries >>= fun nat ->

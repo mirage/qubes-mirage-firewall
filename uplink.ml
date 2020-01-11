@@ -46,12 +46,12 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
                 Lwt.return_unit
               | Error e ->
                 Log.warn (fun f -> f "Ignored unknown IPv4 message from uplink: %a" Nat_packet.pp_error e);
-                Lwt.return ()
+                Lwt.return_unit
               | Ok None -> Lwt.return_unit
               | Ok (Some packet) ->
                 Firewall.ipv4_from_netvm router packet
             )
-          ~ipv6:(fun _ip -> return ())
+          ~ipv6:(fun _ip -> Lwt.return_unit)
           frame
       ) >|= or_raise "Uplink listen loop" Netif.pp_error
 
@@ -70,5 +70,5 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
       ~my_ip:ip
       ~other_ip:config.Dao.uplink_netvm_ip in
     let fragments = Fragments.Cache.create (256 * 1024) in
-    return { net; eth; arp; interface ; fragments }
+    Lwt.return { net; eth; arp; interface ; fragments }
 end
