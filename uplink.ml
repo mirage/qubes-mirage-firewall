@@ -9,7 +9,7 @@ module Eth = Ethernet.Make(Netif)
 let src = Logs.Src.create "uplink" ~doc:"Network connection to NetVM"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
+module Make(Clock : Mirage_clock.MCLOCK) = struct
   module Arp = Arp.Make(Eth)(OS.Time)
 
   type t = {
