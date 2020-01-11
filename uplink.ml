@@ -17,6 +17,7 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
     eth : Eth.t;
     arp : Arp.t;
     interface : interface;
+    fragments : Fragments.Cache.t;
   }
 
   class netvm_iface eth mac ~my_ip ~other_ip : interface = object
@@ -31,13 +32,13 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
       )
   end
 
-  let listen t router =
+  let listen t get_ts router =
     Netif.listen t.net ~header_size:Ethernet_wire.sizeof_ethernet (fun frame ->
         (* Handle one Ethernet frame from NetVM *)
         Eth.input t.eth
           ~arpv4:(Arp.input t.arp)
           ~ipv4:(fun ip ->
-              match Nat_packet.of_ipv4_packet ip with
+              match Nat_packet.of_ipv4_packet t.fragments ~now:(get_ts ()) ip with
               | exception ex ->
                 Log.err (fun f -> f "Error unmarshalling ethernet frame from uplink: %s@.%a" (Printexc.to_string ex)
                             Cstruct.hexdump_pp frame
@@ -46,7 +47,8 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
               | Error e ->
                 Log.warn (fun f -> f "Ignored unknown IPv4 message from uplink: %a" Nat_packet.pp_error e);
                 Lwt.return ()
-              | Ok packet ->
+              | Ok None -> Lwt.return_unit
+              | Ok (Some packet) ->
                 Firewall.ipv4_from_netvm router packet
             )
           ~ipv6:(fun _ip -> return ())
@@ -55,7 +57,7 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
 
   let interface t = t.interface
 
-  let connect ~clock:_ config =
+  let connect config =
     let ip = config.Dao.uplink_our_ip in
     Netif.connect "0" >>= fun net ->
     Eth.connect net >>= fun eth ->
@@ -67,5 +69,6 @@ module Make(Clock : Mirage_clock_lwt.MCLOCK) = struct
     let interface = new netvm_iface eth netvm_mac
       ~my_ip:ip
       ~other_ip:config.Dao.uplink_netvm_ip in
-    return { net; eth; arp; interface }
+    let fragments = Fragments.Cache.create (256 * 1024) in
+    return { net; eth; arp; interface ; fragments }
 end

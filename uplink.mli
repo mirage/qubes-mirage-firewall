@@ -8,12 +8,12 @@ open Fw_utils
 module Make(Clock : Mirage_clock_lwt.MCLOCK) : sig
   type t
 
-  val connect : clock:Clock.t -> Dao.network_config -> t Lwt.t
+  val connect : Dao.network_config -> t Lwt.t
   (** Connect to our NetVM (gateway). *)
 
   val interface : t -> interface
   (** The network interface to NetVM. *)
 
-  val listen : t -> Router.t -> unit Lwt.t
+  val listen : t -> (unit -> int64) -> Router.t -> unit Lwt.t
   (** Handle incoming frames from NetVM. *)
 end

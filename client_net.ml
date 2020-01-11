@@ -56,12 +56,13 @@ let input_arp ~fixed_arp ~iface request =
       iface#writev `ARP (fun b -> Arp_packet.encode_into response b; Arp_packet.size)
 
 (** Handle an IPv4 packet from the client. *)
-let input_ipv4 ~iface ~router packet =
-  match Nat_packet.of_ipv4_packet packet with
+let input_ipv4 get_ts cache ~iface ~router packet =
+  match Nat_packet.of_ipv4_packet cache ~now:(get_ts ()) packet with
   | Error e ->
     Log.warn (fun f -> f "Ignored unknown IPv4 message: %a" Nat_packet.pp_error e);
     Lwt.return ()
-  | Ok packet ->
+  | Ok None -> Lwt.return ()
+  | Ok (Some packet) ->
     let `IPv4 (ip, _) = packet in
     let src = ip.Ipv4_packet.src in
     if src = iface#other_ip then Firewall.ipv4_from_client router ~src:iface packet
@@ -72,7 +73,7 @@ let input_ipv4 ~iface ~router packet =
     )
 
 (** Connect to a new client's interface and listen for incoming frames. *)
-let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks =
+let add_vif get_ts { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks =
   Netback.make ~domid ~device_id >>= fun backend ->
   Log.info (fun f -> f "Client %d (IP: %s) ready" domid (Ipaddr.V4.to_string client_ip));
   ClientEth.connect backend >>= fun eth ->
@@ -83,6 +84,7 @@ let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks
   Router.add_client router iface >>= fun () ->
   Cleanup.on_cleanup cleanup_tasks (fun () -> Router.remove_client router iface);
   let fixed_arp = Client_eth.ARP.create ~net:client_eth iface in
+  let fragment_cache = Fragments.Cache.create (256 * 1024) in
   Netback.listen backend ~header_size:Ethernet_wire.sizeof_ethernet (fun frame ->
     match Ethernet_packet.Unmarshal.of_cstruct frame with
     | exception ex ->
@@ -94,18 +96,18 @@ let add_vif { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanup_tasks
     | Ok (eth, payload) ->
         match eth.Ethernet_packet.ethertype with
         | `ARP -> input_arp ~fixed_arp ~iface payload
-        | `IPv4 -> input_ipv4 ~iface ~router payload
+        | `IPv4 -> input_ipv4 get_ts fragment_cache ~iface ~router payload
         | `IPv6 -> return () (* TODO: oh no! *)
   )
   >|= or_raise "Listen on client interface" Netback.pp_error
 
 (** A new client VM has been found in XenStore. Find its interface and connect to it. *)
-let add_client ~router vif client_ip =
+let add_client get_ts ~router vif client_ip =
   let cleanup_tasks = Cleanup.create () in
   Log.info (fun f -> f "add client vif %a with IP %a" Dao.ClientVif.pp vif Ipaddr.V4.pp client_ip);
   Lwt.async (fun () ->
       Lwt.catch (fun () ->
-          add_vif vif ~client_ip ~router ~cleanup_tasks
+          add_vif get_ts vif ~client_ip ~router ~cleanup_tasks
         )
         (fun ex ->
            Log.warn (fun f -> f "Error with client %a: %s"
@@ -116,7 +118,7 @@ let add_client ~router vif client_ip =
   cleanup_tasks
 
 (** Watch XenStore for notifications of new clients. *)
-let listen router =
+let listen get_ts router =
   Dao.watch_clients (fun new_set ->
     (* Check for removed clients *)
     !clients |> Dao.VifMap.iter (fun key cleanup ->
@@ -129,7 +131,7 @@ let listen router =
     (* Check for added clients *)
     new_set |> Dao.VifMap.iter (fun key ip_addr ->
       if not (Dao.VifMap.mem key !clients) then (
-        let cleanup = add_client ~router key ip_addr in
+        let cleanup = add_client get_ts ~router key ip_addr in
         clients := !clients |> Dao.VifMap.add key cleanup
       )
     )

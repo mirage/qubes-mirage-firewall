@@ -11,11 +11,11 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
   module Uplink = Uplink.Make(Clock)
 
   (* Set up networking and listen for incoming packets. *)
-  let network ~clock nat qubesDB =
+  let network nat qubesDB =
     (* Read configuration from QubesDB *)
     Dao.read_network_config qubesDB >>= fun config ->
     (* Initialise connection to NetVM *)
-    Uplink.connect ~clock config >>= fun uplink ->
+    Uplink.connect config >>= fun uplink ->
     (* Report success *)
     Dao.set_iptables_error qubesDB "" >>= fun () ->
     (* Set up client-side networking *)
@@ -29,8 +29,8 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
     in
     (* Handle packets from both networks *)
     Lwt.choose [
-      Client_net.listen router;
-      Uplink.listen uplink router
+      Client_net.listen Clock.elapsed_ns router;
+      Uplink.listen uplink Clock.elapsed_ns router
     ]
 
   (* We don't use the GUI, but it's interesting to keep an eye on it.
@@ -41,7 +41,7 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
         (fun () ->
            gui >>= fun gui ->
            Log.info (fun f -> f "GUI agent connected");
-           GUI.listen gui
+           GUI.listen gui ()
         )
         (fun `Cant_happen -> assert false)
         (fun ex ->
@@ -51,8 +51,8 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
     )
 
   (* Main unikernel entry point (called from auto-generated main.ml). *)
-  let start clock =
-    let start_time = Clock.elapsed_ns clock in
+  let start _clock =
+    let start_time = Clock.elapsed_ns () in
     (* Start qrexec agent, GUI agent and QubesDB agent in parallel *)
     let qrexec = RExec.connect ~domid:0 () in
     GUI.connect ~domid:0 () |> watch_gui;
@@ -63,7 +63,7 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
     qubesDB >>= fun qubesDB ->
     let startup_time = 
       let (-) = Int64.sub in
-      let time_in_ns = Clock.elapsed_ns clock - start_time in
+      let time_in_ns = Clock.elapsed_ns () - start_time in
       Int64.to_float time_in_ns /. 1e9
     in
     Log.info (fun f -> f "QubesDB and qrexec agents connected in %.3f s" startup_time);
@@ -72,10 +72,9 @@ module Main (Clock : Mirage_clock_lwt.MCLOCK) = struct
       OS.Lifecycle.await_shutdown_request () >>= fun (`Poweroff | `Reboot) ->
       return () in
     (* Set up networking *)
-    let get_time () = Clock.elapsed_ns clock in
     let max_entries = Key_gen.nat_table_size () in
-    My_nat.create ~get_time ~max_entries >>= fun nat ->
-    let net_listener = network ~clock nat qubesDB in
+    My_nat.create ~max_entries >>= fun nat ->
+    let net_listener = network nat qubesDB in
     (* Report memory usage to XenStore *)
     Memory_pressure.init ();
     (* Run until something fails or we get a shutdown request. *)

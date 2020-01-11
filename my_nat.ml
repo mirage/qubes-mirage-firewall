@@ -15,14 +15,13 @@ module Nat = Mirage_nat_lru
 
 type t = {
   table : Nat.t;
-  get_time : unit -> Mirage_nat.time;
 }
 
-let create ~get_time ~max_entries =
+let create ~max_entries =
   let tcp_size = 7 * max_entries / 8 in
   let udp_size = max_entries - tcp_size in
   Nat.empty ~tcp_size ~udp_size ~icmp_size:100 >|= fun table ->
-  { get_time; table }
+  { table }
 
 let translate t packet =
   Nat.translate t.table packet >|= function
@@ -41,10 +40,9 @@ let reset t =
   Nat.reset t.table
 
 let add_nat_rule_and_translate t ~xl_host action packet =
-  let now = t.get_time () in
   let apply_action xl_port =
     Lwt.catch (fun () ->
-        Nat.add t.table ~now packet (xl_host, xl_port) action
+        Nat.add t.table packet (xl_host, xl_port) action
       )
       (function
         | Out_of_memory -> Lwt.return (Error `Out_of_memory)
