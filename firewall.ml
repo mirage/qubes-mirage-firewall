@@ -12,33 +12,23 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let transmit_ipv4 packet iface =
   Lwt.catch
     (fun () ->
-       Lwt.catch
-         (fun () ->
-            let fragments = ref [] in
-            iface#writev `IPv4 (fun b ->
-                match Nat_packet.into_cstruct packet b with
-                | Error e ->
-                  Log.warn (fun f -> f "Failed to write packet to %a: %a"
-                               Ipaddr.V4.pp iface#other_ip
-                               Nat_packet.pp_error e);
-                  0
-                | Ok (n, frags) -> fragments := frags ; n) >>= fun () ->
-            Lwt_list.iter_s (fun f ->
-                let size = Cstruct.len f in
-                iface#writev `IPv4 (fun b -> Cstruct.blit f 0 b 0 size ; size))
-              !fragments)
-         (fun ex ->
-            Log.warn (fun f -> f "Failed to write packet to %a: %s"
-                         Ipaddr.V4.pp iface#other_ip
-                         (Printexc.to_string ex));
-            Lwt.return_unit
-         )
-    )
+       let fragments = ref [] in
+       iface#writev `IPv4 (fun b ->
+           match Nat_packet.into_cstruct packet b with
+           | Error e ->
+             Log.warn (fun f -> f "Failed to NAT packet to %a: %a"
+                          Ipaddr.V4.pp iface#other_ip
+                          Nat_packet.pp_error e);
+             0
+           | Ok (n, frags) -> fragments := frags ; n) >>= fun () ->
+       Lwt_list.iter_s (fun f ->
+           let size = Cstruct.len f in
+           iface#writev `IPv4 (fun b -> Cstruct.blit f 0 b 0 size ; size))
+         !fragments)
     (fun ex ->
-       Log.err (fun f -> f "Exception in transmit_ipv4: %s for:@.%a"
-                   (Printexc.to_string ex)
-                   Nat_packet.pp packet
-               );
+       Log.warn (fun f -> f "Failed to write packet to %a: %s"
+                    Ipaddr.V4.pp iface#other_ip
+                    (Printexc.to_string ex));
        Lwt.return_unit
     )
 
