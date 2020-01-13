@@ -41,9 +41,6 @@ let error fmt =
   let err s = Failure s in
   Printf.ksprintf err fmt
 
-let return = Lwt.return
-let fail = Lwt.fail
-
 let or_raise msg pp = function
   | Ok x -> x
   | Error e -> failwith (Fmt.strf "%s: %a" msg pp e)

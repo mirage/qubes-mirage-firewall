@@ -1,7 +1,6 @@
 (* Copyright (C) 2015, Thomas Leonard <thomas.leonard@unikernel.com>
    See the README file for details. *)
 
-open Fw_utils
 open Packet
 open Lwt.Infix
 
@@ -15,6 +14,7 @@ let transmit_ipv4 packet iface =
     (fun () ->
        Lwt.catch
          (fun () ->
+            let fragments = ref [] in
             iface#writev `IPv4 (fun b ->
                 match Nat_packet.into_cstruct packet b with
                 | Error e ->
@@ -22,14 +22,16 @@ let transmit_ipv4 packet iface =
                                Ipaddr.V4.pp iface#other_ip
                                Nat_packet.pp_error e);
                   0
-                | Ok n -> n
-              )
-         )
+                | Ok (n, frags) -> fragments := frags ; n) >>= fun () ->
+            Lwt_list.iter_s (fun f ->
+                let size = Cstruct.len f in
+                iface#writev `IPv4 (fun b -> Cstruct.blit f 0 b 0 size ; size))
+              !fragments)
          (fun ex ->
             Log.warn (fun f -> f "Failed to write packet to %a: %s"
                          Ipaddr.V4.pp iface#other_ip
                          (Printexc.to_string ex));
-            Lwt.return ()
+            Lwt.return_unit
          )
     )
     (fun ex ->
@@ -37,7 +39,7 @@ let transmit_ipv4 packet iface =
                    (Printexc.to_string ex)
                    Nat_packet.pp packet
                );
-       Lwt.return ()
+       Lwt.return_unit
     )
 
 let forward_ipv4 t packet =
@@ -124,19 +126,19 @@ let add_nat_and_forward_ipv4 t packet =
   | Ok packet -> forward_ipv4 t packet
   | Error e ->
     Log.warn (fun f -> f "Failed to add NAT rewrite rule: %s (%a)" e pp_header packet);
-    Lwt.return ()
+    Lwt.return_unit
 
 (* Add a NAT rule to redirect this conversation to [host:port] instead of us. *)
 let nat_to t ~host ~port packet =
   match Router.resolve t host with
-  | Ipaddr.V6 _ -> Log.warn (fun f -> f "Cannot NAT with IPv6"); Lwt.return ()
+  | Ipaddr.V6 _ -> Log.warn (fun f -> f "Cannot NAT with IPv6"); Lwt.return_unit
   | Ipaddr.V4 target ->
     let xl_host = t.Router.uplink#my_ip in
     My_nat.add_nat_rule_and_translate t.Router.nat ~xl_host (`Redirect (target, port)) packet >>= function
     | Ok packet -> forward_ipv4 t packet
     | Error e ->
       Log.warn (fun f -> f "Failed to add NAT redirect rule: %s (%a)" e pp_header packet);
-      Lwt.return ()
+      Lwt.return_unit
 
 (* Handle incoming packets *)
 
@@ -147,12 +149,12 @@ let apply_rules t rules ~dst info =
   | `Accept, (`External _ | `NetVM) -> transmit_ipv4 packet t.Router.uplink
   | `Accept, `Firewall ->
       Log.warn (fun f -> f "Bad rule: firewall can't accept packets %a" (pp_packet t) info);
-      return ()
+      Lwt.return_unit
   | `NAT, _ -> add_nat_and_forward_ipv4 t packet
   | `NAT_to (host, port), _ -> nat_to t packet ~host ~port
   | `Drop reason, _ ->
       Log.info (fun f -> f "Dropped packet (%s) %a" reason (pp_packet t) info);
-      return ()
+      Lwt.return_unit
 
 let handle_low_memory t =
   match Memory_pressure.status () with
@@ -164,7 +166,7 @@ let handle_low_memory t =
 
 let ipv4_from_client t ~src packet =
   handle_low_memory t >>= function
-  | `Memory_critical -> return ()
+  | `Memory_critical -> Lwt.return_unit
   | `Ok ->
   (* Check for existing NAT entry for this packet *)
   translate t packet >>= function
@@ -174,23 +176,23 @@ let ipv4_from_client t ~src packet =
   let `IPv4 (ip, _transport) = packet in
   let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
   match classify ~src:(resolve_client src) ~dst:(resolve_host dst) packet with
-  | None -> return ()
+  | None -> Lwt.return_unit
   | Some info -> apply_rules t Rules.from_client ~dst info
 
 let ipv4_from_netvm t packet =
   handle_low_memory t >>= function
-  | `Memory_critical -> return ()
+  | `Memory_critical -> Lwt.return_unit
   | `Ok ->
   let `IPv4 (ip, _transport) = packet in
   let src = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.src) in
   let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
   match classify ~src ~dst:(resolve_host dst) packet with
-  | None -> return ()
+  | None -> Lwt.return_unit
   | Some info ->
   match src with
   | `Client _ | `Firewall ->
     Log.warn (fun f -> f "Frame from NetVM has internal source IP address! %a" (pp_packet t) info);
-    return ()
+    Lwt.return_unit
   | `External _ | `NetVM as src ->
   translate t packet >>= function
   | Some frame -> forward_ipv4 t frame

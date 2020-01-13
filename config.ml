@@ -30,10 +30,10 @@ let main =
       package "netchannel" ~min:"1.11.0";
       package "mirage-net-xen";
       package "ipaddr" ~min:"4.0.0";
-      package "mirage-qubes";
-      package "mirage-nat" ~min:"1.2.0";
+      package "mirage-qubes" ~min:"0.8.0";
+      package "mirage-nat" ~min:"2.0.0";
       package "mirage-logs";
-      package "mirage-xen" ~min:"4.0.0";
+      package "mirage-xen" ~min:"5.0.0";
     ]
     "Unikernel.Main" (mclock @-> job)
 
