@@ -16,7 +16,7 @@ type t = {
   eth : Eth.t;
   arp : Arp.t;
   interface : interface;
-  fragments : Fragments.Cache.t;
+  mutable fragments : Fragments.Cache.t;
 }
 
 class netvm_iface eth mac ~my_ip ~other_ip : interface = object
@@ -37,7 +37,11 @@ let listen t get_ts router =
       Eth.input t.eth
         ~arpv4:(Arp.input t.arp)
         ~ipv4:(fun ip ->
-            match Nat_packet.of_ipv4_packet t.fragments ~now:(get_ts ()) ip with
+            let cache, r =
+              Nat_packet.of_ipv4_packet t.fragments ~now:(get_ts ()) ip
+            in
+            t.fragments <- cache;
+            match r with
             | Error e ->
               Log.warn (fun f -> f "Ignored unknown IPv4 message from uplink: %a" Nat_packet.pp_error e);
               Lwt.return_unit
@@ -63,5 +67,5 @@ let connect config =
   let interface = new netvm_iface eth netvm_mac
     ~my_ip:ip
     ~other_ip:config.Dao.uplink_netvm_ip in
-  let fragments = Fragments.Cache.create (256 * 1024) in
+  let fragments = Fragments.Cache.empty (256 * 1024) in
   Lwt.return { net; eth; arp; interface ; fragments }
