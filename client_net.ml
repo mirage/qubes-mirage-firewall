@@ -87,11 +87,6 @@ let add_vif get_ts { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanu
   let fragment_cache = Fragments.Cache.create (256 * 1024) in
   Netback.listen backend ~header_size:Ethernet_wire.sizeof_ethernet (fun frame ->
     match Ethernet_packet.Unmarshal.of_cstruct frame with
-    | exception ex ->
-      Log.err (fun f -> f "Error unmarshalling ethernet frame from client: %s@.%a" (Printexc.to_string ex)
-                  Cstruct.hexdump_pp frame
-              );
-      Lwt.return_unit
     | Error err -> Log.warn (fun f -> f "Invalid Ethernet frame: %s" err); Lwt.return_unit
     | Ok (eth, payload) ->
         match eth.Ethernet_packet.ethertype with
