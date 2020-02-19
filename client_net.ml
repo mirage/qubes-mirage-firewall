@@ -57,7 +57,9 @@ let input_arp ~fixed_arp ~iface request =
 
 (** Handle an IPv4 packet from the client. *)
 let input_ipv4 get_ts cache ~iface ~router packet =
-  match Nat_packet.of_ipv4_packet cache ~now:(get_ts ()) packet with
+  let cache', r = Nat_packet.of_ipv4_packet !cache ~now:(get_ts ()) packet in
+  cache := cache';
+  match r with
   | Error e ->
     Log.warn (fun f -> f "Ignored unknown IPv4 message: %a" Nat_packet.pp_error e);
     Lwt.return_unit
@@ -84,14 +86,9 @@ let add_vif get_ts { Dao.ClientVif.domid; device_id } ~client_ip ~router ~cleanu
   Router.add_client router iface >>= fun () ->
   Cleanup.on_cleanup cleanup_tasks (fun () -> Router.remove_client router iface);
   let fixed_arp = Client_eth.ARP.create ~net:client_eth iface in
-  let fragment_cache = Fragments.Cache.create (256 * 1024) in
+  let fragment_cache = ref (Fragments.Cache.empty (256 * 1024)) in
   Netback.listen backend ~header_size:Ethernet_wire.sizeof_ethernet (fun frame ->
     match Ethernet_packet.Unmarshal.of_cstruct frame with
-    | exception ex ->
-      Log.err (fun f -> f "Error unmarshalling ethernet frame from client: %s@.%a" (Printexc.to_string ex)
-                  Cstruct.hexdump_pp frame
-              );
-      Lwt.return_unit
     | Error err -> Log.warn (fun f -> f "Invalid Ethernet frame: %s" err); Lwt.return_unit
     | Ok (eth, payload) ->
         match eth.Ethernet_packet.ethertype with

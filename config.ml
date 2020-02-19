@@ -31,7 +31,7 @@ let main =
       package "mirage-net-xen";
       package "ipaddr" ~min:"4.0.0";
       package "mirage-qubes" ~min:"0.8.0";
-      package "mirage-nat" ~min:"2.0.0";
+      package "mirage-nat" ~min:"2.1.0";
       package "mirage-logs";
       package "mirage-xen" ~min:"5.0.0";
     ]
