@@ -5,3 +5,8 @@ tar: build
 	touch _build/mirage-firewall/modules.img
 	cat /dev/null | gzip -n > _build/mirage-firewall/initramfs
 	tar cjf mirage-firewall.tar.bz2 -C _build --mtime=./build-with-docker.sh mirage-firewall
+
+fetchmotron: qubes_firewall.xen
+	test-mirage qubes_firewall.xen mirage-fw-test &
+	sleep 1
+	boot-mirage fetchmotron

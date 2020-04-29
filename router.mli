@@ -10,14 +10,13 @@ type t = private {
   nat : My_nat.t;
   uplink : interface;
 }
-(** A routing table. *)
 
 val create :
   client_eth:Client_eth.t ->
   uplink:interface ->
   nat:My_nat.t ->
   t
-(** [create ~client_eth ~uplink] is a new routing table
+(** [create ~client_eth ~uplink ~nat] is a new routing table
     that routes packets outside of [client_eth] via [uplink]. *)
 
 val target : t -> Ipv4_packet.t -> interface option

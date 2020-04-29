@@ -1,62 +1,101 @@
 (* Copyright (C) 2015, Thomas Leonard <thomas.leonard@unikernel.com>
    See the README file for details. *)
 
-(** Put your firewall rules in this file. *)
+(** This module applies firewall rules from QubesDB. *)
 
-open Packet   (* Allow us to use definitions in packet.ml *)
+open Packet
+open Lwt.Infix
+module Q = Pf_qubes.Parse_qubes
 
-(* List your AppVM IP addresses here if you want to match on them in the rules below.
-   Any client not listed here will appear as [`Client `Unknown]. *)
-let clients = [
-  (*
-  "10.137.0.12", `Dev;
-  "10.137.0.14", `Untrusted;
-  *)
+let src = Logs.Src.create "rules" ~doc:"Firewall rules"
+module Log = (val Logs.src_log src : Logs.LOG)
+
+(* the upstream NetVM will redirect TCP and UDP port 53 traffic with
+   these destination IPs to its upstream nameserver. *)
+let default_dns_servers = [
+  Ipaddr.V4.of_string_exn "10.139.1.1";
+  Ipaddr.V4.of_string_exn "10.139.1.2";
 ]
+let dns_port = 53
 
-(* List your external (non-AppVM) IP addresses here if you want to match on them in the rules below.
-   Any external machine not listed here will appear as [`External `Unknown]. *)
-let externals = [
-  (*
-  "8.8.8.8", `GoogleDNS;
-  *)
-]
+module Classifier = struct
 
-(* OCaml normally warns if you don't match all fields, but that's OK here. *)
-[@@@ocaml.warning "-9"]
+  let matches_port dstports (port : int) = match dstports with
+    | None -> true
+    | Some (Q.Range_inclusive (min, max)) -> min <= port && port <= max
 
-(** This function decides what to do with a packet from a client VM.
+  let matches_proto rule packet = match rule.Q.proto, rule.Q.specialtarget with
+    | None, None -> true
+    | None, Some `dns when List.mem packet.ipv4_header.Ipv4_packet.dst default_dns_servers -> begin
+      (* specialtarget=dns applies only to the specialtarget destination IPs, and
+         specialtarget=dns is also implicitly tcp/udp port 53 *)
+      match packet.transport_header with
+        | `TCP header -> header.Tcp.Tcp_packet.dst_port = dns_port
+        | `UDP header -> header.Udp_packet.dst_port = dns_port
+        | _ -> false
+      end
+   (* DNS rules can only match traffic headed to the specialtarget hosts, so any other destination
+   isn't a match for DNS rules *)
+    | None, Some `dns -> false
+    | Some rule_proto, _ -> match rule_proto, packet.transport_header with
+      | `tcp, `TCP header -> matches_port rule.Q.dstports header.Tcp.Tcp_packet.dst_port
+      | `udp, `UDP header -> matches_port rule.Q.dstports header.Udp_packet.dst_port
+      | `icmp, `ICMP header ->
+      begin
+        match rule.Q.icmp_type with
+        | None -> true
+        | Some rule_icmp_type ->
+          0 = compare rule_icmp_type @@ Icmpv4_wire.ty_to_int header.Icmpv4_packet.ty
+      end
+      | _, _ -> false
 
-    It takes as input an argument [info] (of type [Packet.info]) describing the
-    packet, and returns an action (of type [Packet.action]) to perform.
+  let matches_dest rule packet =
+    let ip = packet.ipv4_header.Ipv4_packet.dst in
+    match rule.Q.dst with
+    | `any ->  Lwt.return @@ `Match rule
+    | `hosts subnet ->
+      Lwt.return @@ if (Ipaddr.Prefix.mem Ipaddr.(V4 ip) subnet) then `Match rule else `No_match
+    | `dnsname name ->
+      Log.warn (fun f -> f "Resolving %a" Domain_name.pp name);
+      Lwt.return @@ `No_match
 
-    See packet.ml for the definitions of [info] and [action].
+end
 
-    Note: If the packet matched an existing NAT rule then this isn't called. *)
-let from_client (info : ([`Client of _], _) Packet.info) : Packet.action =
-  match info with
-  (* Examples (add your own rules here):
+let find_first_match packet acc rule =
+  match acc with
+  | `No_match ->
+    if Classifier.matches_proto rule packet
+    then Classifier.matches_dest rule packet
+    else Lwt.return `No_match
+  | q -> Lwt.return q
 
-     1. Allows Dev to send SSH packets to Untrusted.
-        Note: responses are not covered by this!
-     2. Allows Untrusted to reply to Dev.
-     3. Blocks an external site.
+(* Does the packet match our rules? *)
+let classify_client_packet (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  =
+  let (`Client client_link) = packet.src in
+  let rules = client_link#get_rules in
+  Lwt_list.fold_left_s (find_first_match packet) `No_match rules >|= function
+  | `No_match -> `Drop "No matching rule; assuming default drop"
+  | `Match {Q.action = Q.Accept; _} -> `Accept
+  | `Match ({Q.action = Q.Drop; _} as rule) ->
+    `Drop (Format.asprintf "rule number %a explicitly drops this packet" Q.pp_rule rule)
 
-     In all cases, make sure you've added the VM name to [clients] or [externals] above, or it won't
-     match anything! *)
-  (*
-  | { src = `Client `Dev; dst = `Client `Untrusted; proto = `TCP { dport = 22 } } -> `Accept
-  | { src = `Client `Untrusted; dst = `Client `Dev; proto = `TCP _; packet }
-                                        when not (is_tcp_start packet) -> `Accept
-  | { dst = `External `GoogleDNS } -> `Drop "block Google DNS"
-  *)
-  | { dst = (`External _ | `NetVM) } -> `NAT
-  | { dst = `Firewall; proto = `UDP { dport = 53 } } -> `NAT_to (`NetVM, 53)
-  | { dst = `Firewall } -> `Drop "packet addressed to firewall itself"
-  | { dst = `Client _ } -> `Drop "prevent communication between client VMs by default"
+let translate_accepted_packets packet =
+  classify_client_packet packet >|= function
+  | `Accept -> `NAT
+  | `Drop s -> `Drop s
 
-(** Decide what to do with a packet received from the outside world.
-    Note: If the packet matched an existing NAT rule then this isn't called. *)
-let from_netvm (info : ([`NetVM | `External of _], _) Packet.info) : Packet.action =
-  match info with
-  | _ -> `Drop "drop by default"
+(** Packets from the private interface that don't match any NAT table entry are being checked against the fw rules here *)
+let from_client (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action Lwt.t =
+  match packet with
+  | { dst = `Firewall; transport_header = `UDP header; _ } ->
+    if header.Udp_packet.dst_port = dns_port
+    then Lwt.return @@ `NAT_to (`NetVM, dns_port)
+    else Lwt.return @@ `Drop "packet addressed to client gateway"
+  | { dst = `External _ ; _ } | { dst = `NetVM; _ } -> translate_accepted_packets packet
+  | { dst = `Firewall ; _ } -> Lwt.return @@ `Drop "packet addressed to firewall itself"
+  | { dst = `Client _ ; _ } -> classify_client_packet packet
+  | _ -> Lwt.return @@ `Drop "could not classify packet"
+
+(** Packets from the outside world that don't match any NAT table entry are being dropped by default *)
+let from_netvm (_packet : ([`NetVM | `External of _], _) Packet.t) : Packet.action Lwt.t =
+  Lwt.return @@ `Drop "drop by default"

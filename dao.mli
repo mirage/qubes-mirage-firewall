@@ -30,4 +30,11 @@ val read_network_config : Qubes.DB.t -> network_config Lwt.t
 (** [read_network_config db] fetches the configuration from QubesDB.
     If it isn't there yet, it waits until it is. *)
 
+val db_root : Ipaddr.V4.t -> string
+(** Returns the root path of the firewall rules in the QubesDB for a given IP address. *)
+
+val read_rules : string Qubes.DB.KeyMap.t -> Ipaddr.V4.t -> Pf_qubes.Parse_qubes.rule list
+(** [read_rules bindings ip] extracts firewall rule information for [ip] from [bindings].
+    If any rules fail to parse, it will return only one rule denying all traffic. *)
+
 val set_iptables_error : Qubes.DB.t -> string -> unit Lwt.t

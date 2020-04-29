@@ -39,6 +39,10 @@ let random_user_port () =
 let reset t =
   Nat.reset t.table
 
+let remove_connections t ip =
+  let Mirage_nat.{ tcp ; udp } = Nat.remove_connections t.table ip in
+  ignore(tcp, udp)
+
 let add_nat_rule_and_translate t ~xl_host action packet =
   let apply_action xl_port =
     Lwt.catch (fun () ->
@@ -56,13 +60,13 @@ let add_nat_rule_and_translate t ~xl_host action packet =
       (* Because hash tables resize in big steps, this can happen even if we have a fair
          chunk of free memory. *)
       Log.warn (fun f -> f "Out_of_memory adding NAT rule. Dropping NAT table...");
-      Nat.reset t.table >>= fun () ->
+      reset t >>= fun () ->
       aux ~retries:(retries - 1)
     | Error `Overlap when retries < 0 -> Lwt.return (Error "Too many retries")
     | Error `Overlap ->
       if retries = 0 then (
         Log.warn (fun f -> f "Failed to find a free port; resetting NAT table");
-        Nat.reset t.table >>= fun () ->
+        reset t >>= fun () ->
         aux ~retries:(retries - 1)
       ) else (
         aux ~retries:(retries - 1)
