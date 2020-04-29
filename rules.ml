@@ -49,51 +49,60 @@ module Classifier = struct
       end
       | _, _ -> false
 
-  let matches_dest rule packet =
+  let matches_dest dns_client rule packet =
     let ip = packet.ipv4_header.Ipv4_packet.dst in
     match rule.Q.dst with
     | `any ->  Lwt.return @@ `Match rule
     | `hosts subnet ->
       Lwt.return @@ if (Ipaddr.Prefix.mem Ipaddr.(V4 ip) subnet) then `Match rule else `No_match
     | `dnsname name ->
-      Log.warn (fun f -> f "Resolving %a" Domain_name.pp name);
-      Lwt.return @@ `No_match
+      Log.debug (fun f -> f "Resolving %a" Domain_name.pp name);
+      dns_client name >|= function
+      | Ok (_ttl, found_ips) ->
+        if Dns.Rr_map.Ipv4_set.mem ip found_ips
+        then `Match rule
+        else `No_match
+      | Error (`Msg m) ->
+        Log.warn (fun f -> f "Ignoring rule %a, could not resolve" Q.pp_rule rule);
+        Log.debug (fun f -> f "%s" m);
+        `No_match
+      | Error _ -> assert false (* TODO: fix type of dns_client so that this case can go *)
 
 end
 
-let find_first_match packet acc rule =
+let find_first_match dns_client packet acc rule =
   match acc with
   | `No_match ->
     if Classifier.matches_proto rule packet
-    then Classifier.matches_dest rule packet
+    then Classifier.matches_dest dns_client rule packet
     else Lwt.return `No_match
   | q -> Lwt.return q
 
 (* Does the packet match our rules? *)
-let classify_client_packet (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  =
+let classify_client_packet dns_client (packet : ([`Client of Fw_utils.client_link], _) Packet.t)  =
   let (`Client client_link) = packet.src in
   let rules = client_link#get_rules in
-  Lwt_list.fold_left_s (find_first_match packet) `No_match rules >|= function
+  Lwt_list.fold_left_s (find_first_match dns_client packet) `No_match rules >|= function
   | `No_match -> `Drop "No matching rule; assuming default drop"
   | `Match {Q.action = Q.Accept; _} -> `Accept
   | `Match ({Q.action = Q.Drop; _} as rule) ->
     `Drop (Format.asprintf "rule number %a explicitly drops this packet" Q.pp_rule rule)
 
-let translate_accepted_packets packet =
-  classify_client_packet packet >|= function
+let translate_accepted_packets dns_client packet =
+  classify_client_packet dns_client packet >|= function
   | `Accept -> `NAT
   | `Drop s -> `Drop s
 
 (** Packets from the private interface that don't match any NAT table entry are being checked against the fw rules here *)
-let from_client (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action Lwt.t =
+let from_client dns_client (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action Lwt.t =
   match packet with
   | { dst = `Firewall; transport_header = `UDP header; _ } ->
     if header.Udp_packet.dst_port = dns_port
     then Lwt.return @@ `NAT_to (`NetVM, dns_port)
     else Lwt.return @@ `Drop "packet addressed to client gateway"
-  | { dst = `External _ ; _ } | { dst = `NetVM; _ } -> translate_accepted_packets packet
+  | { dst = `External _ ; _ } | { dst = `NetVM; _ } -> translate_accepted_packets dns_client packet
   | { dst = `Firewall ; _ } -> Lwt.return @@ `Drop "packet addressed to firewall itself"
-  | { dst = `Client _ ; _ } -> classify_client_packet packet
+  | { dst = `Client _ ; _ } -> classify_client_packet dns_client packet
   | _ -> Lwt.return @@ `Drop "could not classify packet"
 
 (** Packets from the outside world that don't match any NAT table entry are being dropped by default *)

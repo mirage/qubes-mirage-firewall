@@ -45,8 +45,9 @@ let translate t packet =
 
 (* Add a NAT rule for the endpoints in this frame, via a random port on the firewall. *)
 let add_nat_and_forward_ipv4 t packet =
-  let xl_host = t.Router.uplink#my_ip in
-  My_nat.add_nat_rule_and_translate t.Router.nat ~xl_host `NAT packet >>= function
+  let open Router in
+  let xl_host = t.uplink#my_ip in
+  My_nat.add_nat_rule_and_translate t.nat t.ports ~xl_host `NAT packet >>= function
   | Ok packet -> forward_ipv4 t packet
   | Error e ->
     Log.warn (fun f -> f "Failed to add NAT rewrite rule: %s (%a)" e Nat_packet.pp packet);
@@ -54,11 +55,12 @@ let add_nat_and_forward_ipv4 t packet =
 
 (* Add a NAT rule to redirect this conversation to [host:port] instead of us. *)
 let nat_to t ~host ~port packet =
-  match Router.resolve t host with
+  let open Router in
+  match resolve t host with
   | Ipaddr.V6 _ -> Log.warn (fun f -> f "Cannot NAT with IPv6"); Lwt.return_unit
   | Ipaddr.V4 target ->
-    let xl_host = t.Router.uplink#my_ip in
-    My_nat.add_nat_rule_and_translate t.Router.nat ~xl_host (`Redirect (target, port)) packet >>= function
+    let xl_host = t.uplink#my_ip in
+    My_nat.add_nat_rule_and_translate t.nat t.ports ~xl_host (`Redirect (target, port)) packet >>= function
     | Ok packet -> forward_ipv4 t packet
     | Error e ->
       Log.warn (fun f -> f "Failed to add NAT redirect rule: %s (%a)" e Nat_packet.pp packet);
@@ -85,11 +87,11 @@ let handle_low_memory t =
   match Memory_pressure.status () with
   | `Memory_critical -> (* TODO: should happen before copying and async *)
       Log.warn (fun f -> f "Memory low - dropping packet and resetting NAT table");
-      My_nat.reset t.Router.nat >|= fun () ->
+      My_nat.reset t.Router.nat t.Router.ports >|= fun () ->
       `Memory_critical
   | `Ok -> Lwt.return `Ok
 
-let ipv4_from_client t ~src packet =
+let ipv4_from_client resolver t ~src packet =
   handle_low_memory t >>= function
   | `Memory_critical -> Lwt.return_unit
   | `Ok ->
@@ -102,7 +104,7 @@ let ipv4_from_client t ~src packet =
   let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
   match of_mirage_nat_packet ~src:(`Client src) ~dst packet with
   | None -> Lwt.return_unit
-  | Some firewall_packet -> apply_rules t Rules.from_client ~dst firewall_packet
+  | Some firewall_packet -> apply_rules t (Rules.from_client resolver) ~dst firewall_packet
 
 let ipv4_from_netvm t packet =
   handle_low_memory t >>= function

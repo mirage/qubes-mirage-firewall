@@ -8,15 +8,18 @@ let src = Logs.Src.create "unikernel" ~doc:"Main unikernel code"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK) = struct
+  module Uplink = Uplink.Make(R)(Clock)
+  module Dns_transport = My_dns.Transport(R)(Clock)
+  module Dns_client = Dns_client.Make(Dns_transport)
 
   (* Set up networking and listen for incoming packets. *)
-  let network uplink qubesDB router =
+  let network dns_client dns_responses uplink qubesDB router =
     (* Report success *)
     Dao.set_iptables_error qubesDB "" >>= fun () ->
     (* Handle packets from both networks *)
     Lwt.choose [
-      Client_net.listen Clock.elapsed_ns qubesDB router;
-      Uplink.listen uplink Clock.elapsed_ns router
+      Client_net.listen Clock.elapsed_ns dns_client qubesDB router;
+      Uplink.listen uplink Clock.elapsed_ns dns_responses router
     ]
 
   (* We don't use the GUI, but it's interesting to keep an eye on it.
@@ -76,7 +79,11 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK) = struct
       ~nat
     in
 
-    let net_listener = network uplink qubesDB router in
+    let send_dns_query = Uplink.send_dns_client_query uplink in
+    let dns_mvar = Lwt_mvar.create_empty () in
+    let dns_client = Dns_client.create (router, send_dns_query, dns_mvar) in
+
+    let net_listener = network (Dns_client.getaddrinfo dns_client Dns.Rr_map.A) dns_mvar uplink qubesDB router in
 
     (* Report memory usage to XenStore *)
     Memory_pressure.init ();
