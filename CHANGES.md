@@ -1,3 +1,18 @@
+### master branch
+
+This version adapts qubes-mirage-firewall with
+- dynamic rulesets via QubesDB (as defined in Qubes 4.0), and
+- adds support for DNS hostnames in rules, using the pf-qubes library for parsing.
+
+The DNS client is provided by DNS (>= 4.2.0) which uses a cache for name lookups. Not every packet will lead to a DNS lookup if DNS rules are in place.
+
+A test unikernel is available in the test subdirectory.
+
+This project was done by @linse and @yomimono in summer 2019, see PR #96.
+
+Additional changes and bugfixes:
+TODO: describe based on commit log de7d05e .. 02e515d
+
 ### 0.6
 
 Changes to rules language:
