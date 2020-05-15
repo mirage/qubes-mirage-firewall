@@ -30,13 +30,15 @@ let main =
       package "netchannel" ~min:"1.11.0";
       package "mirage-net-xen";
       package "ipaddr" ~min:"4.0.0";
-      package "mirage-qubes" ~min:"0.8.0";
-      package "mirage-nat" ~min:"2.1.0";
+      package "mirage-qubes" ~min:"0.8.2";
+      package "mirage-nat" ~min:"2.2.1";
       package "mirage-logs";
       package "mirage-xen" ~min:"5.0.0";
+      package ~min:"4.5.0" "dns-client";
+      package "pf-qubes";
     ]
-    "Unikernel.Main" (mclock @-> job)
+    "Unikernel.Main" (random @-> mclock @-> job)
 
 let () =
-  register "qubes-firewall" [main $ default_monotonic_clock]
+  register "qubes-firewall" [main $ default_random $ default_monotonic_clock]
     ~argv:no_argv

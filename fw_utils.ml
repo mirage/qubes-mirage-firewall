@@ -31,6 +31,8 @@ class type client_link = object
   inherit interface
   method other_mac : Macaddr.t
   method log_header : string  (* For log messages *)
+  method get_rules: Pf_qubes.Parse_qubes.rule list
+  method set_rules: string Qubes.DB.KeyMap.t -> unit
 end
 
 (** An Ethernet header from [src]'s MAC address to [dst]'s with an IPv4 payload. *)

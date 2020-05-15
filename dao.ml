@@ -33,6 +33,38 @@ let directory ~handle dir =
   | [""] -> []      (* XenStore client bug *)
   | items -> items
 
+let db_root client_ip =
+  "/qubes-firewall/" ^ (Ipaddr.V4.to_string client_ip)
+
+let read_rules rules client_ip =
+  let root = db_root client_ip in
+  let rec get_rule n l : (Pf_qubes.Parse_qubes.rule list, string) result =
+    let pattern = root ^ "/" ^ Printf.sprintf "%04d" n in
+    Log.debug (fun f -> f "reading %s" pattern);
+    match Qubes.DB.KeyMap.find_opt pattern rules with
+    | None ->
+      Log.debug (fun f -> f "rule %d does not exist; won't look for more" n);
+      Ok (List.rev l)
+    | Some rule ->
+      Log.debug (fun f -> f "rule %d: %s" n rule);
+      match Pf_qubes.Parse_qubes.parse_qubes ~number:n rule with
+      | Error e -> Log.warn (fun f -> f "Error parsing rule %d: %s" n e); Error e
+      | Ok rule ->
+        Log.debug (fun f -> f "parsed rule: %a" Pf_qubes.Parse_qubes.pp_rule rule);
+        get_rule (n+1) (rule :: l)
+  in
+  match get_rule 0 [] with
+  | Ok l -> l
+  | Error e ->
+    Log.warn (fun f -> f "Defaulting to deny-all because of rule parse failure (%s)" e);
+    [ Pf_qubes.Parse_qubes.({action = Drop;
+                             proto = None;
+                             specialtarget = None;
+                             dst = `any;
+                             dstports = None;
+                             icmp_type = None;
+                             number = 0;})]
+
 let vifs ~handle domid =
   match String.to_int domid with
   | None -> Log.err (fun f -> f "Invalid domid %S" domid); Lwt.return []

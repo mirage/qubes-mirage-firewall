@@ -165,6 +165,13 @@ This takes a little more setting up the first time, but will be much quicker aft
     2017-03-18 11:32:38 -00:00: INF [dao] Watching backend/vif
     2017-03-18 11:32:38 -00:00: INF [qubes.db] got update: "/qubes-netvm-domid" = "1"
 
+# Testing if the firewall works
+
+Build the test unikernel in the test directory.
+Install it to a vm which has the firewall as netvm.
+Set the rules for the testvm to "textfile".
+Run the test unikernel.
+
 # Security advisories
 
 See [issues tagged "security"](https://github.com/mirage/qubes-mirage-firewall/issues?utf8=%E2%9C%93&q=label%3Asecurity+) for security advisories affecting the firewall.

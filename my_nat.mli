@@ -3,6 +3,15 @@
 
 (* Abstract over NAT interface (todo: remove this) *)
 
+type ports = private {
+  nat_tcp : Ports.t ref;
+  nat_udp : Ports.t ref;
+  nat_icmp : Ports.t ref;
+  dns_udp : Ports.t ref;
+}
+
+val empty_ports : unit -> ports
+
 type t
 
 type action = [
@@ -11,7 +20,8 @@ type action = [
 ]
 
 val create : max_entries:int -> t Lwt.t
-val reset : t -> unit Lwt.t
+val reset : t -> ports -> unit Lwt.t
+val remove_connections : t -> ports -> Ipaddr.V4.t -> unit
 val translate : t -> Nat_packet.t -> Nat_packet.t option Lwt.t
-val add_nat_rule_and_translate : t -> xl_host:Ipaddr.V4.t ->
-  action -> Nat_packet.t -> (Nat_packet.t, string) result Lwt.t
+val add_nat_rule_and_translate : t -> ports ->
+  xl_host:Ipaddr.V4.t -> action -> Nat_packet.t -> (Nat_packet.t, string) result Lwt.t
