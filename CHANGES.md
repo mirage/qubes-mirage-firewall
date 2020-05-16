@@ -13,6 +13,42 @@ This project was done by @linse and @yomimono in summer 2019, see PR #96.
 Additional changes and bugfixes:
 TODO: describe based on commit log de7d05e .. 02e515d
 
+- Support Mirage 3.7 and mirage-nat 2.0.0 (@hannesm, #89).
+  The main improvement is fragmentation and reassembly support.
+
+- Use the smaller OCurrent images as the base for building the Docker images (@talex5, #80).
+  - Before: 1 GB (ocaml/opam2:debian-10-ocaml-4.08)
+  - Now: 309 MB (ocurrent/opam:alpine-3.10-ocaml-4.08)
+
+- Removed unreachable `Lwt.catch` (@hannesm, #90).
+
+Documentation:
+
+- Add note that AppVM used to build from source may need a private image larger than the default 2048MB (@marmot1791, #83).
+
+- README: create the symlink-redirected docker dir (@xaki23, #75). Otherwise, installing the docker package removes the dangling symlink.
+
+- Note that mirage-firewall cannot be used as UpdateVM (@talex5, #68).
+
+- Fix ln(1) call in build instructions (@jaseg, #69). The arguments were backwards.
+
+Keeping up with upstream changes:
+
+- Support mirage-3.7 via qubes-builder (@xaki23, #91).
+
+- Remove unused `Clock` argument to `Uplink` (@talex5, #90).
+
+- Rename things for newer mirage-xen versions (@xaki23, #80).
+
+- Adjust to ipaddr-4.0.0 renaming `_bytes` to `_octets` (@xaki23, #75).
+
+- Use OCaml 4.08.0 for qubes-builder builds (was 4.07.1) (@xaki23, #75).
+
+- Remove netchannel pin as 1.11.0 is now released (@talex5, #72).
+
+- Remove cmdliner pin as 1.0.4 is now released (@talex5, #71).
+
+
 ### 0.6
 
 Changes to rules language:
