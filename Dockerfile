@@ -14,5 +14,7 @@ RUN mkdir /home/opam/qubes-mirage-firewall
 ADD config.ml /home/opam/qubes-mirage-firewall/config.ml
 WORKDIR /home/opam/qubes-mirage-firewall
 RUN opam config exec -- mirage configure -t xen && make depend
+ADD . /home/opam/qubes-mirage-firewall
+RUN sudo chown -R opam /home/opam/qubes-mirage-firewall
 CMD opam config exec -- mirage configure -t xen && \
     opam config exec -- make tar
