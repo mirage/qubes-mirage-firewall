@@ -3,8 +3,6 @@
 A unikernel that can run as a QubesOS ProxyVM, replacing `sys-firewall`.
 It uses the [mirage-qubes][] library to implement the Qubes protocols.
 
-Note: This firewall *ignores the rules set in the Qubes GUI*. See `rules.ml` for the actual policy.
-
 See [A Unikernel Firewall for QubesOS][] for more details.
 
 
@@ -63,8 +61,8 @@ Run this command in dom0 to create a `mirage-firewall` VM using the `mirage-fire
 qvm-create \
   --property kernel=mirage-firewall \
   --property kernelopts=None \
-  --property memory=32 \
-  --property maxmem=32 \
+  --property memory=64 \
+  --property maxmem=64 \
   --property netvm=sys-net \
   --property provides_network=True \
   --property vcpus=1 \
@@ -106,7 +104,7 @@ This diagram show the main components (each box corresponds to a source `.ml` fi
 </p>
 
 Ethernet frames arrives from client qubes (such as `work` or `personal`) or from `sys-net`.
-Internet (IP) packets are sent to `firewall`, which consults `rules` to decide what to do with the packet.
+Internet (IP) packets are sent to `firewall`, which consults the NAT table and the rules from QubesDB to decide what to do with the packet.
 If it should be sent on, it uses `router` to send it to the chosen destination.
 `client_net` watches the XenStore database provided by dom0
 to find out when clients need to be added or removed.
@@ -167,10 +165,8 @@ This takes a little more setting up the first time, but will be much quicker aft
 
 # Testing if the firewall works
 
-Build the test unikernel in the test directory.
-Install it to a vm which has the firewall as netvm.
-Set the rules for the testvm to "textfile".
-Run the test unikernel.
+A unikernel which tests the firewall is available in the `test/` subdirectory.
+To use it, run `test.sh` and follow the instructions to set up the test environment.
 
 # Security advisories
 
