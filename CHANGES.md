@@ -1,4 +1,4 @@
-### master branch
+### 0.7
 
 This version adapts qubes-mirage-firewall with
 - dynamic rulesets via QubesDB (as defined in Qubes 4.0), and
@@ -11,7 +11,6 @@ A test unikernel is available in the test subdirectory.
 This project was done by @linse and @yomimono in summer 2019, see PR #96.
 
 Additional changes and bugfixes:
-TODO: describe based on commit log de7d05e .. 02e515d
 
 - Support Mirage 3.7 and mirage-nat 2.0.0 (@hannesm, #89).
   The main improvement is fragmentation and reassembly support.
