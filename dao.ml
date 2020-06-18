@@ -79,8 +79,20 @@ let vifs ~handle domid =
         Lwt.try_bind
           (fun () -> OS.Xs.read handle (Printf.sprintf "%s/%d/ip" path device_id))
           (fun client_ip ->
-             let client_ip = Ipaddr.V4.of_string_exn client_ip in
-             Lwt.return (Some (vif, client_ip))
+             let client_ip' = match String.cuts ~sep:" " client_ip with
+               | [] -> Log.err (fun m -> m "unexpected empty list"); ""
+               | [ ip ] -> ip
+               | ip::rest ->
+                 Log.warn (fun m -> m "ignoring IPs %s from %a, we support one IP per client"
+                             (String.concat ~sep:" " rest) ClientVif.pp vif);
+                 ip
+             in
+             match Ipaddr.V4.of_string client_ip' with
+             | Ok ip -> Lwt.return (Some (vif, ip))
+             | Error `Msg msg  ->
+               Log.err (fun f -> f "Error parsing IP address of %a from %s: %s"
+                          ClientVif.pp vif client_ip msg);
+               Lwt.return None
           )
           (function
             | Xs_protocol.Enoent _ -> Lwt.return None
