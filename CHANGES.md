@@ -1,3 +1,11 @@
+### 0.7.1
+
+Bugfixes:
+
+- More robust parsing of IP address in Xenstore, which may contain both IPv4 and IPv6 addresses (@linse, #103, reported by @grote)
+
+- Avoid stack overflow with many connections in the NAT table (@linse and @hannesm, reported by @talex5 in #105, fixed by mirage-nat 2.2.2 release)
+
 ### 0.7
 
 This version adapts qubes-mirage-firewall with

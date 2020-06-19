@@ -70,6 +70,8 @@ qvm-create \
   --label=green \
   --class StandaloneVM \
   mirage-firewall
+
+qvm-features mirage-firewall qubes-firewall 1
 ```
 
 To upgrade from an earlier release, just overwrite `/var/lib/qubes/vm-kernels/mirage-firewall/vmlinuz` with the new version and restart the firewall VM.
