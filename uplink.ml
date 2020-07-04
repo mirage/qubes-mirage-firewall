@@ -83,8 +83,8 @@ let connect config =
   Eth.connect net >>= fun eth ->
   Arp.connect eth >>= fun arp ->
   Arp.add_ip arp my_ip >>= fun () ->
-  let network = Ipaddr.V4.Prefix.make 0 Ipaddr.V4.any in
-  I.connect ~ip:(network, my_ip) ~gateway eth arp >>= fun ip ->
+  let cidr = Ipaddr.V4.Prefix.make 0 my_ip in
+  I.connect ~cidr ~gateway eth arp >>= fun ip ->
   U.connect ip >>= fun udp ->
   let netvm_mac =
     Arp.query arp gateway
