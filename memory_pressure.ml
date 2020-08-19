@@ -6,44 +6,48 @@ open Lwt
 let src = Logs.Src.create "memory_pressure" ~doc:"Memory pressure monitor"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let total_pages = OS.MM.Heap_pages.total ()
-let pagesize_kb = Io_page.page_size / 1024
+let wordsize_in_bytes = Sys.word_size / 8
 
-let meminfo ~used =
-  let mem_total = total_pages * pagesize_kb in
-  let mem_free = (total_pages - used) * pagesize_kb in
-  Log.info (fun f -> f "Writing meminfo: free %d / %d kB (%.2f %%)"
-    mem_free mem_total (float_of_int mem_free /. float_of_int mem_total *. 100.0));
+let fraction_free stats =
+  let { OS.Memory.free_words; heap_words; _ } = stats in
+  float free_words /. float heap_words
+
+let meminfo stats =
+  let { OS.Memory.free_words; heap_words; _ } = stats in
+  let mem_total = heap_words * wordsize_in_bytes in
+  let mem_free = free_words * wordsize_in_bytes in
+  Log.info (fun f -> f "Writing meminfo: free %a / %a (%.2f %%)"
+    Fmt.bi_byte_size mem_free
+    Fmt.bi_byte_size mem_total
+    (fraction_free stats *. 100.0));
   Printf.sprintf "MemTotal: %d kB\n\
                   MemFree: %d kB\n\
                   Buffers: 0 kB\n\
                   Cached: 0 kB\n\
                   SwapTotal: 0 kB\n\
-                  SwapFree: 0 kB\n" mem_total mem_free
+                  SwapFree: 0 kB\n" (mem_total / 1024) (mem_free / 1024)
 
-let report_mem_usage used =
+let report_mem_usage stats =
   Lwt.async (fun () ->
     let open OS in
     Xs.make () >>= fun xs ->
     Xs.immediate xs (fun h ->
-      Xs.write h "memory/meminfo" (meminfo ~used)
+      Xs.write h "memory/meminfo" (meminfo stats)
     )
   )
 
 let init () =
   Gc.full_major ();
-  let used = OS.MM.Heap_pages.used () in
-  report_mem_usage used
+  let stats = OS.Memory.quick_stat () in
+  report_mem_usage stats
 
 let status () =
-  let used = OS.MM.Heap_pages.used () |> float_of_int in
-  let frac = used /. float_of_int total_pages in
-  if frac < 0.9 then `Ok
+  let stats = OS.Memory.quick_stat () in
+  if fraction_free stats > 0.1 then `Ok
   else (
     Gc.full_major ();
-    let used = OS.MM.Heap_pages.used () in
-    report_mem_usage used;
-    let frac = float_of_int used /. float_of_int total_pages in
-    if frac > 0.9 then `Memory_critical
+    let stats = OS.Memory.quick_stat () in
+    report_mem_usage stats;
+    if fraction_free stats < 0.1 then `Memory_critical
     else `Ok
   )
