@@ -13,6 +13,10 @@ See the [Deploy](#deploy) section below for installation instructions.
 
 ## Build from source
 
+Note: The most reliable way to build is using Docker.
+Fedora 30 works well for this, but installing Docker on Fedora 31 or 32 is more difficult.
+Debian 10 also works, but you'll need to follow the instructions at [docker.com][debian-docker] to get Docker
+(don't use Debian's version).
 
 Create a new Fedora-30 AppVM (or reuse an existing one). In the Qube's Settings (Basic / Disk storage), increase the private storage max size from the default 2048 MiB to 4096 MiB. Open a terminal.
 
@@ -32,8 +36,6 @@ It gives Docker more disk space and avoids losing the Docker image cache when yo
 
 Note: the object files are stored in the `_build` directory to speed up incremental builds.
 If you change the dependencies, you will need to delete this directory before rebuilding.
-
-If you want to build on Debian, follow the instructions at [docker.com][debian-docker] to get Docker and then run `sudo ./build-with-docker.sh` as above.
 
 It's OK to install the Docker package in a template VM if you want it to remain
 after a reboot, but the build of the firewall itself should be done in a regular AppVM.
@@ -59,12 +61,11 @@ Copy `vmlinuz` to `/var/lib/qubes/vm-kernels/mirage-firewall` directory in dom0,
     [tal@dom0 ~]$ cd /var/lib/qubes/vm-kernels/mirage-firewall/
     [tal@dom0 mirage-firewall]$ qvm-run -p dev 'cat mirage-firewall/vmlinuz' > vmlinuz
 
-Finally create dummy files required by Qubes OS:
+Finally, create [a dummy file required by Qubes OS](https://github.com/QubesOS/qubes-issues/issues/5516):
 
-    [tal@dom0 mirage-firewall]$ touch modules.img
     [tal@dom0 mirage-firewall]$ gzip -n9 < /dev/null > initramfs
 
-Run this command in dom0 to create a `mirage-firewall` VM using the `mirage-firewall` kernel you added above:
+Run this command in dom0 to create a `mirage-firewall` VM using the `mirage-firewall` kernel you added above
 
 ```
 qvm-create \
@@ -75,15 +76,28 @@ qvm-create \
   --property netvm=sys-net \
   --property provides_network=True \
   --property vcpus=1 \
-  --property virt_mode=pv \
+  --property virt_mode=pvh \
   --label=green \
   --class StandaloneVM \
   mirage-firewall
 
 qvm-features mirage-firewall qubes-firewall 1
+qvm-features mirage-firewall no-default-kernelopts 1
 ```
 
+**Note**: for `virt_mode`, use `pv` instead of `pvh` for firewall versions before 0.8.
+
+## Upgrading
+
 To upgrade from an earlier release, just overwrite `/var/lib/qubes/vm-kernels/mirage-firewall/vmlinuz` with the new version and restart the firewall VM.
+
+If upgrading from a version before 0.8, you will also need to update a few options:
+
+```
+qvm-prefs mirage-firewall kernelopts ''
+qvm-prefs mirage-firewall virt_mode pvh
+qvm-features mirage-firewall no-default-kernelopts 1
+```
 
 ### Configure AppVMs to use it
 
