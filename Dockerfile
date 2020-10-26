@@ -1,8 +1,8 @@
 # Pin the base image to a specific hash for maximum reproducibility.
-# It will probably still work on newer images, though, unless Debian
+# It will probably still work on newer images, though, unless an update
 # changes some compiler optimisations (unlikely).
-#FROM ocurrent/opam:alpine-3.10-ocaml-4.10
-FROM ocurrent/opam@sha256:4546b41a99b54f163af435327c86f88d06346f2a059f0f42bea431b37329ea8d
+#FROM ocurrent/opam:fedora-32-ocaml-4.10
+FROM ocurrent/opam@sha256:2e0e1689d2260c202bf944034f15ba8ebe945dba6b126cc6dd6b185c223014f3
 
 # Pin last known-good version for reproducible builds.
 # Remove this line (and the base image pin above) if you want to test with the
