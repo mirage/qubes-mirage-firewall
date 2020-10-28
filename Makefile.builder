@@ -4,5 +4,5 @@ SOURCE_BUILD_DEP := firewall-build-dep
 
 firewall-build-dep:
 	opam install -y depext
-	opam depext -i -y mirage.3.8.0 lwt.5.3.0
+	opam depext -i -y mirage
 
