@@ -29,11 +29,15 @@ let meminfo stats =
 
 let report_mem_usage stats =
   Lwt.async (fun () ->
-    let open OS in
-    Xs.make () >>= fun xs ->
-    Xs.immediate xs (fun h ->
-      Xs.write h "memory/meminfo" (meminfo stats)
-    )
+      let rec aux () =
+        OS.Xs.make () >>= fun xs ->
+        OS.Xs.immediate xs (fun h ->
+            OS.Xs.write h "memory/meminfo" (meminfo stats)
+          ) >>= fun () ->
+        OS.Time.sleep_ns (Duration.of_f 600.0) >>= fun () ->
+        aux ()
+      in
+      aux ()
   )
 
 let init () =
