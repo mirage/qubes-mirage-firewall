@@ -22,8 +22,7 @@ let main =
       package "cstruct";
       package "astring";
       package "tcpip" ~min:"3.7.0";
-      package "arp";
-      package "arp-mirage";
+      package ~min:"2.3.0" ~sublibs:["mirage"] "arp";
       package "ethernet";
       package "mirage-protocols";
       package "shared-memory-ring" ~min:"3.0.0";
