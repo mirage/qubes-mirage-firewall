@@ -30,7 +30,7 @@ let main =
       package "netchannel" ~min:"1.11.0";
       package "mirage-net-xen";
       package "ipaddr" ~min:"4.0.0";
-      package "mirage-qubes" ~min:"0.8.2";
+      package "mirage-qubes" ~min:"0.9.1";
       package "mirage-nat" ~min:"2.2.1";
       package "mirage-logs";
       package "mirage-xen" ~min:"6.0.0";
