@@ -5,5 +5,5 @@ docker build -t qubes-mirage-firewall .
 echo Building Firewall...
 docker run --rm -i -v `pwd`:/home/opam/qubes-mirage-firewall qubes-mirage-firewall
 echo "SHA2 of build:   $(sha256sum qubes_firewall.xen)"
-echo "SHA2 last known: 583d22327500fa092f436af1d0d9b1b78ebe12abd814c128ec7452c2f4cf319a"
+echo "SHA2 last known: d68d2a8d2337b8c1a78995e1acbb4f72082076c73be45bf40dd6268c87b2353e"
 echo "(hashes should match for released versions)"

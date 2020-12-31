@@ -1,13 +1,13 @@
 # Pin the base image to a specific hash for maximum reproducibility.
 # It will probably still work on newer images, though, unless an update
 # changes some compiler optimisations (unlikely).
-#FROM ocurrent/opam:fedora-32-ocaml-4.10
-FROM ocurrent/opam@sha256:2e0e1689d2260c202bf944034f15ba8ebe945dba6b126cc6dd6b185c223014f3
+#FROM ocurrent/opam:fedora-32-ocaml-4.11
+FROM ocurrent/opam@sha256:fce44a073ff874166b51c33a4e37782286d48dbba1b5aa43563a0dd35d15510f
 
 # Pin last known-good version for reproducible builds.
 # Remove this line (and the base image pin above) if you want to test with the
 # latest versions.
-RUN cd ~/opam-repository && git fetch origin master && git reset --hard 6ef290f5681b7ece5d9c085bcf0c55268c118292 && opam update
+RUN cd ~/opam-repository && git fetch origin master && git reset --hard 0531bd9f8068f9cbd0815cfc5fcbd6b6568e9620 && opam update
 
 RUN opam depext -i -y mirage
 RUN mkdir /home/opam/qubes-mirage-firewall
