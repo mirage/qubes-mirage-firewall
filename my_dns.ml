@@ -34,7 +34,7 @@ module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) = struct
     let open Router in
     let open My_nat in
     let nslist = snd ctx.t.nameservers in
-    let dst, dst_port = List.hd(nslist) in
+    let dst, dst_port = List.hd nslist in
     let router, send_udp, _ = ctx.t.stack in
     let src_port = Ports.pick_free_port ~consult:router.ports.nat_udp router.ports.dns_udp in
     ctx.src_port <- src_port;

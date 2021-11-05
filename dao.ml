@@ -125,11 +125,11 @@ type network_config = {
   uplink_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
 
   clients_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to our client VMs (their gateway) *)
+  dns : Ipaddr.V4.t list;
 }
 
 exception Missing_key of string
 
-(* TODO: /qubes-secondary-dns *)
 let try_read_network_config db =
   let get name =
     match DB.KeyMap.find_opt name db with
@@ -138,14 +138,20 @@ let try_read_network_config db =
   let uplink_our_ip = get "/qubes-ip" |> Ipaddr.V4.of_string_exn in
   let uplink_netvm_ip = get "/qubes-gateway" |> Ipaddr.V4.of_string_exn in
   let clients_our_ip = get "/qubes-netvm-gateway" |> Ipaddr.V4.of_string_exn in
+  let dns =
+    [ get "/qubes-primary-dns" |> Ipaddr.V4.of_string_exn ;
+      get "/qubes-secondary-dns" |> Ipaddr.V4.of_string_exn ]
+  in
   Log.info (fun f -> f "@[<v2>Got network configuration from QubesDB:@,\
                         NetVM IP on uplink network: %a@,\
                         Our IP on uplink network:   %a@,\
-                        Our IP on client networks:  %a@]"
+                        Our IP on client networks:  %a@,\
+                        DNS resolvers:              %a@]"
                Ipaddr.V4.pp uplink_netvm_ip
                Ipaddr.V4.pp uplink_our_ip
-               Ipaddr.V4.pp clients_our_ip);
-  { uplink_netvm_ip; uplink_our_ip; clients_our_ip }
+               Ipaddr.V4.pp clients_our_ip
+               Fmt.(list ~sep:(any ", ") Ipaddr.V4.pp) dns);
+  { uplink_netvm_ip; uplink_our_ip; clients_our_ip ; dns }
 
 let read_network_config qubesDB =
   let rec aux bindings =
