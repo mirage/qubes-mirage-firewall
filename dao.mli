@@ -24,7 +24,7 @@ type network_config = {
   uplink_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
 
   clients_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to our client VMs (their gateway) *)
-  dns : Ipaddr.V4.t list;
+  dns : Ipaddr.V4.t;
 }
 
 val read_network_config : Qubes.DB.t -> network_config Lwt.t
