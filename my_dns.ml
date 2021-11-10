@@ -11,7 +11,7 @@ module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) = struct
     stack : stack ;
     timeout_ns : int64 ;
   }
-  type context = { t : t ; timeout_ns : int64 ref; mutable src_port : int }
+  type context = t
 
   let nameservers { protocol ; nameserver ; _ } = protocol, [ nameserver ]
   let rng = R.generate ?g:None
@@ -24,32 +24,23 @@ module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) = struct
     in
     { protocol ; nameserver ; stack ; timeout_ns = timeout }
 
-  let with_timeout ctx f =
-    let timeout = OS.Time.sleep_ns !(ctx.timeout_ns) >|= fun () -> Error (`Msg "DNS request timeout") in
-    let start = clock () in
-    Lwt.pick [ f ; timeout ] >|= fun result ->
-    let stop = clock () in
-    ctx.timeout_ns := Int64.sub !(ctx.timeout_ns) (Int64.sub stop start);
-    result
+  let with_timeout timeout_ns f =
+    let timeout = OS.Time.sleep_ns timeout_ns >|= fun () -> Error (`Msg "DNS request timeout") in
+    Lwt.pick [ f ; timeout ]
 
-  let connect (t : t) = Lwt.return (Ok { t ; timeout_ns = ref t.timeout_ns ; src_port = 0 })
+  let connect (t : t) = Lwt.return (Ok t)
 
-  let send (ctx : context) buf : (unit, [> `Msg of string ]) result Lwt.t =
+  let send_recv (ctx : context) buf : (Cstruct.t, [> `Msg of string ]) result Lwt.t =
     let open Router in
     let open My_nat in
-    let dst, dst_port = ctx.t.nameserver in
-    let router, send_udp, _ = ctx.t.stack in
+    let dst, dst_port = ctx.nameserver in
+    let router, send_udp, answer = ctx.stack in
     let src_port = Ports.pick_free_port ~consult:router.ports.nat_udp router.ports.dns_udp in
-    ctx.src_port <- src_port;
-    with_timeout ctx (send_udp ~src_port ~dst ~dst_port buf >|= Rresult.R.open_error_msg)
-
-  let recv ctx =
-    let open Router in
-    let open My_nat in
-    let router, _, answers = ctx.t.stack in
-    with_timeout ctx
-      (Lwt_mvar.take answers >|= fun (_, dns_response) -> Ok dns_response) >|= fun result ->
-    router.ports.dns_udp := Ports.remove ctx.src_port !(router.ports.dns_udp);
+    with_timeout ctx.timeout_ns
+      ((send_udp ~src_port ~dst ~dst_port buf >|= Rresult.R.open_error_msg) >>= function
+        | Ok () -> (Lwt_mvar.take answer >|= fun (_, dns_response) -> Ok dns_response)
+        | Error _ as e -> Lwt.return e) >|= fun result ->
+    router.ports.dns_udp := Ports.remove src_port !(router.ports.dns_udp);
     result
 
   let close _ = Lwt.return_unit
