@@ -22,7 +22,7 @@ let transmit_ipv4 packet iface =
              0
            | Ok (n, frags) -> fragments := frags ; n) >>= fun () ->
        Lwt_list.iter_s (fun f ->
-           let size = Cstruct.len f in
+           let size = Cstruct.length f in
            iface#writev `IPv4 (fun b -> Cstruct.blit f 0 b 0 size ; size))
          !fragments)
     (fun ex ->

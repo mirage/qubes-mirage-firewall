@@ -22,19 +22,18 @@ let main =
       package "cstruct";
       package "astring";
       package "tcpip" ~min:"3.7.0";
-      package "arp";
-      package "arp-mirage";
+      package ~min:"2.3.0" ~sublibs:["mirage"] "arp";
       package "ethernet";
       package "mirage-protocols";
       package "shared-memory-ring" ~min:"3.0.0";
       package "netchannel" ~min:"1.11.0";
       package "mirage-net-xen";
-      package "ipaddr" ~min:"4.0.0";
+      package "ipaddr" ~min:"5.2.0";
       package "mirage-qubes" ~min:"0.9.1";
       package "mirage-nat" ~min:"2.2.1";
       package "mirage-logs";
       package "mirage-xen" ~min:"6.0.0";
-      package ~min:"4.5.0" "dns-client";
+      package ~min:"6.0.0" "dns-client";
       package "pf-qubes";
     ]
     "Unikernel.Main" (random @-> mclock @-> job)

@@ -27,7 +27,7 @@ let writev eth dst proto fillfn =
     )
 
 class client_iface eth ~domid ~gateway_ip ~client_ip client_mac : client_link =
-  let log_header = Fmt.strf "dom%d:%a" domid Ipaddr.V4.pp client_ip in
+  let log_header = Fmt.str "dom%d:%a" domid Ipaddr.V4.pp client_ip in
   object
     val queue = FrameQ.create (Ipaddr.V4.to_string client_ip)
     val mutable rules = []
@@ -99,7 +99,7 @@ let add_vif get_ts { Dao.ClientVif.domid; device_id } dns_client ~client_ip ~rou
           else begin
             Log.debug (fun m -> m "New firewall rules for %s@.%a"
                         (Ipaddr.V4.to_string client_ip)
-                        Fmt.(list ~sep:(unit "@.") Pf_qubes.Parse_qubes.pp_rule) new_rules);
+                        Fmt.(list ~sep:(any "@.") Pf_qubes.Parse_qubes.pp_rule) new_rules);
             (* empty NAT table if rules are updated: they might deny old connections *)
             My_nat.remove_connections router.Router.nat router.Router.ports client_ip;
           end);

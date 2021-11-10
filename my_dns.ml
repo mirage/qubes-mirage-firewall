@@ -3,22 +3,26 @@ open Lwt.Infix
 module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) = struct
   type +'a io = 'a Lwt.t
   type io_addr = Ipaddr.V4.t * int
-  type ns_addr = [ `TCP | `UDP ] * io_addr
   type stack = Router.t * (src_port:int -> dst:Ipaddr.V4.t -> dst_port:int -> Cstruct.t -> (unit, [ `Msg of string ]) result Lwt.t) * (Udp_packet.t * Cstruct.t) Lwt_mvar.t
 
   type t = {
-    nameserver : ns_addr ;
+    protocol : Dns.proto ;
+    nameserver : io_addr ;
     stack : stack ;
     timeout_ns : int64 ;
   }
   type context = { t : t ; timeout_ns : int64 ref; mutable src_port : int }
 
-  let nameserver t = t.nameserver
+  let nameservers { protocol ; nameserver ; _ } = protocol, [ nameserver ]
   let rng = R.generate ?g:None
   let clock = C.elapsed_ns
 
-  let create ?(nameserver = `UDP, (Ipaddr.V4.of_string_exn "91.239.100.100", 53)) ~timeout stack =
-    { nameserver ; stack ; timeout_ns = timeout }
+  let create ?nameservers ~timeout stack =
+    let protocol, nameserver = match nameservers with
+      | None | Some (_, []) -> invalid_arg "no nameserver found"
+      | Some (proto, ns :: _) -> proto, ns
+    in
+    { protocol ; nameserver ; stack ; timeout_ns = timeout }
 
   let with_timeout ctx f =
     let timeout = OS.Time.sleep_ns !(ctx.timeout_ns) >|= fun () -> Error (`Msg "DNS request timeout") in
@@ -28,12 +32,12 @@ module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) = struct
     ctx.timeout_ns := Int64.sub !(ctx.timeout_ns) (Int64.sub stop start);
     result
 
-  let connect ?nameserver:_ (t : t) = Lwt.return (Ok { t ; timeout_ns = ref t.timeout_ns ; src_port = 0 })
+  let connect (t : t) = Lwt.return (Ok { t ; timeout_ns = ref t.timeout_ns ; src_port = 0 })
 
   let send (ctx : context) buf : (unit, [> `Msg of string ]) result Lwt.t =
     let open Router in
     let open My_nat in
-    let dst, dst_port = snd ctx.t.nameserver in
+    let dst, dst_port = ctx.t.nameserver in
     let router, send_udp, _ = ctx.t.stack in
     let src_port = Ports.pick_free_port ~consult:router.ports.nat_udp router.ports.dns_udp in
     ctx.src_port <- src_port;

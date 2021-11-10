@@ -59,7 +59,7 @@ module Classifier = struct
       Log.debug (fun f -> f "Resolving %a" Domain_name.pp name);
       dns_client name >|= function
       | Ok (_ttl, found_ips) ->
-        if Dns.Rr_map.Ipv4_set.mem ip found_ips
+        if Ipaddr.V4.Set.mem ip found_ips
         then `Match rule
         else `No_match
       | Error (`Msg m) ->

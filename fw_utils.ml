@@ -45,4 +45,4 @@ let error fmt =
 
 let or_raise msg pp = function
   | Ok x -> x
-  | Error e -> failwith (Fmt.strf "%s: %a" msg pp e)
+  | Error e -> failwith (Fmt.str "%s: %a" msg pp e)

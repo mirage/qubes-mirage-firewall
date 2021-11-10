@@ -81,7 +81,8 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK) = struct
 
     let send_dns_query = Uplink.send_dns_client_query uplink in
     let dns_mvar = Lwt_mvar.create_empty () in
-    let dns_client = Dns_client.create (router, send_dns_query, dns_mvar) in
+    let nameservers = `Udp, [ config.Dao.dns, 53 ] in
+    let dns_client = Dns_client.create ~nameservers (router, send_dns_query, dns_mvar) in
 
     let net_listener = network (Dns_client.getaddrinfo dns_client Dns.Rr_map.A) dns_mvar uplink qubesDB router in
 
