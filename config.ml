@@ -33,7 +33,7 @@ let main =
       package "mirage-nat" ~min:"2.2.1";
       package "mirage-logs";
       package "mirage-xen" ~min:"6.0.0";
-      package ~min:"6.0.0" "dns-client";
+      package ~min:"6.1.0" "dns-client";
       package "pf-qubes";
     ]
     "Unikernel.Main" (random @-> mclock @-> job)

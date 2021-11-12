@@ -7,7 +7,7 @@ FROM ocurrent/opam@sha256:fce44a073ff874166b51c33a4e37782286d48dbba1b5aa43563a0d
 # Pin last known-good version for reproducible builds.
 # Remove this line (and the base image pin above) if you want to test with the
 # latest versions.
-RUN cd ~/opam-repository && git fetch origin master && git reset --hard 87ef72b5cd492573258eb1b6f3b30c88af31ae3f && opam update
+RUN cd ~/opam-repository && git fetch origin master && git reset --hard 295910defa4dedc27af45ca64d63e8927f8261ff && opam update
 
 RUN opam depext -i -y mirage
 RUN mkdir /home/opam/qubes-mirage-firewall
