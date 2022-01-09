@@ -23,8 +23,7 @@ let main =
       package "astring";
       package "tcpip" ~min:"3.7.0";
       package ~min:"2.3.0" ~sublibs:["mirage"] "arp";
-      package "ethernet";
-      package "mirage-protocols";
+      package ~min:"3.0.0" "ethernet";
       package "shared-memory-ring" ~min:"3.0.0";
       package "netchannel" ~min:"1.11.0";
       package "mirage-net-xen";

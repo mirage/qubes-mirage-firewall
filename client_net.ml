@@ -116,11 +116,11 @@ let add_vif get_ts { Dao.ClientVif.domid; device_id } dns_client ~client_ip ~rou
   let listener =
     Lwt.catch
       (fun () ->
-        Netback.listen backend ~header_size:Ethernet_wire.sizeof_ethernet (fun frame ->
-          match Ethernet_packet.Unmarshal.of_cstruct frame with
+        Netback.listen backend ~header_size:Ethernet.Packet.sizeof_ethernet (fun frame ->
+          match Ethernet.Packet.of_cstruct frame with
           | Error err -> Log.warn (fun f -> f "Invalid Ethernet frame: %s" err); Lwt.return_unit
           | Ok (eth, payload) ->
-              match eth.Ethernet_packet.ethertype with
+              match eth.Ethernet.Packet.ethertype with
               | `ARP -> input_arp ~fixed_arp ~iface payload
               | `IPv4 -> input_ipv4 get_ts fragment_cache ~iface ~router dns_client payload
               | `IPv6 -> Lwt.return_unit (* TODO: oh no! *)

@@ -53,7 +53,7 @@ end
       | _ ->
         Firewall.ipv4_from_netvm router (`IPv4 (ip_header, ip_packet))
     in
-    Netif.listen t.net ~header_size:Ethernet_wire.sizeof_ethernet (fun frame ->
+    Netif.listen t.net ~header_size:Ethernet.Packet.sizeof_ethernet (fun frame ->
         (* Handle one Ethernet frame from NetVM *)
         Eth.input t.eth
         ~arpv4:(Arp.input t.arp)
