@@ -9,11 +9,11 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let wordsize_in_bytes = Sys.word_size / 8
 
 let fraction_free stats =
-  let { OS.Memory.free_words; heap_words; _ } = stats in
+  let { Xen_os.Memory.free_words; heap_words; _ } = stats in
   float free_words /. float heap_words
 
 let meminfo stats =
-  let { OS.Memory.free_words; heap_words; _ } = stats in
+  let { Xen_os.Memory.free_words; heap_words; _ } = stats in
   let mem_total = heap_words * wordsize_in_bytes in
   let mem_free = free_words * wordsize_in_bytes in
   Log.info (fun f -> f "Writing meminfo: free %a / %a (%.2f %%)"
@@ -29,7 +29,7 @@ let meminfo stats =
 
 let report_mem_usage stats =
   Lwt.async (fun () ->
-    let open OS in
+    let open Xen_os in
     Xs.make () >>= fun xs ->
     Xs.immediate xs (fun h ->
       Xs.write h "memory/meminfo" (meminfo stats)
@@ -38,15 +38,15 @@ let report_mem_usage stats =
 
 let init () =
   Gc.full_major ();
-  let stats = OS.Memory.quick_stat () in
+  let stats = Xen_os.Memory.quick_stat () in
   report_mem_usage stats
 
 let status () =
-  let stats = OS.Memory.quick_stat () in
+  let stats = Xen_os.Memory.quick_stat () in
   if fraction_free stats > 0.1 then `Ok
   else (
     Gc.full_major ();
-    let stats = OS.Memory.quick_stat () in
+    let stats = Xen_os.Memory.quick_stat () in
     report_mem_usage stats;
     if fraction_free stats < 0.1 then `Memory_critical
     else `Ok

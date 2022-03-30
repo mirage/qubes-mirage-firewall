@@ -9,8 +9,8 @@ module Eth = Ethernet.Make(Netif)
 let src = Logs.Src.create "uplink" ~doc:"Network connection to NetVM"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make (R:Mirage_random.S) (Clock : Mirage_clock.MCLOCK) = struct
-  module Arp = Arp.Make(Eth)(OS.Time)
+module Make (R:Mirage_random.S) (Clock : Mirage_clock.MCLOCK) (Time : Mirage_time.S) = struct
+  module Arp = Arp.Make(Eth)(Time)
   module I = Static_ipv4.Make(R)(Clock)(Eth)(Arp)
   module U = Udp.Make(I)(R)
 

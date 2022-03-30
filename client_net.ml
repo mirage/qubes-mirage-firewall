@@ -4,7 +4,7 @@
 open Lwt.Infix
 open Fw_utils
 
-module Netback = Netchannel.Backend.Make(Netchannel.Xenstore.Make(OS.Xs))
+module Netback = Netchannel.Backend.Make(Netchannel.Xenstore.Make(Xen_os.Xs))
 module ClientEth = Ethernet.Make(Netback)
 
 let src = Logs.Src.create "client_net" ~doc:"Client networking"

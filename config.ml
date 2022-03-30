@@ -6,17 +6,16 @@
 open Mirage
 
 let table_size =
-  let open Functoria_key in
-  let info = Arg.info
+  let info = Key.Arg.info
       ~doc:"The number of NAT entries to allocate."
       ~docv:"ENTRIES" ["nat-table-size"]
   in
-  let key = Arg.opt ~stage:`Both Arg.int 5_000 info in
-  create "nat_table_size" key
+  let key = Key.Arg.opt ~stage:`Both Key.Arg.int 5_000 info in
+  Key.create "nat_table_size" key
 
 let main =
   foreign
-    ~keys:[Functoria_key.abstract table_size]
+    ~keys:[Key.v table_size]
     ~packages:[
       package "vchan" ~min:"4.0.2";
       package "cstruct";
@@ -35,8 +34,8 @@ let main =
       package ~min:"6.1.0" "dns-client";
       package "pf-qubes";
     ]
-    "Unikernel.Main" (random @-> mclock @-> job)
+    "Unikernel.Main" (random @-> mclock @-> time @-> job)
 
 let () =
-  register "qubes-firewall" [main $ default_random $ default_monotonic_clock]
+  register "qubes-firewall" [main $ default_random $ default_monotonic_clock $ default_time]
     ~argv:no_argv
