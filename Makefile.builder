@@ -1,4 +1,4 @@
-MIRAGE_KERNEL_NAME = qubes_firewall.xen
+MIRAGE_KERNEL_NAME = dist/qubes-firewall.xen
 OCAML_VERSION ?= 4.14.0
 SOURCE_BUILD_DEP := firewall-build-dep
 
