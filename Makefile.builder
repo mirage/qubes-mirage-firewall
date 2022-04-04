@@ -3,5 +3,5 @@ OCAML_VERSION ?= 4.14.0
 SOURCE_BUILD_DEP := firewall-build-dep
 
 firewall-build-dep:
-	opam -i -y mirage
+	opam install -y mirage
 
