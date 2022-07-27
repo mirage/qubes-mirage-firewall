@@ -43,11 +43,12 @@ let init () =
 
 let status () =
   let stats = Xen_os.Memory.quick_stat () in
-  if fraction_free stats > 0.1 then `Ok
+  if fraction_free stats > 0.4 then `Ok
   else (
     Gc.full_major ();
+    Xen_os.Memory.trim ();
     let stats = Xen_os.Memory.quick_stat () in
     report_mem_usage stats;
-    if fraction_free stats < 0.1 then `Memory_critical
+    if fraction_free stats < 0.4 then `Memory_critical
     else `Ok
   )
