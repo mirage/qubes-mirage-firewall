@@ -16,5 +16,4 @@ RUN opam install -y mirage opam-monorepo
 RUN mkdir /home/opam/qubes-mirage-firewall
 ADD config.ml /home/opam/qubes-mirage-firewall/config.ml
 WORKDIR /home/opam/qubes-mirage-firewall
-RUN opam exec -- mirage configure -t xen && make depend
-CMD opam exec -- mirage configure -t xen && make tar
+CMD opam exec -- mirage configure -t xen && make depend && make tar
