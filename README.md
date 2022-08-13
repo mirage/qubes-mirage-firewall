@@ -14,11 +14,10 @@ See the [Deploy](#deploy) section below for installation instructions.
 ## Build from source
 
 Note: The most reliable way to build is using Docker.
-Fedora 30 works well for this, but installing Docker on Fedora 31 or 32 is more difficult.
-Debian 10 also works, but you'll need to follow the instructions at [docker.com][debian-docker] to get Docker
+Fedora 35 works well for this and Debian 11 also works, but you'll need to follow the instructions at [docker.com][debian-docker] to get Docker
 (don't use Debian's version).
 
-Create a new Fedora-30 AppVM (or reuse an existing one). In the Qube's Settings (Basic / Disk storage), increase the private storage max size from the default 2048 MiB to 4096 MiB. Open a terminal.
+Create a new Fedora-35 AppVM (or reuse an existing one). In the Qube's Settings (Basic / Disk storage), increase the private storage max size from the default 2048 MiB to 4096 MiB. Open a terminal.
 
 Clone this Git repository and run the `build-with-docker.sh` script:
 
@@ -51,7 +50,7 @@ However, it should still work fine.
 ## Deploy
 
 If you want to deploy manually, unpack `mirage-firewall.tar.bz2` in domU. The tarball contains `vmlinuz`,
-which is the unikernel itself, plus a couple of dummy files that Qubes requires:
+which is the unikernel itself, plus a dummy initramfs file that Qubes requires:
 
     [user@dev ~]$ tar xjf mirage-firewall.tar.bz2
 
@@ -85,19 +84,9 @@ qvm-features mirage-firewall qubes-firewall 1
 qvm-features mirage-firewall no-default-kernelopts 1
 ```
 
-**Note**: for `virt_mode`, use `pv` instead of `pvh` for firewall versions before 0.8.
-
 ## Upgrading
 
 To upgrade from an earlier release, just overwrite `/var/lib/qubes/vm-kernels/mirage-firewall/vmlinuz` with the new version and restart the firewall VM.
-
-If upgrading from a version before 0.8, you will also need to update a few options:
-
-```
-qvm-prefs mirage-firewall kernelopts ''
-qvm-prefs mirage-firewall virt_mode pvh
-qvm-features mirage-firewall no-default-kernelopts 1
-```
 
 ### Configure AppVMs to use it
 
@@ -150,43 +139,44 @@ This takes a little more setting up the first time, but will be much quicker aft
 
     $ test-mirage qubes_firewall.xen mirage-firewall
     Waiting for 'Ready'... OK
-    Uploading 'qubes_firewall.xen' (5901080 bytes) to "mirage-firewall"
+    Uploading 'dist/qubes-firewall.xen' (7454880 bytes) to "mirage-test"
     Waiting for 'Booting'... OK
-    --> Loading the VM (type = ProxyVM)...
-    --> Starting Qubes DB...
-    --> Setting Qubes DB info for the VM...
-    --> Updating firewall rules...
-    --> Starting the VM...
-    --> Starting the qrexec daemon...
-    Waiting for VM's qrexec agent.connected
-    --> Starting Qubes GUId...
-    Connecting to VM's GUI agent: .connected
-    --> Sending monitor layout...
-    --> Waiting for qubes-session...
-    Connecting to mirage-firewall console...
-    MirageOS booting...
-    Initialising timer interface
-    Initialising console ... done.
-    gnttab_stubs.c: initialised mini-os gntmap
-    2017-03-18 11:32:37 -00:00: INF [qubes.rexec] waiting for client...
-    2017-03-18 11:32:37 -00:00: INF [qubes.gui] waiting for client...
-    2017-03-18 11:32:37 -00:00: INF [qubes.db] connecting to server...
-    2017-03-18 11:32:37 -00:00: INF [qubes.db] connected
-    2017-03-18 11:32:37 -00:00: INF [qubes.rexec] client connected, using protocol version 2
-    2017-03-18 11:32:37 -00:00: INF [qubes.db] got update: "/qubes-keyboard" = "xkb_keymap {\n\txkb_keycodes  { include \"evdev+aliases(qwerty)\"\t};\n\txkb_types     { include \"complete\"\t};\n\txkb_compat    { include \"complete\"\t};\n\txkb_symbols   { include \"pc+gb+inet(evdev)\"\t};\n\txkb_geometry  { include \"pc(pc105)\"\t};\n};"
-    2017-03-18 11:32:37 -00:00: INF [qubes.gui] client connected (screen size: 6720x2160)
-    2017-03-18 11:32:37 -00:00: INF [unikernel] Qubes agents connected in 0.095 s (CPU time used since boot: 0.008 s)
-    2017-03-18 11:32:37 -00:00: INF [net-xen:frontend] connect 0
-    2017-03-18 11:32:37 -00:00: INF [memory_pressure] Writing meminfo: free 6584 / 17504 kB (37.61 %)
-    Note: cannot write Xen 'control' directory
-    2017-03-18 11:32:37 -00:00: INF [net-xen:frontend] create: id=0 domid=1
-    2017-03-18 11:32:37 -00:00: INF [net-xen:frontend]  sg:true gso_tcpv4:true rx_copy:true rx_flip:false smart_poll:false
-    2017-03-18 11:32:37 -00:00: INF [net-xen:frontend] MAC: 00:16:3e:5e:6c:11
-    2017-03-18 11:32:37 -00:00: WRN [command] << Unknown command "QUBESRPC qubes.SetMonitorLayout dom0"
-    2017-03-18 11:32:38 -00:00: INF [ethif] Connected Ethernet interface 00:16:3e:5e:6c:11
-    2017-03-18 11:32:38 -00:00: INF [arpv4] Connected arpv4 device on 00:16:3e:5e:6c:11
-    2017-03-18 11:32:38 -00:00: INF [dao] Watching backend/vif
-    2017-03-18 11:32:38 -00:00: INF [qubes.db] got update: "/qubes-netvm-domid" = "1"
+    Connecting to mirage-test console...
+    Solo5: Xen console: port 0x2, ring @0x00000000FEFFF000
+                |      ___|
+      __|  _ \  |  _ \ __ \
+    \__ \ (   | | (   |  ) |
+    ____/\___/ _|\___/____/
+    Solo5: Bindings version v0.7.3
+    Solo5: Memory map: 64 MB addressable:
+    Solo5:   reserved @ (0x0 - 0xfffff)
+    Solo5:       text @ (0x100000 - 0x31bfff)
+    Solo5:     rodata @ (0x31c000 - 0x386fff)
+    Solo5:       data @ (0x387000 - 0x544fff)
+    Solo5:       heap >= 0x545000 < stack < 0x4000000
+    2022-08-13 14:55:38 -00:00: INF [qubes.rexec] waiting for client...
+    2022-08-13 14:55:38 -00:00: INF [qubes.gui] waiting for client...
+    2022-08-13 14:55:38 -00:00: INF [qubes.db] connecting to server...
+    2022-08-13 14:55:38 -00:00: INF [qubes.db] connected
+    2022-08-13 14:55:38 -00:00: INF [qubes.db] got update: "/mapped-ip/10.137.0.20/visible-ip" = "10.137.0.20"
+    2022-08-13 14:55:38 -00:00: INF [qubes.db] got update: "/mapped-ip/10.137.0.20/visible-gateway" = "10.137.0.23"
+    2022-08-13 14:55:38 -00:00: INF [qubes.rexec] client connected, other end wants to use protocol version 3, continuing with version 2
+    2022-08-13 14:55:38 -00:00: INF [unikernel] QubesDB and qrexec agents connected in 0.041 s
+    2022-08-13 14:55:38 -00:00: INF [dao] Got network configuration from QubesDB:
+                NetVM IP on uplink network: 10.137.0.4
+                Our IP on uplink network:   10.137.0.23
+                Our IP on client networks:  10.137.0.23
+                DNS resolver:               10.139.1.1
+    2022-08-13 14:55:38 -00:00: INF [net-xen frontend] connect 0
+    2022-08-13 14:55:38 -00:00: INF [net-xen frontend] create: id=0 domid=1
+    2022-08-13 14:55:38 -00:00: INF [net-xen frontend]  sg:true gso_tcpv4:true rx_copy:true rx_flip:false smart_poll:false
+    2022-08-13 14:55:38 -00:00: INF [net-xen frontend] MAC: 00:16:3e:5e:6c:00
+    2022-08-13 14:55:38 -00:00: INF [ethernet] Connected Ethernet interface 00:16:3e:5e:6c:00
+    2022-08-13 14:55:38 -00:00: INF [ARP] Sending gratuitous ARP for 10.137.0.23 (00:16:3e:5e:6c:00)
+    2022-08-13 14:55:38 -00:00: INF [ARP] Sending gratuitous ARP for 10.137.0.23 (00:16:3e:5e:6c:00)
+    2022-08-13 14:55:38 -00:00: INF [udp] UDP layer connected on 10.137.0.23
+    2022-08-13 14:55:38 -00:00: INF [dao] Watching backend/vif
+    2022-08-13 14:55:38 -00:00: INF [memory_pressure] Writing meminfo: free 52MiB / 59MiB (87.55 %)
 
 # Testing if the firewall works
 
