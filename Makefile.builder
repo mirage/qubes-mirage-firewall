@@ -1,8 +1,7 @@
-MIRAGE_KERNEL_NAME = qubes_firewall.xen
-OCAML_VERSION ?= 4.10.0
+MIRAGE_KERNEL_NAME = dist/qubes-firewall.xen
+OCAML_VERSION ?= 4.14.0
 SOURCE_BUILD_DEP := firewall-build-dep
 
 firewall-build-dep:
-	opam install -y depext
-	opam depext -i -y mirage
+	opam install -y mirage
 

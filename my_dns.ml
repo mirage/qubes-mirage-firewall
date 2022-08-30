@@ -1,6 +1,6 @@
 open Lwt.Infix
 
-module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) = struct
+module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) (Time : Mirage_time.S) = struct
   type +'a io = 'a Lwt.t
   type io_addr = Ipaddr.V4.t * int
   type stack = Router.t * (src_port:int -> dst:Ipaddr.V4.t -> dst_port:int -> Cstruct.t -> (unit, [ `Msg of string ]) result Lwt.t) * (Udp_packet.t * Cstruct.t) Lwt_mvar.t
@@ -25,7 +25,7 @@ module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) = struct
     { protocol ; nameserver ; stack ; timeout_ns = timeout }
 
   let with_timeout timeout_ns f =
-    let timeout = OS.Time.sleep_ns timeout_ns >|= fun () -> Error (`Msg "DNS request timeout") in
+    let timeout = Time.sleep_ns timeout_ns >|= fun () -> Error (`Msg "DNS request timeout") in
     Lwt.pick [ f ; timeout ]
 
   let connect (t : t) = Lwt.return (Ok t)

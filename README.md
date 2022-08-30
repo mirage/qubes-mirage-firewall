@@ -134,7 +134,7 @@ The boot process:
 
 ### Easy deployment for developers
 
-For development, use the [test-mirage][] scripts to deploy the unikernel (`qubes_firewall.xen`) from your development AppVM.
+For development, use the [test-mirage][] scripts to deploy the unikernel (`qubes-firewall.xen`) from your development AppVM.
 This takes a little more setting up the first time, but will be much quicker after that. e.g.
 
     $ test-mirage qubes_firewall.xen mirage-firewall
