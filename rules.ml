@@ -96,10 +96,6 @@ let translate_accepted_packets dns_client packet =
 (** Packets from the private interface that don't match any NAT table entry are being checked against the fw rules here *)
 let from_client dns_client (packet : ([`Client of Fw_utils.client_link], _) Packet.t) : Packet.action Lwt.t =
   match packet with
-  | { dst = `Firewall; transport_header = `UDP header; _ } ->
-    if header.Udp_packet.dst_port = dns_port
-    then Lwt.return @@ `NAT_to (`NetVM, dns_port)
-    else Lwt.return @@ `Drop "packet addressed to client gateway"
   | { dst = `External _ ; _ } | { dst = `NetVM; _ } -> translate_accepted_packets dns_client packet
   | { dst = `Firewall ; _ } -> Lwt.return @@ `Drop "packet addressed to firewall itself"
   | { dst = `Client _ ; _ } -> classify_client_packet dns_client packet
