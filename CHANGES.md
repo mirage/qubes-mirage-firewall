@@ -1,3 +1,17 @@
+### 0.8.0
+
+The major change is to use PVH instead of PV. The effort was in solo5 (https://github.com/solo5/solo5) which since 0.6.6 supports Xen and PVH (developed by @mato, with some fixes (multiboot, mem size computed uniformly, not skipping first token of command line arguments) by @marmarek, @xaki23, @palainp, and @hannesm).
+
+Another user-visible change is that the DNS resolver is read from QubesDB /qubes-primary-dns instead of using a hardcoded IP address (@palainp and @hannesm).
+
+Also, the qrexec version negotiation has been implemented (in mirage-qubes by @reynir).
+
+Thanks to @palainp and @winux138 keeping track of memory allocation has been improved, and also memory can be freed now.
+
+This release uses the latest mirage release (4.2.1). It can be built with a Fedora 35 container. It uses OCaml 4.14.0.
+
+Thanks to @talex5 for lots of code cleanups, reviews, and merges. Also thanks to @xaki23 for early and detailed feedback. Testing was done by @Tommytran732 and @Szewcson. Thanks to @burghardt for documentation improvements.
+
 ### 0.7.1
 
 Bugfixes:
