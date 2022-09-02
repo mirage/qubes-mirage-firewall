@@ -22,29 +22,11 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
       Uplink.listen uplink Clock.elapsed_ns dns_responses router
     ]
 
-  (* We don't use the GUI, but it's interesting to keep an eye on it.
-     If the other end dies, don't let it take us with it (can happen on logout). *)
-  let watch_gui gui =
-    Lwt.async (fun () ->
-      Lwt.try_bind
-        (fun () ->
-           gui >>= fun gui ->
-           Log.info (fun f -> f "GUI agent connected");
-           GUI.listen gui ()
-        )
-        (fun `Cant_happen -> assert false)
-        (fun ex ->
-          Log.warn (fun f -> f "GUI thread failed: %s" (Printexc.to_string ex));
-          Lwt.return_unit
-        )
-    )
-
   (* Main unikernel entry point (called from auto-generated main.ml). *)
   let start _random _clock _time =
     let start_time = Clock.elapsed_ns () in
-    (* Start qrexec agent, GUI agent and QubesDB agent in parallel *)
+    (* Start qrexec agent and QubesDB agent in parallel *)
     let qrexec = RExec.connect ~domid:0 () in
-    GUI.connect ~domid:0 () |> watch_gui;
     let qubesDB = DB.connect ~domid:0 () in
 
     (* Wait for clients to connect *)
