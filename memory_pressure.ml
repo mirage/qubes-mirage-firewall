@@ -36,14 +36,30 @@ let report_mem_usage stats =
     )
   )
 
+let print_mem_usage =
+  let rec aux () =
+    let stats = Xen_os.Memory.quick_stat () in
+    let { Xen_os.Memory.free_words; heap_words; _ } = stats in
+    let mem_total = heap_words * wordsize_in_bytes in
+    let mem_free = free_words * wordsize_in_bytes in
+    Log.info (fun f -> f "Memory usage: free %a / %a (%.2f %%)"
+      Fmt.bi_byte_size mem_free
+      Fmt.bi_byte_size mem_total
+      (fraction_free stats *. 100.0));
+    Xen_os.Time.sleep_ns (Duration.of_f 600.0) >>= fun () ->
+    aux ()
+  in
+  aux ()
+
 let init () =
   Gc.full_major ();
   let stats = Xen_os.Memory.quick_stat () in
+  print_mem_usage ;
   report_mem_usage stats
 
 let status () =
   let stats = Xen_os.Memory.quick_stat () in
-  if fraction_free stats > 0.6 then `Ok
+  if fraction_free stats > 0.5 then `Ok
   else (
     Gc.full_major ();
     Xen_os.Memory.trim ();
