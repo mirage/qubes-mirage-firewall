@@ -1,2 +1,0 @@
-not <main.*>: warn(A-4), strict_sequence
-<qubes_protocol.*>: package(cstruct.syntax)
