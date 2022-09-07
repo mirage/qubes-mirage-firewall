@@ -59,7 +59,7 @@ let input_arp ~fixed_arp ~iface request =
       iface#writev `ARP (fun b -> Arp_packet.encode_into response b; Arp_packet.size)
 
 (** Handle an IPv4 packet from the client. *)
-let input_ipv4 get_ts cache ~iface ~router dns_client packet =
+let input_ipv4 get_ts cache ~iface ~router dns_client dns_servers packet =
   let cache', r = Nat_packet.of_ipv4_packet !cache ~now:(get_ts ()) packet in
   cache := cache';
   match r with
@@ -70,7 +70,7 @@ let input_ipv4 get_ts cache ~iface ~router dns_client packet =
   | Ok (Some packet) ->
     let `IPv4 (ip, _) = packet in
     let src = ip.Ipv4_packet.src in
-    if src = iface#other_ip then Firewall.ipv4_from_client dns_client router ~src:iface packet
+    if src = iface#other_ip then Firewall.ipv4_from_client dns_client dns_servers router ~src:iface packet
     else (
       Log.warn (fun f -> f "Incorrect source IP %a in IP packet from %a (dropping)"
                    Ipaddr.V4.pp src Ipaddr.V4.pp iface#other_ip);
@@ -78,7 +78,7 @@ let input_ipv4 get_ts cache ~iface ~router dns_client packet =
     )
 
 (** Connect to a new client's interface and listen for incoming frames and firewall rule changes. *)
-let add_vif get_ts { Dao.ClientVif.domid; device_id } dns_client ~client_ip ~router ~cleanup_tasks qubesDB =
+let add_vif get_ts { Dao.ClientVif.domid; device_id } dns_client dns_servers ~client_ip ~router ~cleanup_tasks qubesDB =
   Netback.make ~domid ~device_id >>= fun backend ->
   Log.info (fun f -> f "Client %d (IP: %s) ready" domid (Ipaddr.V4.to_string client_ip));
   ClientEth.connect backend >>= fun eth ->
@@ -122,7 +122,7 @@ let add_vif get_ts { Dao.ClientVif.domid; device_id } dns_client ~client_ip ~rou
           | Ok (eth, payload) ->
               match eth.Ethernet.Packet.ethertype with
               | `ARP -> input_arp ~fixed_arp ~iface payload
-              | `IPv4 -> input_ipv4 get_ts fragment_cache ~iface ~router dns_client payload
+              | `IPv4 -> input_ipv4 get_ts fragment_cache ~iface ~router dns_client dns_servers payload
               | `IPv6 -> Lwt.return_unit (* TODO: oh no! *)
         )
         >|= or_raise "Listen on client interface" Netback.pp_error)
@@ -132,13 +132,13 @@ let add_vif get_ts { Dao.ClientVif.domid; device_id } dns_client ~client_ip ~rou
   Lwt.pick [ qubesdb_updater ; listener ]
 
 (** A new client VM has been found in XenStore. Find its interface and connect to it. *)
-let add_client get_ts dns_client ~router vif client_ip qubesDB =
+let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB =
   let cleanup_tasks = Cleanup.create () in
   Log.info (fun f -> f "add client vif %a with IP %a"
                Dao.ClientVif.pp vif Ipaddr.V4.pp client_ip);
   Lwt.async (fun () ->
       Lwt.catch (fun () ->
-          add_vif get_ts vif dns_client ~client_ip ~router ~cleanup_tasks qubesDB
+          add_vif get_ts vif dns_client dns_servers ~client_ip ~router ~cleanup_tasks qubesDB
         )
         (fun ex ->
            Log.warn (fun f -> f "Error with client %a: %s"
@@ -149,7 +149,7 @@ let add_client get_ts dns_client ~router vif client_ip qubesDB =
   cleanup_tasks
 
 (** Watch XenStore for notifications of new clients. *)
-let listen get_ts dns_client qubesDB router =
+let listen get_ts dns_client dns_servers qubesDB router =
   Dao.watch_clients (fun new_set ->
     (* Check for removed clients *)
     !clients |> Dao.VifMap.iter (fun key cleanup ->
@@ -162,7 +162,7 @@ let listen get_ts dns_client qubesDB router =
     (* Check for added clients *)
     new_set |> Dao.VifMap.iter (fun key ip_addr ->
       if not (Dao.VifMap.mem key !clients) then (
-        let cleanup = add_client get_ts dns_client ~router key ip_addr qubesDB in
+        let cleanup = add_client get_ts dns_client dns_servers ~router key ip_addr qubesDB in
         Log.debug (fun f -> f "client %a arrived" Dao.ClientVif.pp key);
         clients := !clients |> Dao.VifMap.add key cleanup
       )
