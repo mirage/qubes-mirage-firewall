@@ -13,38 +13,20 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
   module Dns_client = Dns_client.Make(Dns_transport)
 
   (* Set up networking and listen for incoming packets. *)
-  let network dns_client dns_responses uplink qubesDB router =
+  let network dns_client dns_responses dns_servers uplink qubesDB router =
     (* Report success *)
     Dao.set_iptables_error qubesDB "" >>= fun () ->
     (* Handle packets from both networks *)
     Lwt.choose [
-      Client_net.listen Clock.elapsed_ns dns_client qubesDB router;
+      Client_net.listen Clock.elapsed_ns dns_client dns_servers qubesDB router;
       Uplink.listen uplink Clock.elapsed_ns dns_responses router
     ]
-
-  (* We don't use the GUI, but it's interesting to keep an eye on it.
-     If the other end dies, don't let it take us with it (can happen on logout). *)
-  let watch_gui gui =
-    Lwt.async (fun () ->
-      Lwt.try_bind
-        (fun () ->
-           gui >>= fun gui ->
-           Log.info (fun f -> f "GUI agent connected");
-           GUI.listen gui ()
-        )
-        (fun `Cant_happen -> assert false)
-        (fun ex ->
-          Log.warn (fun f -> f "GUI thread failed: %s" (Printexc.to_string ex));
-          Lwt.return_unit
-        )
-    )
 
   (* Main unikernel entry point (called from auto-generated main.ml). *)
   let start _random _clock _time =
     let start_time = Clock.elapsed_ns () in
-    (* Start qrexec agent, GUI agent and QubesDB agent in parallel *)
+    (* Start qrexec agent and QubesDB agent in parallel *)
     let qrexec = RExec.connect ~domid:0 () in
-    GUI.connect ~domid:0 () |> watch_gui;
     let qubesDB = DB.connect ~domid:0 () in
 
     (* Wait for clients to connect *)
@@ -81,10 +63,11 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
 
     let send_dns_query = Uplink.send_dns_client_query uplink in
     let dns_mvar = Lwt_mvar.create_empty () in
-    let nameservers = `Udp, [ config.Dao.dns, 53 ] in
+    let nameservers = `Udp, [ config.Dao.dns, 53 ; config.Dao.dns2, 53 ] in
     let dns_client = Dns_client.create ~nameservers (router, send_dns_query, dns_mvar) in
 
-    let net_listener = network (Dns_client.getaddrinfo dns_client Dns.Rr_map.A) dns_mvar uplink qubesDB router in
+    let dns_servers = [ config.Dao.dns ; config.Dao.dns2 ] in
+    let net_listener = network (Dns_client.getaddrinfo dns_client Dns.Rr_map.A) dns_mvar dns_servers uplink qubesDB router in
 
     (* Report memory usage to XenStore *)
     Memory_pressure.init ();
