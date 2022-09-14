@@ -1,3 +1,11 @@
+### 0.8.1 (2022-09-14)
+
+- support qrexec protocol version 3 (@reynir @palainp in mirage-qubes 0.9.3)
+- remove special DNS rule (which used to be required for Qubes 3, issue #63, fix #142, @hannesm)
+- use DNS servers from QubesDB instead of hardcoded ones for evaluation of the DNS rule (#142 @hannesm)
+- remove the GUI code (not needed in Qubes 4.1 anymore, issue #62, fix #144, @palainp)
+- trigger GC slightly earlier (at < 50% free space, issue #143, fix #147, @palainp)
+
 ### 0.8.0
 
 The major change is to use PVH instead of PV. The effort was in solo5 (https://github.com/solo5/solo5) which since 0.6.6 supports Xen and PVH (developed by @mato, with some fixes (multiboot, mem size computed uniformly, not skipping first token of command line arguments) by @marmarek, @xaki23, @palainp, and @hannesm).
