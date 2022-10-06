@@ -83,16 +83,8 @@ let apply_rules t (rules : ('a, 'b) Packet.t -> Packet.action Lwt.t) ~dst (annot
       Log.debug (fun f -> f "Dropped packet (%s) %a" reason Nat_packet.pp packet);
       Lwt.return_unit
 
-let handle_low_memory t =
-  match Memory_pressure.status () with
-  | `Memory_critical -> (* TODO: should happen before copying and async *)
-      Log.warn (fun f -> f "Memory low - dropping packet and resetting NAT table");
-      My_nat.reset t.Router.nat t.Router.ports >|= fun () ->
-      `Memory_critical
-  | `Ok -> Lwt.return `Ok
-
 let ipv4_from_client resolver dns_servers t ~src packet =
-  handle_low_memory t >>= function
+  match Memory_pressure.status () with
   | `Memory_critical -> Lwt.return_unit
   | `Ok ->
   (* Check for existing NAT entry for this packet *)
@@ -107,7 +99,7 @@ let ipv4_from_client resolver dns_servers t ~src packet =
   | Some firewall_packet -> apply_rules t (Rules.from_client resolver dns_servers) ~dst firewall_packet
 
 let ipv4_from_netvm t packet =
-  handle_low_memory t >>= function
+  match Memory_pressure.status () with
   | `Memory_critical -> Lwt.return_unit
   | `Ok ->
   let `IPv4 (ip, _transport) = packet in

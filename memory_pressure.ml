@@ -54,7 +54,6 @@ let print_mem_usage =
 let init () =
   Gc.full_major ();
   let stats = Xen_os.Memory.quick_stat () in
-  print_mem_usage ;
   report_mem_usage stats
 
 let status () =

@@ -10,7 +10,7 @@ let table_size =
       ~doc:"The number of NAT entries to allocate."
       ~docv:"ENTRIES" ["nat-table-size"]
   in
-  let key = Key.Arg.opt ~stage:`Both Key.Arg.int 5_000 info in
+  let key = Key.Arg.opt ~stage:`Both Key.Arg.int 500 info in
   Key.create "nat_table_size" key
 
 let main =

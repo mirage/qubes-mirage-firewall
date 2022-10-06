@@ -25,15 +25,12 @@ module Make (R:Mirage_random.S) (Clock : Mirage_clock.MCLOCK) (Time : Mirage_tim
   }
 
 class netvm_iface eth mac ~my_ip ~other_ip : interface = object
-  val queue = FrameQ.create (Ipaddr.V4.to_string other_ip)
   method my_mac = Eth.mac eth
   method my_ip = my_ip
   method other_ip = other_ip
   method writev ethertype fillfn =
-    FrameQ.send queue (fun () ->
-      mac >>= fun dst ->
-      Eth.write eth dst ethertype fillfn >|= or_raise "Write to uplink" Eth.pp_error
-    )
+    mac >>= fun dst ->
+    Eth.write eth dst ethertype fillfn >|= or_raise "Write to uplink" Eth.pp_error
 end
 
   let send_dns_client_query t ~src_port ~dst ~dst_port buf =

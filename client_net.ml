@@ -29,7 +29,6 @@ let writev eth dst proto fillfn =
 class client_iface eth ~domid ~gateway_ip ~client_ip client_mac : client_link =
   let log_header = Fmt.str "dom%d:%a" domid Ipaddr.V4.pp client_ip in
   object
-    val queue = FrameQ.create (Ipaddr.V4.to_string client_ip)
     val mutable rules = []
     method get_rules = rules
     method set_rules new_db = rules <- Dao.read_rules new_db client_ip
@@ -38,9 +37,7 @@ class client_iface eth ~domid ~gateway_ip ~client_ip client_mac : client_link =
     method my_ip = gateway_ip
     method other_ip = client_ip
     method writev proto fillfn =
-      FrameQ.send queue (fun () ->
-          writev eth client_mac proto fillfn
-        )
+        writev eth client_mac proto fillfn
     method log_header = log_header
   end
 
