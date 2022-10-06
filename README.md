@@ -70,8 +70,8 @@ Run this command in dom0 to create a `mirage-firewall` VM using the `mirage-fire
 qvm-create \
   --property kernel=mirage-firewall \
   --property kernelopts='' \
-  --property memory=64 \
-  --property maxmem=64 \
+  --property memory=32 \
+  --property maxmem=32 \
   --property netvm=sys-net \
   --property provides_network=True \
   --property vcpus=1 \
@@ -137,7 +137,7 @@ The boot process:
 For development, use the [test-mirage][] scripts to deploy the unikernel (`qubes-firewall.xen`) from your development AppVM.
 This takes a little more setting up the first time, but will be much quicker after that. e.g.
 
-    $ test-mirage qubes_firewall.xen mirage-firewall
+    $ test-mirage dist/qubes-firewall.xen mirage-firewall
     Waiting for 'Ready'... OK
     Uploading 'dist/qubes-firewall.xen' (7454880 bytes) to "mirage-test"
     Waiting for 'Booting'... OK
@@ -148,25 +148,25 @@ This takes a little more setting up the first time, but will be much quicker aft
     \__ \ (   | | (   |  ) |
     ____/\___/ _|\___/____/
     Solo5: Bindings version v0.7.3
-    Solo5: Memory map: 64 MB addressable:
+    Solo5: Memory map: 32 MB addressable:
     Solo5:   reserved @ (0x0 - 0xfffff)
-    Solo5:       text @ (0x100000 - 0x31bfff)
-    Solo5:     rodata @ (0x31c000 - 0x386fff)
-    Solo5:       data @ (0x387000 - 0x544fff)
-    Solo5:       heap >= 0x545000 < stack < 0x4000000
+    Solo5:       text @ (0x100000 - 0x319fff)
+    Solo5:     rodata @ (0x31a000 - 0x384fff)
+    Solo5:       data @ (0x385000 - 0x53ffff)
+    Solo5:       heap >= 0x540000 < stack < 0x2000000
     2022-08-13 14:55:38 -00:00: INF [qubes.rexec] waiting for client...
-    2022-08-13 14:55:38 -00:00: INF [qubes.gui] waiting for client...
     2022-08-13 14:55:38 -00:00: INF [qubes.db] connecting to server...
     2022-08-13 14:55:38 -00:00: INF [qubes.db] connected
     2022-08-13 14:55:38 -00:00: INF [qubes.db] got update: "/mapped-ip/10.137.0.20/visible-ip" = "10.137.0.20"
     2022-08-13 14:55:38 -00:00: INF [qubes.db] got update: "/mapped-ip/10.137.0.20/visible-gateway" = "10.137.0.23"
-    2022-08-13 14:55:38 -00:00: INF [qubes.rexec] client connected, other end wants to use protocol version 3, continuing with version 2
+    2022-08-13 14:55:38 -00:00: INF [qubes.rexec] client connected, using protocol version 3
     2022-08-13 14:55:38 -00:00: INF [unikernel] QubesDB and qrexec agents connected in 0.041 s
     2022-08-13 14:55:38 -00:00: INF [dao] Got network configuration from QubesDB:
                 NetVM IP on uplink network: 10.137.0.4
                 Our IP on uplink network:   10.137.0.23
                 Our IP on client networks:  10.137.0.23
                 DNS resolver:               10.139.1.1
+                DNS secondary resolver:     10.139.1.2
     2022-08-13 14:55:38 -00:00: INF [net-xen frontend] connect 0
     2022-08-13 14:55:38 -00:00: INF [net-xen frontend] create: id=0 domid=1
     2022-08-13 14:55:38 -00:00: INF [net-xen frontend]  sg:true gso_tcpv4:true rx_copy:true rx_flip:false smart_poll:false
@@ -176,7 +176,7 @@ This takes a little more setting up the first time, but will be much quicker aft
     2022-08-13 14:55:38 -00:00: INF [ARP] Sending gratuitous ARP for 10.137.0.23 (00:16:3e:5e:6c:00)
     2022-08-13 14:55:38 -00:00: INF [udp] UDP layer connected on 10.137.0.23
     2022-08-13 14:55:38 -00:00: INF [dao] Watching backend/vif
-    2022-08-13 14:55:38 -00:00: INF [memory_pressure] Writing meminfo: free 52MiB / 59MiB (87.55 %)
+    2022-08-13 14:55:38 -00:00: INF [memory_pressure] Writing meminfo: free 20MiB / 27MiB (72.68 %)
 
 # Testing if the firewall works
 
