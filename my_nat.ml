@@ -34,11 +34,11 @@ type t = {
 let create ~max_entries =
   let tcp_size = 7 * max_entries / 8 in
   let udp_size = max_entries - tcp_size in
-  Nat.empty ~tcp_size ~udp_size ~icmp_size:100 >|= fun table ->
+  let table = Nat.empty ~tcp_size ~udp_size ~icmp_size:100 in
   { table }
 
 let translate t packet =
-  Nat.translate t.table packet >|= function
+  match Nat.translate t.table packet with
   | Error (`Untranslated | `TTL_exceeded as e) ->
     Log.debug (fun f -> f "Failed to NAT %a: %a"
                   Nat_packet.pp packet
@@ -64,15 +64,6 @@ let remove_connections t ports ip =
   ports.nat_icmp := Ports.diff !(ports.nat_icmp) (Ports.of_list freed_ports.Mirage_nat.icmp)
 
 let add_nat_rule_and_translate t ports ~xl_host action packet =
-  let apply_action xl_port =
-    Lwt.catch (fun () ->
-        Nat.add t.table packet (xl_host, xl_port) action
-      )
-      (function
-        | Out_of_memory -> Lwt.return (Error `Out_of_memory)
-        | x -> Lwt.fail x
-      )
-  in
   let rec aux ~retries =
     let nat_ports, dns_ports =
       match packet with
@@ -81,29 +72,21 @@ let add_nat_rule_and_translate t ports ~xl_host action packet =
       | `IPv4 (_, `ICMP _) -> ports.nat_icmp, ref Ports.empty
     in
     let xl_port = pick_free_port ~nat_ports ~dns_ports in
-    apply_action xl_port >>= function
-    | Error `Out_of_memory ->
-      (* Because hash tables resize in big steps, this can happen even if we have a fair
-         chunk of free memory. *)
-      Log.warn (fun f -> f "Out_of_memory adding NAT rule. Dropping NAT table...");
-      reset t ports >>= fun () ->
-      aux ~retries:(retries - 1)
-    | Error `Overlap when retries < 0 -> Lwt.return (Error "Too many retries")
+    match Nat.add t.table packet xl_host (fun () -> xl_port) action with
+    | Error `Overlap when retries < 0 -> Error "Too many retries"
     | Error `Overlap ->
       if retries = 0 then (
         Log.warn (fun f -> f "Failed to find a free port; resetting NAT table");
-        reset t ports >>= fun () ->
+        reset t ports;
         aux ~retries:(retries - 1)
       ) else (
         aux ~retries:(retries - 1)
       )
     | Error `Cannot_NAT ->
-      Lwt.return (Error "Cannot NAT this packet")
+      Error "Cannot NAT this packet"
     | Ok () ->
       Log.debug (fun f -> f "Updated NAT table: %a" Nat.pp_summary t.table);
-      translate t packet >|= function
-      | None -> Error "No NAT entry, even after adding one!"
-      | Some packet ->
-        Ok packet
+      Option.to_result ~none:"No NAT entry, even after adding one!"
+        (translate t packet)
   in
   aux ~retries:100
