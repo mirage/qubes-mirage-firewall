@@ -45,7 +45,7 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
       Lwt.return_unit in
     (* Set up networking *)
     let max_entries = Key_gen.nat_table_size () in
-    My_nat.create ~max_entries >>= fun nat ->
+    let nat = My_nat.create ~max_entries in
 
     (* Read network configuration from QubesDB *)
     Dao.read_network_config qubesDB >>= fun config ->

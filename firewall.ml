@@ -47,7 +47,7 @@ let translate t packet =
 let add_nat_and_forward_ipv4 t packet =
   let open Router in
   let xl_host = t.uplink#my_ip in
-  My_nat.add_nat_rule_and_translate t.nat t.ports ~xl_host `NAT packet >>= function
+  match My_nat.add_nat_rule_and_translate t.nat t.ports ~xl_host `NAT packet with
   | Ok packet -> forward_ipv4 t packet
   | Error e ->
     Log.warn (fun f -> f "Failed to add NAT rewrite rule: %s (%a)" e Nat_packet.pp packet);
@@ -60,7 +60,7 @@ let nat_to t ~host ~port packet =
   | Ipaddr.V6 _ -> Log.warn (fun f -> f "Cannot NAT with IPv6"); Lwt.return_unit
   | Ipaddr.V4 target ->
     let xl_host = t.uplink#my_ip in
-    My_nat.add_nat_rule_and_translate t.nat t.ports ~xl_host (`Redirect (target, port)) packet >>= function
+    match My_nat.add_nat_rule_and_translate t.nat t.ports ~xl_host (`Redirect (target, port)) packet with
     | Ok packet -> forward_ipv4 t packet
     | Error e ->
       Log.warn (fun f -> f "Failed to add NAT redirect rule: %s (%a)" e Nat_packet.pp packet);
@@ -88,34 +88,34 @@ let ipv4_from_client resolver dns_servers t ~src packet =
   | `Memory_critical -> Lwt.return_unit
   | `Ok ->
   (* Check for existing NAT entry for this packet *)
-  translate t packet >>= function
-  | Some frame -> forward_ipv4 t frame  (* Some existing connection or redirect *)
-  | None ->
-  (* No existing NAT entry. Check the firewall rules. *)
-  let `IPv4 (ip, _transport) = packet in
-  let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
-  match of_mirage_nat_packet ~src:(`Client src) ~dst packet with
-  | None -> Lwt.return_unit
-  | Some firewall_packet -> apply_rules t (Rules.from_client resolver dns_servers) ~dst firewall_packet
+    match translate t packet with
+    | Some frame -> forward_ipv4 t frame  (* Some existing connection or redirect *)
+    | None ->
+      (* No existing NAT entry. Check the firewall rules. *)
+      let `IPv4 (ip, _transport) = packet in
+      let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
+      match of_mirage_nat_packet ~src:(`Client src) ~dst packet with
+      | None -> Lwt.return_unit
+      | Some firewall_packet -> apply_rules t (Rules.from_client resolver dns_servers) ~dst firewall_packet
 
 let ipv4_from_netvm t packet =
   match Memory_pressure.status () with
   | `Memory_critical -> Lwt.return_unit
   | `Ok ->
-  let `IPv4 (ip, _transport) = packet in
-  let src = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.src) in
-  let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
-  match Packet.of_mirage_nat_packet ~src ~dst packet with
-  | None -> Lwt.return_unit
-  | Some _ ->
-  match src with
-  | `Client _ | `Firewall ->
-    Log.warn (fun f -> f "Frame from NetVM has internal source IP address! %a" Nat_packet.pp packet);
-    Lwt.return_unit
-  | `External _ | `NetVM as src ->
-  translate t packet >>= function
-  | Some frame -> forward_ipv4 t frame
-  | None ->
+    let `IPv4 (ip, _transport) = packet in
+    let src = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.src) in
+    let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
     match Packet.of_mirage_nat_packet ~src ~dst packet with
     | None -> Lwt.return_unit
-    | Some packet -> apply_rules t Rules.from_netvm ~dst packet
+    | Some _ ->
+      match src with
+      | `Client _ | `Firewall ->
+        Log.warn (fun f -> f "Frame from NetVM has internal source IP address! %a" Nat_packet.pp packet);
+        Lwt.return_unit
+      | `External _ | `NetVM as src ->
+        match translate t packet with
+        | Some frame -> forward_ipv4 t frame
+        | None ->
+          match Packet.of_mirage_nat_packet ~src ~dst packet with
+          | None -> Lwt.return_unit
+          | Some packet -> apply_rules t Rules.from_netvm ~dst packet

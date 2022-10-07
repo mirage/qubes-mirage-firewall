@@ -19,9 +19,9 @@ type action = [
   | `Redirect of Mirage_nat.endpoint
 ]
 
-val create : max_entries:int -> t Lwt.t
-val reset : t -> ports -> unit Lwt.t
+val create : max_entries:int -> t
+val reset : t -> ports -> unit
 val remove_connections : t -> ports -> Ipaddr.V4.t -> unit
-val translate : t -> Nat_packet.t -> Nat_packet.t option Lwt.t
+val translate : t -> Nat_packet.t -> Nat_packet.t option
 val add_nat_rule_and_translate : t -> ports ->
-  xl_host:Ipaddr.V4.t -> action -> Nat_packet.t -> (Nat_packet.t, string) result Lwt.t
+  xl_host:Ipaddr.V4.t -> action -> Nat_packet.t -> (Nat_packet.t, string) result
