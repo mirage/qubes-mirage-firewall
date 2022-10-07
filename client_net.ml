@@ -101,7 +101,7 @@ let add_vif get_ts { Dao.ClientVif.domid; device_id } dns_client dns_servers ~cl
                         (Ipaddr.V4.to_string client_ip)
                         Fmt.(list ~sep:(any "@.") Pf_qubes.Parse_qubes.pp_rule) new_rules);
             (* empty NAT table if rules are updated: they might deny old connections *)
-            My_nat.remove_connections router.Router.nat router.Router.ports client_ip;
+            My_nat.remove_connections router.Router.nat client_ip;
           end);
           update new_db new_rules
         in
