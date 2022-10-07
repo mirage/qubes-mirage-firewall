@@ -47,7 +47,7 @@ let translate t packet =
 let add_nat_and_forward_ipv4 t packet =
   let open Router in
   let xl_host = t.uplink#my_ip in
-  match My_nat.add_nat_rule_and_translate t.nat t.ports ~xl_host `NAT packet with
+  match My_nat.add_nat_rule_and_translate t.nat ~xl_host `NAT packet with
   | Ok packet -> forward_ipv4 t packet
   | Error e ->
     Log.warn (fun f -> f "Failed to add NAT rewrite rule: %s (%a)" e Nat_packet.pp packet);
@@ -60,7 +60,7 @@ let nat_to t ~host ~port packet =
   | Ipaddr.V6 _ -> Log.warn (fun f -> f "Cannot NAT with IPv6"); Lwt.return_unit
   | Ipaddr.V4 target ->
     let xl_host = t.uplink#my_ip in
-    match My_nat.add_nat_rule_and_translate t.nat t.ports ~xl_host (`Redirect (target, port)) packet with
+    match My_nat.add_nat_rule_and_translate t.nat ~xl_host (`Redirect (target, port)) packet with
     | Ok packet -> forward_ipv4 t packet
     | Error e ->
       Log.warn (fun f -> f "Failed to add NAT redirect rule: %s (%a)" e Nat_packet.pp packet);
