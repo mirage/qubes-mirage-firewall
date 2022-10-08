@@ -13,36 +13,57 @@ type action = [
 
 module Nat = Mirage_nat_lru
 
+module S =
+  Set.Make(struct type t = int let compare (a : int) (b : int) = compare a b end)
+
 type t = {
   table : Nat.t;
-  mutable udp_dns : int list;
+  mutable udp_dns : S.t;
+  last_resort_port : int
 }
+
+let pick_port () =
+  1024 + Random.int (0xffff - 1024)
 
 let create ~max_entries =
   let tcp_size = 7 * max_entries / 8 in
   let udp_size = max_entries - tcp_size in
   let table = Nat.empty ~tcp_size ~udp_size ~icmp_size:100 in
-  { table ; udp_dns = [] }
+  let last_resort_port = pick_port () in
+  { table ; udp_dns = S.empty ; last_resort_port }
 
 let pick_free_port t proto =
-  let rec go () =
-    let p = 1024 + Random.int (0xffff - 1024) in
-    match proto with
-    | `Udp when List.mem p t.udp_dns -> go ()
-    | _ -> p
+  let rec go retries =
+    if retries = 0 then
+      None
+    else
+      let p = 1024 + Random.int (0xffff - 1024) in
+      match proto with
+      | `Udp when S.mem p t.udp_dns || p = t.last_resort_port ->
+        go (retries - 1)
+      | _ -> Some p
   in
-  go ()
+  go 10
 
 let free_udp_port t ~src ~dst ~dst_port =
   let rec go () =
-    let src_port = pick_free_port t `Udp in
+    let src_port =
+      Option.value ~default:t.last_resort_port (pick_free_port t `Udp)
+    in
     if Nat.is_port_free t.table `Udp ~src ~dst ~src_port ~dst_port then begin
-      t.udp_dns <- src_port :: t.udp_dns;
-      src_port
+      let remove =
+        if src_port <> t.last_resort_port then begin
+          t.udp_dns <- S.add src_port t.udp_dns;
+          (fun () -> t.udp_dns <- S.remove src_port t.udp_dns)
+        end else Fun.id
+      in
+      src_port, remove
     end else
       go ()
   in
   go ()
+
+let dns_port t port = S.mem port t.udp_dns || port = t.last_resort_port
 
 let translate t packet =
   match Nat.translate t.table packet with

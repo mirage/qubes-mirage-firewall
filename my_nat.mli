@@ -3,17 +3,16 @@
 
 (* Abstract over NAT interface (todo: remove this) *)
 
-type t = {
-  table : Mirage_nat_lru.t;
-  mutable udp_dns : int list;
-}
+type t
 
 type action = [
   | `NAT
   | `Redirect of Mirage_nat.endpoint
 ]
 
-val free_udp_port : t -> src:Ipaddr.V4.t -> dst:Ipaddr.V4.t -> dst_port:int -> int
+val free_udp_port : t -> src:Ipaddr.V4.t -> dst:Ipaddr.V4.t -> dst_port:int ->
+  int * (unit -> unit)
+val dns_port : t -> int -> bool
 val create : max_entries:int -> t
 val remove_connections : t -> Ipaddr.V4.t -> unit
 val translate : t -> Nat_packet.t -> Nat_packet.t option

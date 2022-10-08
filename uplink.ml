@@ -47,7 +47,7 @@ end
 
       Log.debug (fun f -> f "received ipv4 packet from %a on uplink" Ipaddr.V4.pp ip_header.Ipv4_packet.src);
       match ip_packet with
-      | `UDP (header, packet) when List.mem header.dst_port router.Router.nat.My_nat.udp_dns ->
+      | `UDP (header, packet) when My_nat.dns_port router.Router.nat header.dst_port ->
         Log.debug (fun f -> f "found a DNS packet whose dst_port (%d) was in the list of dns_client ports" header.dst_port);
         Lwt_mvar.put dns_responses (header, packet)
       | _ ->
