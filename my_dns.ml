@@ -35,12 +35,14 @@ module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) (Time : Mirage_
     let open My_nat in
     let dst, dst_port = ctx.nameserver in
     let router, send_udp, answer = ctx.stack in
-    let src_port = Ports.pick_free_port ~consult:router.ports.nat_udp router.ports.dns_udp in
+    let src_port, evict =
+      My_nat.free_udp_port router.nat ~src:router.uplink#my_ip ~dst ~dst_port:53
+    in
     with_timeout ctx.timeout_ns
       ((send_udp ~src_port ~dst ~dst_port buf >|= Rresult.R.open_error_msg) >>= function
         | Ok () -> (Lwt_mvar.take answer >|= fun (_, dns_response) -> Ok dns_response)
         | Error _ as e -> Lwt.return e) >|= fun result ->
-    router.ports.dns_udp := Ports.remove src_port !(router.ports.dns_udp);
+    evict ();
     result
 
   let close _ = Lwt.return_unit

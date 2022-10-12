@@ -11,34 +11,62 @@ type action = [
   | `Redirect of Mirage_nat.endpoint
 ]
 
-type ports = {
-  nat_tcp : Ports.t ref;
-  nat_udp : Ports.t ref;
-  nat_icmp : Ports.t ref;
-  dns_udp : Ports.t ref;
-}
-
-let empty_ports () =
-  let nat_tcp = ref Ports.empty in
-  let nat_udp = ref Ports.empty in
-  let nat_icmp = ref Ports.empty in
-  let dns_udp = ref Ports.empty in
-  { nat_tcp ; nat_udp ; nat_icmp ; dns_udp }
-
 module Nat = Mirage_nat_lru
+
+module S =
+  Set.Make(struct type t = int let compare (a : int) (b : int) = compare a b end)
 
 type t = {
   table : Nat.t;
+  mutable udp_dns : S.t;
+  last_resort_port : int
 }
+
+let pick_port () =
+  1024 + Random.int (0xffff - 1024)
 
 let create ~max_entries =
   let tcp_size = 7 * max_entries / 8 in
   let udp_size = max_entries - tcp_size in
-  Nat.empty ~tcp_size ~udp_size ~icmp_size:100 >|= fun table ->
-  { table }
+  let table = Nat.empty ~tcp_size ~udp_size ~icmp_size:100 in
+  let last_resort_port = pick_port () in
+  { table ; udp_dns = S.empty ; last_resort_port }
+
+let pick_free_port t proto =
+  let rec go retries =
+    if retries = 0 then
+      None
+    else
+      let p = 1024 + Random.int (0xffff - 1024) in
+      match proto with
+      | `Udp when S.mem p t.udp_dns || p = t.last_resort_port ->
+        go (retries - 1)
+      | _ -> Some p
+  in
+  go 10
+
+let free_udp_port t ~src ~dst ~dst_port =
+  let rec go () =
+    let src_port =
+      Option.value ~default:t.last_resort_port (pick_free_port t `Udp)
+    in
+    if Nat.is_port_free t.table `Udp ~src ~dst ~src_port ~dst_port then begin
+      let remove =
+        if src_port <> t.last_resort_port then begin
+          t.udp_dns <- S.add src_port t.udp_dns;
+          (fun () -> t.udp_dns <- S.remove src_port t.udp_dns)
+        end else Fun.id
+      in
+      src_port, remove
+    end else
+      go ()
+  in
+  go ()
+
+let dns_port t port = S.mem port t.udp_dns || port = t.last_resort_port
 
 let translate t packet =
-  Nat.translate t.table packet >|= function
+  match Nat.translate t.table packet with
   | Error (`Untranslated | `TTL_exceeded as e) ->
     Log.debug (fun f -> f "Failed to NAT %a: %a"
                   Nat_packet.pp packet
@@ -47,63 +75,19 @@ let translate t packet =
     None
   | Ok packet -> Some packet
 
-let pick_free_port ~nat_ports ~dns_ports =
-  Ports.pick_free_port ~consult:dns_ports nat_ports
+let remove_connections t ip =
+  ignore (Nat.remove_connections t.table ip)
 
-(* just clears the nat ports, dns ports stay as is *)
-let reset t ports =
-  ports.nat_tcp := Ports.empty;
-  ports.nat_udp := Ports.empty;
-  ports.nat_icmp := Ports.empty;
-  Nat.reset t.table
-
-let remove_connections t ports ip =
-  let freed_ports = Nat.remove_connections t.table ip in
-  ports.nat_tcp := Ports.diff !(ports.nat_tcp) (Ports.of_list freed_ports.Mirage_nat.tcp);
-  ports.nat_udp := Ports.diff !(ports.nat_udp) (Ports.of_list freed_ports.Mirage_nat.udp);
-  ports.nat_icmp := Ports.diff !(ports.nat_icmp) (Ports.of_list freed_ports.Mirage_nat.icmp)
-
-let add_nat_rule_and_translate t ports ~xl_host action packet =
-  let apply_action xl_port =
-    Lwt.catch (fun () ->
-        Nat.add t.table packet (xl_host, xl_port) action
-      )
-      (function
-        | Out_of_memory -> Lwt.return (Error `Out_of_memory)
-        | x -> Lwt.fail x
-      )
+let add_nat_rule_and_translate t ~xl_host action packet =
+  let proto = match packet with
+    | `IPv4 (_, `TCP _) -> `Tcp
+    | `IPv4 (_, `UDP _) -> `Udp
+    | `IPv4 (_, `ICMP _) -> `Icmp
   in
-  let rec aux ~retries =
-    let nat_ports, dns_ports =
-      match packet with
-      | `IPv4 (_, `TCP _) -> ports.nat_tcp, ref Ports.empty
-      | `IPv4 (_, `UDP _) -> ports.nat_udp, ports.dns_udp
-      | `IPv4 (_, `ICMP _) -> ports.nat_icmp, ref Ports.empty
-    in
-    let xl_port = pick_free_port ~nat_ports ~dns_ports in
-    apply_action xl_port >>= function
-    | Error `Out_of_memory ->
-      (* Because hash tables resize in big steps, this can happen even if we have a fair
-         chunk of free memory. *)
-      Log.warn (fun f -> f "Out_of_memory adding NAT rule. Dropping NAT table...");
-      reset t ports >>= fun () ->
-      aux ~retries:(retries - 1)
-    | Error `Overlap when retries < 0 -> Lwt.return (Error "Too many retries")
-    | Error `Overlap ->
-      if retries = 0 then (
-        Log.warn (fun f -> f "Failed to find a free port; resetting NAT table");
-        reset t ports >>= fun () ->
-        aux ~retries:(retries - 1)
-      ) else (
-        aux ~retries:(retries - 1)
-      )
-    | Error `Cannot_NAT ->
-      Lwt.return (Error "Cannot NAT this packet")
-    | Ok () ->
-      Log.debug (fun f -> f "Updated NAT table: %a" Nat.pp_summary t.table);
-      translate t packet >|= function
-      | None -> Error "No NAT entry, even after adding one!"
-      | Some packet ->
-        Ok packet
-  in
-  aux ~retries:100
+  match Nat.add t.table packet xl_host (fun () -> pick_free_port t proto) action with
+  | Error `Overlap -> Error "Too many retries"
+  | Error `Cannot_NAT -> Error "Cannot NAT this packet"
+  | Ok () ->
+    Log.debug (fun f -> f "Updated NAT table: %a" Nat.pp_summary t.table);
+    Option.to_result ~none:"No NAT entry, even after adding one!"
+      (translate t packet)
