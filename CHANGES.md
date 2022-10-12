@@ -1,3 +1,10 @@
+### 0.8.2 (2022-10-12)
+
+- Advise to use 32 MB memory, which is sufficient (#150, @palainp)
+- Improve documentation (#150, @palainp)
+- Remove unneeded memory management code and log messages (#150, @palainp)
+- Use mirage-nat 3.0.0, remove global mutable state (#151, @hannesm)
+
 ### 0.8.1 (2022-09-14)
 
 - support qrexec protocol version 3 (@reynir @palainp in mirage-qubes 0.9.3)
