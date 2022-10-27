@@ -28,7 +28,7 @@ module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) (Time : Mirage_
     let timeout = Time.sleep_ns timeout_ns >|= fun () -> Error (`Msg "DNS request timeout") in
     Lwt.pick [ f ; timeout ]
 
-  let connect (t : t) = Lwt.return (Ok t)
+  let connect (t : t) = Lwt.return (Ok (t.protocol, t))
 
   let send_recv (ctx : context) buf : (Cstruct.t, [> `Msg of string ]) result Lwt.t =
     let open Router in
