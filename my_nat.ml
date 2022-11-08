@@ -44,22 +44,25 @@ let pick_free_port t proto =
   go 10
 
 let free_udp_port t ~src ~dst ~dst_port =
-  let rec go () =
-    let src_port =
-      Option.value ~default:t.last_resort_port (pick_free_port t `Udp)
-    in
-    if Nat.is_port_free t.table `Udp ~src ~dst ~src_port ~dst_port then begin
-      let remove =
-        if src_port <> t.last_resort_port then begin
-          t.udp_dns <- S.add src_port t.udp_dns;
-          (fun () -> t.udp_dns <- S.remove src_port t.udp_dns)
-        end else Fun.id
+  let rec go retries =
+    if retries = 0 then
+      t.last_resort_port, Fun.id
+    else
+      let src_port =
+        Option.value ~default:t.last_resort_port (pick_free_port t `Udp)
       in
-      src_port, remove
-    end else
-      go ()
+      if Nat.is_port_free t.table `Udp ~src ~dst ~src_port ~dst_port then begin
+        let remove =
+          if src_port <> t.last_resort_port then begin
+            t.udp_dns <- S.add src_port t.udp_dns;
+            (fun () -> t.udp_dns <- S.remove src_port t.udp_dns)
+          end else Fun.id
+        in
+        src_port, remove
+      end else
+        go (retries - 1)
   in
-  go ()
+  go 10
 
 let dns_port t port = S.mem port t.udp_dns || port = t.last_resort_port
 
