@@ -28,8 +28,14 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      - run: opam install "mirage>4"
+      - run: opam depext solo5 "mirage>4"
 
-      - run: opam exec -- mirage configure -t xen && make depend && dune build
+      - run: opam install solo5 "mirage>4"
+
+      - run: opam exec -- mirage configure -t xen
+
+      - run: opam exec -- make depend
+
+      - run: opam exec -- dune build
 
       - run: sha256sum dist/qubes-firewall.xen
