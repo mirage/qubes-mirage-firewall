@@ -28,7 +28,7 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      - run: opam install --confirm-level=unsafe-yes "mirage>4"
+      - run: opam install "mirage>4"
 
       - run: opam exec -- mirage configure -t xen && make depend && dune build
 
