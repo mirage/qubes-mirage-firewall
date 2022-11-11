@@ -13,7 +13,7 @@ RUN sudo ln -sf /usr/bin/opam-2.1 /usr/bin/opam
 # latest versions.
 RUN cd /home/opam/opam-repository && git fetch origin master && git reset --hard 685eb4efcebfa671660e55d76dea017f00fed4d9 && opam update
 
-RUN opam install -y mirage opam-monorepo
+RUN opam install -y mirage opam-monorepo ocaml-solo5
 RUN mkdir /home/opam/qubes-mirage-firewall
 ADD config.ml /home/opam/qubes-mirage-firewall/config.ml
 WORKDIR /home/opam/qubes-mirage-firewall
