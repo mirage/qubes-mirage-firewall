@@ -1,3 +1,23 @@
+### 0.8.3 (2022-11-11)
+
+- Fix "DNS issues", a firewall ruleset with a domain name lead to 100% CPU usage
+  (reported by fiftyfourthparallel on
+  https://forum.qubes-os.org/t/mirage-firewall-0-8-2-broken-new-users-should-install-0-8-1/14566,
+  re-reported by @palainp in #158, fixed by @hannesm in mirage/mirage-nat#48
+  (release 3.0.1)) - underlying issue was a wrong definition of `is_port_free`
+  (since 3.0.0, used since mirage-qubes-firewall 0.8.2).
+- Fix "crash on downstream vm start", after more than 64 client VMs have been
+  connected and disconnected with the qubes-mirage-firewall (reported by @xaki23
+  in #155, fixed by @hannesm in #161) - underlying issue was a leak of xenstore
+  watchers and a hard limit in xen on the amount of watchers
+- Fix "detach netvm fails" (reported by @rootnoob in #157, fixed by @palainp
+  in mirage/mirage-net-xen#105 (release 2.1.2)) - underlying issue was that the
+  network interface state was never set to closed, but directly removed
+- Fix potential DoS in handling DNS replies (#162 @hannesm)
+- Avoid potential forever loop in My_nat.free_udp_port (#159 @hannesm)
+- Assorted code removals (#161 @hannesm)
+- Update to dns 6.4.0 changes (#154, @hannesm)
+
 ### 0.8.2 (2022-10-12)
 
 - Advise to use 32 MB memory, which is sufficient (#150, @palainp)

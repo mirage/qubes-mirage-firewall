@@ -11,7 +11,7 @@ RUN sudo ln -sf /usr/bin/opam-2.1 /usr/bin/opam
 # Pin last known-good version for reproducible builds.
 # Remove this line (and the base image pin above) if you want to test with the
 # latest versions.
-RUN cd /home/opam/opam-repository && git fetch origin master && git reset --hard 7b89f6e5c24cf4076252e71abcbbe4d205705627 && opam update
+RUN cd /home/opam/opam-repository && git fetch origin master && git reset --hard 685eb4efcebfa671660e55d76dea017f00fed4d9 && opam update
 
 RUN opam install -y mirage opam-monorepo
 RUN mkdir /home/opam/qubes-mirage-firewall
