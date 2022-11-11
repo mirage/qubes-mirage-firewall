@@ -65,43 +65,44 @@ let read_rules rules client_ip =
                              icmp_type = None;
                              number = 0;})]
 
-let vifs ~handle domid =
+let vifs client domid =
   match String.to_int domid with
   | None -> Log.err (fun f -> f "Invalid domid %S" domid); Lwt.return []
   | Some domid ->
     let path = Printf.sprintf "backend/vif/%d" domid in
-    directory ~handle path >>=
-    Lwt_list.filter_map_p (fun device_id ->
-        match String.to_int device_id with
-        | None -> Log.err (fun f -> f "Invalid device ID %S for domid %d" device_id domid); Lwt.return_none
-        | Some device_id ->
-        let vif = { ClientVif.domid; device_id } in
-        Lwt.try_bind
-          (fun () -> Xen_os.Xs.read handle (Printf.sprintf "%s/%d/ip" path device_id))
-          (fun client_ip ->
-             let client_ip' = match String.cuts ~sep:" " client_ip with
-               | [] -> Log.err (fun m -> m "unexpected empty list"); ""
-               | [ ip ] -> ip
-               | ip::rest ->
-                 Log.warn (fun m -> m "ignoring IPs %s from %a, we support one IP per client"
-                             (String.concat ~sep:" " rest) ClientVif.pp vif);
-                 ip
-             in
-             match Ipaddr.V4.of_string client_ip' with
-             | Ok ip -> Lwt.return (Some (vif, ip))
-             | Error `Msg msg  ->
-               Log.err (fun f -> f "Error parsing IP address of %a from %s: %s"
-                          ClientVif.pp vif client_ip msg);
-               Lwt.return None
-          )
-          (function
-            | Xs_protocol.Enoent _ -> Lwt.return None
-            | ex ->
-              Log.err (fun f -> f "Error getting IP address of %a: %s"
-                          ClientVif.pp vif (Printexc.to_string ex));
-              Lwt.return None
-          )
-      )
+    Xen_os.Xs.immediate client (fun handle ->
+        directory ~handle path >>=
+        Lwt_list.filter_map_p (fun device_id ->
+            match String.to_int device_id with
+            | None -> Log.err (fun f -> f "Invalid device ID %S for domid %d" device_id domid); Lwt.return_none
+            | Some device_id ->
+              let vif = { ClientVif.domid; device_id } in
+              Lwt.try_bind
+                (fun () -> Xen_os.Xs.read handle (Printf.sprintf "%s/%d/ip" path device_id))
+                (fun client_ip ->
+                   let client_ip' = match String.cuts ~sep:" " client_ip with
+                     | [] -> Log.err (fun m -> m "unexpected empty list"); ""
+                     | [ ip ] -> ip
+                     | ip::rest ->
+                       Log.warn (fun m -> m "ignoring IPs %s from %a, we support one IP per client"
+                                    (String.concat ~sep:" " rest) ClientVif.pp vif);
+                       ip
+                   in
+                   match Ipaddr.V4.of_string client_ip' with
+                   | Ok ip -> Lwt.return (Some (vif, ip))
+                   | Error `Msg msg  ->
+                     Log.err (fun f -> f "Error parsing IP address of %a from %s: %s"
+                                 ClientVif.pp vif client_ip msg);
+                     Lwt.return None
+                )
+                (function
+                  | Xs_protocol.Enoent _ -> Lwt.return None
+                  | ex ->
+                    Log.err (fun f -> f "Error getting IP address of %a: %s"
+                                ClientVif.pp vif (Printexc.to_string ex));
+                    Lwt.return None
+                )
+          ))
 
 let watch_clients fn =
   Xen_os.Xs.make () >>= fun xs ->
@@ -114,7 +115,8 @@ let watch_clients fn =
         | Xs_protocol.Enoent _ -> Lwt.return []
         | ex -> Lwt.fail ex)
     end >>= fun items ->
-    Lwt_list.map_p (vifs ~handle) items >>= fun items ->
+    Xen_os.Xs.make () >>= fun xs ->
+    Lwt_list.map_p (vifs xs) items >>= fun items ->
     fn (List.concat items |> VifMap.of_list);
     (* Wait for further updates *)
     Lwt.fail Xs_protocol.Eagain

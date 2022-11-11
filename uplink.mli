@@ -5,7 +5,6 @@
 
 open Fw_utils
 
-[@@@ocaml.warning "-67"]
 module Make (R: Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_time.S) : sig
   type t
 
