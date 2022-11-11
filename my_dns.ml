@@ -32,7 +32,6 @@ module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) (Time : Mirage_
 
   let send_recv (ctx : context) buf : (Cstruct.t, [> `Msg of string ]) result Lwt.t =
     let open Router in
-    let open My_nat in
     let dst, dst_port = ctx.nameserver in
     let router, send_udp, answer = ctx.stack in
     let src_port, evict =

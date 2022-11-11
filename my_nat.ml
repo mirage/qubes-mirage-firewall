@@ -1,8 +1,6 @@
 (* Copyright (C) 2015, Thomas Leonard <thomas.leonard@unikernel.com>
    See the README file for details. *)
 
-open Lwt.Infix
-
 let src = Logs.Src.create "my-nat" ~doc:"NAT shim"
 module Log = (val Logs.src_log src : Logs.LOG)
 
