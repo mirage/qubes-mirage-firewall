@@ -23,6 +23,8 @@ jobs:
 
       - run: ./build-with-docker.sh
 
+      - run: sh -exc 'if [ $(sha256sum dist/qubes-firewall.xen | cut -d " " -f 1) = $(grep "SHA2 last known" build-with-docker.sh | rev | cut -d ":" -f 1 | rev | cut -d "\"" -f 1 | tr -d " ") ]; then echo "SHA256 MATCHES"; else exit 42; fi'
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v3
         with:
