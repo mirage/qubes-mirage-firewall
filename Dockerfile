@@ -1,20 +1,21 @@
 # Pin the base image to a specific hash for maximum reproducibility.
 # It will probably still work on newer images, though, unless an update
 # changes some compiler optimisations (unlikely).
-# fedora-35-ocaml-4.14
-FROM ocaml/opam@sha256:68b7ce1fd4c992d6f3bfc9b4b0a88ee572ced52427f0547b6e4eb6194415f585
-ENV PATH="${PATH}:/home/opam/.opam/4.14/bin"
+# ubuntu-20.04
+FROM ubuntu@sha256:b25ef49a40b7797937d0d23eca3b0a41701af6757afca23d504d50826f0b37ce
 
-# Since mirage 4.2 we must use opam version 2.1 or later
-RUN sudo ln -sf /usr/bin/opam-2.1 /usr/bin/opam
+RUN apt update && apt install --no-install-recommends --no-install-suggests -y wget ca-certificates git patch unzip make gcc g++ libc-dev
+RUN wget -O /usr/bin/opam https://github.com/ocaml/opam/releases/download/2.1.3/opam-2.1.3-i686-linux && chmod 755 /usr/bin/opam
 
+ENV OPAMROOT=/tmp
+ENV OPAMCONFIRMLEVEL=unsafe-yes
 # Pin last known-good version for reproducible builds.
 # Remove this line (and the base image pin above) if you want to test with the
 # latest versions.
-RUN cd /home/opam/opam-repository && git fetch origin master && git reset --hard 685eb4efcebfa671660e55d76dea017f00fed4d9 && opam update
-
-RUN opam install -y mirage opam-monorepo ocaml-solo5
-RUN mkdir /home/opam/qubes-mirage-firewall
-ADD config.ml /home/opam/qubes-mirage-firewall/config.ml
-WORKDIR /home/opam/qubes-mirage-firewall
-CMD opam exec -- mirage configure -t xen && make depend && make tar
+RUN opam init --disable-sandboxing -a --bare https://github.com/ocaml/opam-repository.git#685eb4efcebfa671660e55d76dea017f00fed4d9
+RUN opam switch create myswitch 4.14.0
+RUN opam exec -- opam install -y mirage opam-monorepo ocaml-solo5
+RUN mkdir /tmp/orb-build
+ADD config.ml /tmp/orb-build/config.ml
+WORKDIR /tmp/orb-build
+CMD opam exec -- sh -exc 'mirage configure -t xen --allocation-policy=best-fit && make depend && make tar'

@@ -3,7 +3,7 @@ set -eu
 echo Building Docker image with dependencies..
 docker build -t qubes-mirage-firewall .
 echo Building Firewall...
-docker run --rm -i -v `pwd`:/home/opam/qubes-mirage-firewall qubes-mirage-firewall
+docker run --rm -i -v `pwd`:/tmp/orb-build qubes-mirage-firewall
 echo "SHA2 of build:   $(sha256sum ./dist/qubes-firewall.xen)"
-echo "SHA2 last known: f499b2379c62917ac32854be63f201e6b90466e645e54dea51e376baccdf26ab"
+echo "SHA2 last known: 3f71a1b672a15d145c7d40405dd75f06a2b148d2cfa106dc136e3da38552de41"
 echo "(hashes should match for released versions)"

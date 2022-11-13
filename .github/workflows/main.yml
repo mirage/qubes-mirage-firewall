@@ -14,8 +14,6 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-        ocaml-compiler:
-          - 4.14.x
 
     runs-on: ${{ matrix.os }}
 
@@ -23,19 +21,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Use OCaml ${{ matrix.ocaml-compiler }}
-        uses: ocaml/setup-ocaml@v2
+      - run: ./build-with-docker.sh
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
         with:
-          ocaml-compiler: ${{ matrix.ocaml-compiler }}
-
-      - run: opam depext solo5 "mirage>4"
-
-      - run: opam install solo5 "mirage>4"
-
-      - run: opam exec -- mirage configure -t xen
-
-      - run: opam exec -- make depend
-
-      - run: opam exec -- dune build
-
-      - run: sha256sum dist/qubes-firewall.xen
+          name: mirage-firewall.tar.bz2
+          path: mirage-firewall.tar.bz2
