@@ -1,3 +1,11 @@
+### 0.8.4 (2022-12-07)
+
+- Fix remote denial of service due to excessive console output (#166 @burghardt,
+  fix in solo5/solo5#538 by @palainp)
+- Use Ubuntu container for build, now GitHub action, ./build-with-docker.sh and
+  builds.robur.coop are synchronized (and result in the same artifact)
+  (#164 @hannesm)
+
 ### 0.8.3 (2022-11-11)
 
 - Fix "DNS issues", a firewall ruleset with a domain name lead to 100% CPU usage
