@@ -12,7 +12,7 @@ ENV OPAMCONFIRMLEVEL=unsafe-yes
 # Pin last known-good version for reproducible builds.
 # Remove this line (and the base image pin above) if you want to test with the
 # latest versions.
-RUN opam init --disable-sandboxing -a --bare https://github.com/ocaml/opam-repository.git#685eb4efcebfa671660e55d76dea017f00fed4d9
+RUN opam init --disable-sandboxing -a --bare https://github.com/ocaml/opam-repository.git#c9b2f766b7c7009be8cd68ac423d0d5b36044aca
 RUN opam switch create myswitch 4.14.0
 RUN opam exec -- opam install -y mirage opam-monorepo ocaml-solo5
 RUN mkdir /tmp/orb-build
