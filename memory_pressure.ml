@@ -27,19 +27,8 @@ let meminfo stats =
                   SwapTotal: 0 kB\n\
                   SwapFree: 0 kB\n" (mem_total / 1024) (mem_free / 1024)
 
-let report_mem_usage stats =
-  Lwt.async (fun () ->
-    let open Xen_os in
-    Xs.make () >>= fun xs ->
-    Xs.immediate xs (fun h ->
-      Xs.write h "memory/meminfo" (meminfo stats)
-    )
-  )
-
 let init () =
-  Gc.full_major ();
-  let stats = Xen_os.Memory.quick_stat () in
-  report_mem_usage stats
+  Gc.full_major ()
 
 let status () =
   let stats = Xen_os.Memory.quick_stat () in
@@ -48,8 +37,6 @@ let status () =
     Gc.full_major ();
     Xen_os.Memory.trim ();
     let stats = Xen_os.Memory.quick_stat () in
-    if fraction_free stats < 0.6 then begin
-      report_mem_usage stats;
-      `Memory_critical
-    end else `Ok
+    if fraction_free stats < 0.6 then `Memory_critical
+    else `Ok
   )
