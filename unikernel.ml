@@ -17,10 +17,13 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
     (* Report success *)
     Dao.set_iptables_error qubesDB "" >>= fun () ->
     (* Handle packets from both networks *)
-    Lwt.choose [
-      Client_net.listen Clock.elapsed_ns dns_client dns_servers qubesDB router;
-      Uplink.listen uplink Clock.elapsed_ns dns_responses router
-    ]
+    match uplink with
+    | None -> Client_net.listen Clock.elapsed_ns dns_client dns_servers qubesDB router
+    | _ ->
+      Lwt.choose [
+        Client_net.listen Clock.elapsed_ns dns_client dns_servers qubesDB router;
+        Uplink.listen uplink Clock.elapsed_ns dns_responses router
+      ]
 
   (* Main unikernel entry point (called from auto-generated main.ml). *)
   let start _random _clock _time =
