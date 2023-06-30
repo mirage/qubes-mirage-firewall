@@ -54,9 +54,6 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
     Dao.read_network_config qubesDB >>= fun config ->
     (* config.netvm_ip might be 0.0.0.0 if there's no netvm provided via Qubes *)
 
-    (* Set up client-side networking *)
-    Client_eth.create config >>= fun clients ->
-
     let connect_if_netvm = 
       if config.netvm_ip <> (Ipaddr.V4.make 0 0 0 0) then (
         Uplink.connect config >>= fun uplink ->
@@ -78,6 +75,9 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
     (* We now must have a valid netvm IP address or crash *)
     Dao.print_network_config config ;
     assert(config.netvm_ip <> (Ipaddr.V4.make 0 0 0 0));
+
+    (* Set up client-side networking *)
+    Client_eth.create config >>= fun clients ->
 
     (* Set up routing between networks and hosts *)
     let router = Router.create
