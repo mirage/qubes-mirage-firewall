@@ -20,10 +20,8 @@ val watch_clients : (Ipaddr.V4.t VifMap.t -> unit) -> 'a Lwt.t
     in XenStore, and again each time XenStore updates. *)
 
 type network_config = {
-  uplink_netvm_ip : Ipaddr.V4.t;      (* The IP address of NetVM (our gateway) *)
-  uplink_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
-
-  clients_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to our client VMs (their gateway) *)
+  netvm_ip : Ipaddr.V4.t;      (* The IP address of NetVM (our gateway) *)
+  our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
   dns : Ipaddr.V4.t;
   dns2 : Ipaddr.V4.t;
 }

@@ -74,8 +74,8 @@ end
 let interface t = t.interface
 
 let connect config =
-  let my_ip = config.Dao.uplink_our_ip in
-  let gateway = config.Dao.uplink_netvm_ip in
+  let my_ip = config.Dao.our_ip in
+  let gateway = config.Dao.netvm_ip in
   Netif.connect "0" >>= fun net ->
   Eth.connect net >>= fun eth ->
   Arp.connect eth >>= fun arp ->
@@ -88,7 +88,7 @@ let connect config =
     >|= or_raise "Getting MAC of our NetVM" Arp.pp_error in
   let interface = new netvm_iface eth netvm_mac
     ~my_ip
-    ~other_ip:config.Dao.uplink_netvm_ip in
+    ~other_ip:config.Dao.netvm_ip in
   let fragments = Fragments.Cache.empty (256 * 1024) in
   Lwt.return { net; eth; arp; interface ; fragments ; ip ; udp }
 end

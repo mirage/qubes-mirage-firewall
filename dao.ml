@@ -123,10 +123,8 @@ let watch_clients fn =
   )
 
 type network_config = {
-  uplink_netvm_ip : Ipaddr.V4.t;      (* The IP address of NetVM (our gateway) *)
-  uplink_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
-
-  clients_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to our client VMs (their gateway) *)
+  netvm_ip : Ipaddr.V4.t;      (* The IP address of NetVM (our gateway) *)
+  our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
   dns : Ipaddr.V4.t;
   dns2 : Ipaddr.V4.t;
 }
@@ -138,23 +136,20 @@ let try_read_network_config db =
     match DB.KeyMap.find_opt name db with
     | None -> Ipaddr.V4.make 0 0 0 0
     | Some value -> Ipaddr.V4.of_string_exn value in
-  let uplink_our_ip = get "/qubes-ip" in
-  let uplink_netvm_ip = get "/qubes-gateway" in
-  let clients_our_ip = get "/qubes-netvm-gateway" in
+  let our_ip = get "/qubes-ip" in (* - IP address for this VM (only when VM has netvm set) *)
+  let netvm_ip = get "/qubes-gateway" in (* - default gateway IP (only when VM has netvm set); VM should add host route to this address directly via eth0 (or whatever default interface name is) *)
   let dns = get "/qubes-primary-dns" in
   let dns2 = get "/qubes-secondary-dns" in
   Log.info (fun f -> f "@[<v2>Got network configuration from QubesDB:@,\
                         NetVM IP on uplink network: %a@,\
-                        Our IP on uplink network:   %a@,\
                         Our IP on client networks:  %a@,\
                         DNS primary resolver:       %a@,\
                         DNS secondary resolver:     %a@]"
-               Ipaddr.V4.pp uplink_netvm_ip
-               Ipaddr.V4.pp uplink_our_ip
-               Ipaddr.V4.pp clients_our_ip
+               Ipaddr.V4.pp netvm_ip
+               Ipaddr.V4.pp our_ip
                Ipaddr.V4.pp dns
                Ipaddr.V4.pp dns2);
-  { uplink_netvm_ip; uplink_our_ip; clients_our_ip ; dns ; dns2 }
+  { netvm_ip ; our_ip ; dns ; dns2 }
 
 let read_network_config qubesDB =
   let rec aux bindings =

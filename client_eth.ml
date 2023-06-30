@@ -20,7 +20,7 @@ type host =
 
 let create config =
   let changed = Lwt_condition.create () in
-  let my_ip = config.Dao.uplink_our_ip in
+  let my_ip = config.Dao.our_ip in
   Lwt.return { iface_of_ip = IpMap.empty; my_ip; changed }
 
 let client_gw t = t.my_ip
