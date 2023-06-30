@@ -55,6 +55,7 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
     Client_eth.create config >>= fun clients ->
     (* Set up routing between networks and hosts *)
     let router = Router.create
+      ~config
       ~clients
       ~uplink:(Uplink.interface uplink)
       ~nat

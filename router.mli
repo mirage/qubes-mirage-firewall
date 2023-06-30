@@ -6,15 +6,17 @@
 open Fw_utils
 
 type t = private {
+  config : Dao.network_config;
   clients : Client_eth.t;
   nat : My_nat.t;
   uplink : interface;
 }
 
 val create :
-  clients:Client_eth.t ->
-  uplink:interface ->
-  nat:My_nat.t ->
+  config : Dao.network_config ->
+  clients : Client_eth.t ->
+  uplink : interface ->
+  nat : My_nat.t ->
   t
 (** [create ~client_eth ~uplink ~nat] is a new routing table
     that routes packets outside of [client_eth] via [uplink]. *)
