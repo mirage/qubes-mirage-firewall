@@ -52,11 +52,10 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
 
     Uplink.connect config >>= fun uplink ->
     (* Set up client-side networking *)
-    let client_eth = Client_eth.create
-      ~client_gw:config.Dao.clients_our_ip in
+    Client_eth.create config >>= fun clients ->
     (* Set up routing between networks and hosts *)
     let router = Router.create
-      ~client_eth
+      ~clients
       ~uplink:(Uplink.interface uplink)
       ~nat
     in

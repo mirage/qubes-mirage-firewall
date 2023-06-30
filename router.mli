@@ -6,13 +6,13 @@
 open Fw_utils
 
 type t = private {
-  client_eth : Client_eth.t;
+  clients : Client_eth.t;
   nat : My_nat.t;
   uplink : interface;
 }
 
 val create :
-  client_eth:Client_eth.t ->
+  clients:Client_eth.t ->
   uplink:interface ->
   nat:My_nat.t ->
   t

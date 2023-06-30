@@ -136,13 +136,13 @@ exception Missing_key of string
 let try_read_network_config db =
   let get name =
     match DB.KeyMap.find_opt name db with
-    | None -> raise (Missing_key name)
-    | Some value -> value in
-  let uplink_our_ip = get "/qubes-ip" |> Ipaddr.V4.of_string_exn in
-  let uplink_netvm_ip = get "/qubes-gateway" |> Ipaddr.V4.of_string_exn in
-  let clients_our_ip = get "/qubes-netvm-gateway" |> Ipaddr.V4.of_string_exn in
-  let dns = get "/qubes-primary-dns" |> Ipaddr.V4.of_string_exn in
-  let dns2 = get "/qubes-secondary-dns" |> Ipaddr.V4.of_string_exn in
+    | None -> Ipaddr.V4.make 0 0 0 0
+    | Some value -> Ipaddr.V4.of_string_exn value in
+  let uplink_our_ip = get "/qubes-ip" in
+  let uplink_netvm_ip = get "/qubes-gateway" in
+  let clients_our_ip = get "/qubes-netvm-gateway" in
+  let dns = get "/qubes-primary-dns" in
+  let dns2 = get "/qubes-secondary-dns" in
   Log.info (fun f -> f "@[<v2>Got network configuration from QubesDB:@,\
                         NetVM IP on uplink network: %a@,\
                         Our IP on uplink network:   %a@,\

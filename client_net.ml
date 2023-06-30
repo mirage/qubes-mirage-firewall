@@ -80,7 +80,7 @@ let add_vif get_ts { Dao.ClientVif.domid; device_id } dns_client dns_servers ~cl
   Log.info (fun f -> f "Client %d (IP: %s) ready" domid (Ipaddr.V4.to_string client_ip));
   ClientEth.connect backend >>= fun eth ->
   let client_mac = Netback.frontend_mac backend in
-  let client_eth = router.Router.client_eth in
+  let client_eth = router.Router.clients in
   let gateway_ip = Client_eth.client_gw client_eth in
   let iface = new client_iface eth ~domid ~gateway_ip ~client_ip client_mac in
   (* update the rules whenever QubesDB notices a change for this IP *)
