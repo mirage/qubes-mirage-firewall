@@ -9,17 +9,17 @@ type t = {
   config : Dao.network_config;
   clients : Client_eth.t;
   nat : My_nat.t;
-  uplink : interface;
+  uplink : interface option;
 }
 
-let create ~config ~clients ~uplink ~nat =
+let create ~config ~clients ~nat ?uplink =
   { config; clients; nat; uplink }
 
 let target t buf =
   let dst_ip = buf.Ipv4_packet.dst in
   match Client_eth.lookup t.clients dst_ip with
   | Some client_link -> Some (client_link :> interface)
-  | None -> Some t.uplink
+  | None -> t.uplink
 
 let add_client t = Client_eth.add_client t.clients
 let remove_client t = Client_eth.remove_client t.clients

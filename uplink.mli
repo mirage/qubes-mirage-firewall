@@ -11,11 +11,11 @@ module Make (R: Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_time
   val connect : Dao.network_config -> t Lwt.t
   (** Connect to our NetVM (gateway). *)
 
-  val interface : t -> interface
+  val interface : t option -> interface option
   (** The network interface to NetVM. *)
 
-  val listen : t -> (unit -> int64) -> (Udp_packet.t * Cstruct.t) Lwt_mvar.t -> Router.t -> unit Lwt.t
+  val listen : t option -> (unit -> int64) -> (Udp_packet.t * Cstruct.t) Lwt_mvar.t -> Router.t -> unit Lwt.t
   (** Handle incoming frames from NetVM. *)
 
-  val send_dns_client_query: t -> src_port:int-> dst:Ipaddr.V4.t -> dst_port:int -> Cstruct.t -> (unit, [`Msg of string]) result Lwt.t
+  val send_dns_client_query: t option -> src_port:int-> dst:Ipaddr.V4.t -> dst_port:int -> Cstruct.t -> (unit, [`Msg of string]) result Lwt.t
 end

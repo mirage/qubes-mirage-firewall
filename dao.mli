@@ -37,4 +37,8 @@ val read_rules : string Qubes.DB.KeyMap.t -> Ipaddr.V4.t -> Pf_qubes.Parse_qubes
 (** [read_rules bindings ip] extracts firewall rule information for [ip] from [bindings].
     If any rules fail to parse, it will return only one rule denying all traffic. *)
 
+val update_network_config : network_config -> network_config -> network_config Lwt.t
+
+val print_network_config : network_config -> unit
+
 val set_iptables_error : Qubes.DB.t -> string -> unit Lwt.t

@@ -52,7 +52,7 @@ module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) (Time : Mirage_
     let dst, dst_port = ctx.nameserver in
     let router, send_udp, _ = ctx.stack in
     let src_port, evict =
-      My_nat.free_udp_port router.nat ~src:router.uplink#my_ip ~dst ~dst_port:53
+      My_nat.free_udp_port router.nat ~src:router.config.our_ip ~dst ~dst_port:53
     in
     let id = Cstruct.BE.get_uint16 buf 0 in
     with_timeout ctx.timeout_ns

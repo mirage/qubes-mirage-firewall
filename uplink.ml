@@ -34,9 +34,13 @@ class netvm_iface eth mac ~my_ip ~other_ip : interface = object
 end
 
   let send_dns_client_query t ~src_port ~dst ~dst_port buf =
-    U.write ~src_port ~dst ~dst_port t.udp buf >|= function
-    | Error s -> Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s); Error (`Msg "failure")
-    | Ok () -> Ok ()
+    match t with
+    | None ->
+      Log.err (fun f -> f "No uplink interface"); Lwt.return (Error (`Msg "failure"))
+    | Some t ->
+      U.write ~src_port ~dst ~dst_port t.udp buf >|= function
+      | Error s -> Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s); Error (`Msg "failure")
+      | Ok () -> Ok ()
 
   let listen t get_ts dns_responses router =
     let handle_packet ip_header ip_packet =
@@ -50,28 +54,34 @@ end
       | _ ->
         Firewall.ipv4_from_netvm router (`IPv4 (ip_header, ip_packet))
     in
-    Netif.listen t.net ~header_size:Ethernet.Packet.sizeof_ethernet (fun frame ->
-        (* Handle one Ethernet frame from NetVM *)
-        Eth.input t.eth
-        ~arpv4:(Arp.input t.arp)
-        ~ipv4:(fun ip ->
-            let cache, r =
-              Nat_packet.of_ipv4_packet t.fragments ~now:(get_ts ()) ip
-            in
-            t.fragments <- cache;
-            match r with
-              | Error e ->
-                Log.warn (fun f -> f "Ignored unknown IPv4 message from uplink: %a" Nat_packet.pp_error e);
-                Lwt.return ()
-              | Ok None -> Lwt.return_unit
-              | Ok (Some (`IPv4 (header, packet))) -> handle_packet header packet
-            )
-        ~ipv6:(fun _ip -> Lwt.return_unit)
-        frame
-    ) >|= or_raise "Uplink listen loop" Netif.pp_error
+    begin match t with
+    | None -> Lwt.return_unit
+    | Some t ->
+      Netif.listen t.net ~header_size:Ethernet.Packet.sizeof_ethernet (fun frame ->
+          (* Handle one Ethernet frame from NetVM *)
+          Eth.input t.eth
+          ~arpv4:(Arp.input t.arp)
+          ~ipv4:(fun ip ->
+              let cache, r =
+                Nat_packet.of_ipv4_packet t.fragments ~now:(get_ts ()) ip
+              in
+              t.fragments <- cache;
+              match r with
+                | Error e ->
+                  Log.warn (fun f -> f "Ignored unknown IPv4 message from uplink: %a" Nat_packet.pp_error e);
+                  Lwt.return ()
+                | Ok None -> Lwt.return_unit
+                | Ok (Some (`IPv4 (header, packet))) -> handle_packet header packet
+              )
+          ~ipv6:(fun _ip -> Lwt.return_unit)
+          frame
+      ) >|= or_raise "Uplink listen loop" Netif.pp_error
+   end
 
-
-let interface t = t.interface
+let interface t =
+  match t with
+  | None -> None
+  | Some t -> Some t.interface
 
 let connect config =
   let my_ip = config.Dao.our_ip in

@@ -46,7 +46,7 @@ let translate t packet =
 (* Add a NAT rule for the endpoints in this frame, via a random port on the firewall. *)
 let add_nat_and_forward_ipv4 t packet =
   let open Router in
-  let xl_host = t.uplink#my_ip in
+  let xl_host = t.config.our_ip in
   match My_nat.add_nat_rule_and_translate t.nat ~xl_host `NAT packet with
   | Ok packet -> forward_ipv4 t packet
   | Error e ->
@@ -59,7 +59,7 @@ let nat_to t ~host ~port packet =
   match resolve t host with
   | Ipaddr.V6 _ -> Log.warn (fun f -> f "Cannot NAT with IPv6"); Lwt.return_unit
   | Ipaddr.V4 target ->
-    let xl_host = t.uplink#my_ip in
+    let xl_host = t.config.our_ip in
     match My_nat.add_nat_rule_and_translate t.nat ~xl_host (`Redirect (target, port)) packet with
     | Ok packet -> forward_ipv4 t packet
     | Error e ->
@@ -71,7 +71,15 @@ let apply_rules t (rules : ('a, 'b) Packet.t -> Packet.action Lwt.t) ~dst (annot
   rules annotated_packet >>= fun action ->
   match action, dst with
   | `Accept, `Client client_link -> transmit_ipv4 packet client_link
-  | `Accept, (`External _ | `NetVM) -> transmit_ipv4 packet t.Router.uplink
+  | `Accept, (`External _ | `NetVM) -> 
+    begin match t.Router.uplink with
+    | Some uplink -> transmit_ipv4 packet uplink
+    | None -> begin match Client_eth.lookup t.clients t.config.netvm_ip with
+      | Some iface -> transmit_ipv4 packet iface
+      | None -> Log.warn (fun f -> f "No output interface for %a : drop" Nat_packet.pp packet);
+        Lwt.return_unit
+      end
+    end
   | `Accept, `Firewall ->
       Log.warn (fun f -> f "Bad rule: firewall can't accept packets %a" Nat_packet.pp packet);
       Lwt.return_unit

@@ -140,15 +140,6 @@ let try_read_network_config db =
   let netvm_ip = get "/qubes-gateway" in (* - default gateway IP (only when VM has netvm set); VM should add host route to this address directly via eth0 (or whatever default interface name is) *)
   let dns = get "/qubes-primary-dns" in
   let dns2 = get "/qubes-secondary-dns" in
-  Log.info (fun f -> f "@[<v2>Got network configuration from QubesDB:@,\
-                        NetVM IP on uplink network: %a@,\
-                        Our IP on client networks:  %a@,\
-                        DNS primary resolver:       %a@,\
-                        DNS secondary resolver:     %a@]"
-               Ipaddr.V4.pp netvm_ip
-               Ipaddr.V4.pp our_ip
-               Ipaddr.V4.pp dns
-               Ipaddr.V4.pp dns2);
   { netvm_ip ; our_ip ; dns ; dns2 }
 
 let read_network_config qubesDB =
@@ -159,5 +150,24 @@ let read_network_config qubesDB =
       DB.after qubesDB bindings >>= aux
   in
   aux (DB.bindings qubesDB)
+
+let print_network_config config =
+  Log.info (fun f -> f "@[<v2>Got network configuration from QubesDB:@,\
+                        NetVM IP on uplink network: %a@,\
+                        Our IP on client networks:  %a@,\
+                        DNS primary resolver:       %a@,\
+                        DNS secondary resolver:     %a@]"
+               Ipaddr.V4.pp config.netvm_ip
+               Ipaddr.V4.pp config.our_ip
+               Ipaddr.V4.pp config.dns
+               Ipaddr.V4.pp config.dns2)
+
+let update_network_config config update_config =
+  let zero_ip = Ipaddr.V4.make 0 0 0 0 in
+  let netvm_ip = if config.netvm_ip = zero_ip then update_config.netvm_ip else config.netvm_ip in
+  let our_ip = if config.our_ip = zero_ip then update_config.our_ip else config.our_ip in
+  let dns = if config.dns = zero_ip then update_config.dns else config.dns in
+  let dns2 = if config.dns2 = zero_ip then update_config.dns2 else config.dns2 in
+  Lwt.return { netvm_ip ; our_ip ; dns ; dns2 }
 
 let set_iptables_error db = Qubes.DB.write db "/qubes-iptables-error"

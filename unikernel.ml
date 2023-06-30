@@ -49,16 +49,39 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
 
     (* Read network configuration from QubesDB *)
     Dao.read_network_config qubesDB >>= fun config ->
+    (* config.netvm_ip might be 0.0.0.0 if there's no netvm provided via Qubes *)
 
-    Uplink.connect config >>= fun uplink ->
     (* Set up client-side networking *)
     Client_eth.create config >>= fun clients ->
+
+    let connect_if_netvm = 
+      if config.netvm_ip <> (Ipaddr.V4.make 0 0 0 0) then (
+        Uplink.connect config >>= fun uplink ->
+        Lwt.return (config, Some uplink)
+      ) else (
+      (* If we have no netvm IP address we must not try to Uplink.connect and we can update the config
+         with command option (if any) *)
+        let netvm_ip = Ipaddr.V4.of_string_exn (Key_gen.ipv4_gw ()) in
+        let our_ip = Ipaddr.V4.of_string_exn (Key_gen.ipv4 ()) in
+        let dns = Ipaddr.V4.of_string_exn (Key_gen.ipv4_dns ()) in
+        let dns2 = Ipaddr.V4.of_string_exn (Key_gen.ipv4_dns2 ()) in
+        let default_config:Dao.network_config = {netvm_ip; our_ip; dns; dns2} in
+        Dao.update_network_config config default_config >>= fun config ->
+        Lwt.return (config, None)
+      )
+    in
+    connect_if_netvm >>= fun (config, uplink) ->
+
+    (* We now must have a valid netvm IP address or crash *)
+    Dao.print_network_config config ;
+    assert(config.netvm_ip <> (Ipaddr.V4.make 0 0 0 0));
+
     (* Set up routing between networks and hosts *)
     let router = Router.create
       ~config
       ~clients
-      ~uplink:(Uplink.interface uplink)
       ~nat
+      ?uplink:(Uplink.interface uplink)
     in
 
     let send_dns_query = Uplink.send_dns_client_query uplink in
