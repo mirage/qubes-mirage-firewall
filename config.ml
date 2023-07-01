@@ -23,11 +23,11 @@ let ipv4_gw =
 
 let ipv4_dns =
   let doc = Key.Arg.info ~doc:"Manual DNS IP setting." ["ipv4-dns"] in
-  Key.(create "ipv4_dns" Arg.(opt string "10.139.0.1" doc))
+  Key.(create "ipv4_dns" Arg.(opt string "10.139.1.1" doc))
 
 let ipv4_dns2 =
   let doc = Key.Arg.info ~doc:"Manual Second DNS IP setting." ["ipv4-dns2"] in
-  Key.(create "ipv4_dns2" Arg.(opt string "10.139.0.2" doc))
+  Key.(create "ipv4_dns2" Arg.(opt string "10.139.1.2" doc))
 
 let main =
   foreign
