@@ -4,6 +4,8 @@
 open Fw_utils
 
 (* The routing table *)
+let src = Logs.Src.create "router" ~doc:"Packet router"
+module Log = (val Logs.src_log src : Logs.LOG)
 
 type t = {
   config : Dao.network_config;
@@ -19,7 +21,14 @@ let target t buf =
   let dst_ip = buf.Ipv4_packet.dst in
   match Client_eth.lookup t.clients dst_ip with
   | Some client_link -> Some (client_link :> interface)
-  | None -> t.uplink
+  | None -> begin match t.uplink with
+    | None -> (
+      match Client_eth.lookup t.clients t.config.netvm_ip with
+      | Some uplink -> Some (uplink :> interface)
+      | None -> None
+    )
+    | uplink -> uplink
+  end
 
 let add_client t = Client_eth.add_client t.clients
 let remove_client t = Client_eth.remove_client t.clients

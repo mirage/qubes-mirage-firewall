@@ -91,21 +91,6 @@ let apply_rules t (rules : ('a, 'b) Packet.t -> Packet.action Lwt.t) ~dst (annot
       Log.debug (fun f -> f "Dropped packet (%s) %a" reason Nat_packet.pp packet);
       Lwt.return_unit
 
-let ipv4_from_client resolver dns_servers t ~src packet =
-  match Memory_pressure.status () with
-  | `Memory_critical -> Lwt.return_unit
-  | `Ok ->
-  (* Check for existing NAT entry for this packet *)
-    match translate t packet with
-    | Some frame -> forward_ipv4 t frame  (* Some existing connection or redirect *)
-    | None ->
-      (* No existing NAT entry. Check the firewall rules. *)
-      let `IPv4 (ip, _transport) = packet in
-      let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
-      match of_mirage_nat_packet ~src:(`Client src) ~dst packet with
-      | None -> Lwt.return_unit
-      | Some firewall_packet -> apply_rules t (Rules.from_client resolver dns_servers) ~dst firewall_packet
-
 let ipv4_from_netvm t packet =
   match Memory_pressure.status () with
   | `Memory_critical -> Lwt.return_unit
@@ -127,3 +112,25 @@ let ipv4_from_netvm t packet =
           match Packet.of_mirage_nat_packet ~src ~dst packet with
           | None -> Lwt.return_unit
           | Some packet -> apply_rules t Rules.from_netvm ~dst packet
+
+let ipv4_from_client resolver dns_servers t ~src packet =
+  match Memory_pressure.status () with
+  | `Memory_critical -> Lwt.return_unit
+  | `Ok ->
+  (* Check for existing NAT entry for this packet *)
+    match translate t packet with
+    | Some frame -> forward_ipv4 t frame  (* Some existing connection or redirect *)
+    | None ->
+      (* No existing NAT entry. Check the firewall rules. *)
+      let `IPv4 (ip, _transport) = packet in
+      match Router.classify t (Ipaddr.V4 ip.Ipv4_packet.src) with
+      | `Client _ | `Firewall -> (
+        let dst = Router.classify t (Ipaddr.V4 ip.Ipv4_packet.dst) in
+        match of_mirage_nat_packet ~src:(`Client src) ~dst packet with
+        | None -> Lwt.return_unit
+        | Some firewall_packet -> apply_rules t (Rules.from_client resolver dns_servers) ~dst firewall_packet
+      )
+      | `NetVM -> ipv4_from_netvm t packet
+      | `External _ ->
+        Log.warn (fun f -> f "Frame from Inside has external source IP address! %a" Nat_packet.pp packet);
+        Lwt.return_unit
