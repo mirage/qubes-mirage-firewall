@@ -1,3 +1,10 @@
+### 0.8.5 (2023-07-05)
+
+- Remove memreport to Xen to avoid Qubes trying to get back some memory
+  (#176 @palainp)
+- Use bookworm and snapshot.notset.fr debian packages for reproducibility
+  (#175 @palainp)
+
 ### 0.8.4 (2022-12-07)
 
 - Fix remote denial of service due to excessive console output (#166 @burghardt,
