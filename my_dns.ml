@@ -3,7 +3,8 @@ open Lwt.Infix
 module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) (Time : Mirage_time.S) = struct
   type +'a io = 'a Lwt.t
   type io_addr = Ipaddr.V4.t * int
-  type stack = Router.t * (src_port:int -> dst:Ipaddr.V4.t -> dst_port:int -> Cstruct.t -> (unit, [ `Msg of string ]) result Lwt.t) * (Udp_packet.t * Cstruct.t) Lwt_mvar.t
+  module Dispatcher = Dispatcher.Make(R)(C)(Time)
+  type stack = Dispatcher.t * (src_port:int -> dst:Ipaddr.V4.t -> dst_port:int -> Cstruct.t -> (unit, [ `Msg of string ]) result Lwt.t) * (Udp_packet.t * Cstruct.t) Lwt_mvar.t
 
   module IM = Map.Make(Int)
 
@@ -48,7 +49,6 @@ module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) (Time : Mirage_
   let connect (t : t) = Lwt.return (Ok (t.protocol, t))
 
   let send_recv (ctx : context) buf : (Cstruct.t, [> `Msg of string ]) result Lwt.t =
-    let open Router in
     let dst, dst_port = ctx.nameserver in
     let router, send_udp, _ = ctx.stack in
     let src_port, evict =

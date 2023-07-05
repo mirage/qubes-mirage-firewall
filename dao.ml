@@ -123,6 +123,7 @@ let watch_clients fn =
   )
 
 type network_config = {
+  from_cmdline : bool;         (* Specify if we have network configuration from command line or from qubesDB*)
   netvm_ip : Ipaddr.V4.t;      (* The IP address of NetVM (our gateway) *)
   our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
   dns : Ipaddr.V4.t;
@@ -134,13 +135,13 @@ exception Missing_key of string
 let try_read_network_config db =
   let get name =
     match DB.KeyMap.find_opt name db with
-    | None -> Ipaddr.V4.make 0 0 0 0
+    | None -> raise (Missing_key name)
     | Some value -> Ipaddr.V4.of_string_exn value in
   let our_ip = get "/qubes-ip" in (* - IP address for this VM (only when VM has netvm set) *)
   let netvm_ip = get "/qubes-gateway" in (* - default gateway IP (only when VM has netvm set); VM should add host route to this address directly via eth0 (or whatever default interface name is) *)
   let dns = get "/qubes-primary-dns" in
   let dns2 = get "/qubes-secondary-dns" in
-  { netvm_ip ; our_ip ; dns ; dns2 }
+  { from_cmdline=false; netvm_ip ; our_ip ; dns ; dns2 }
 
 let read_network_config qubesDB =
   let rec aux bindings =
@@ -161,13 +162,5 @@ let print_network_config config =
                Ipaddr.V4.pp config.our_ip
                Ipaddr.V4.pp config.dns
                Ipaddr.V4.pp config.dns2)
-
-let update_network_config config update_config =
-  let zero_ip = Ipaddr.V4.make 0 0 0 0 in
-  let netvm_ip = if config.netvm_ip = zero_ip then update_config.netvm_ip else config.netvm_ip in
-  let our_ip = if config.our_ip = zero_ip then update_config.our_ip else config.our_ip in
-  let dns = if config.dns = zero_ip then update_config.dns else config.dns in
-  let dns2 = if config.dns2 = zero_ip then update_config.dns2 else config.dns2 in
-  Lwt.return { netvm_ip ; our_ip ; dns ; dns2 }
 
 let set_iptables_error db = Qubes.DB.write db "/qubes-iptables-error"
