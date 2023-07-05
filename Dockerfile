@@ -7,7 +7,7 @@ FROM debian@sha256:07c6cb2ae86479dcc1942a89b0a1f4049b6e9415f7de327ff641aed58b8e3
 RUN printf "deb [check-valid-until=no] http://snapshot.notset.fr/archive/debian/20230418T024659Z bookworm main" > /etc/apt/sources.list
 
 RUN apt update && apt install --no-install-recommends --no-install-suggests -y wget ca-certificates git patch unzip bzip2 make gcc g++ libc-dev
-RUN wget -O /usr/bin/opam https://github.com/ocaml/opam/releases/download/2.1.4/opam-2.1.4-i686-linux && chmod 755 /usr/bin/opam
+RUN wget -O /usr/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-i686-linux && chmod 755 /usr/bin/opam
 
 ENV OPAMROOT=/tmp
 ENV OPAMCONFIRMLEVEL=unsafe-yes
