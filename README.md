@@ -109,6 +109,17 @@ https://www.qubes-os.org/doc/software-update-dom0/ says:
 > there are no significant security implications in this choice. By default,
 > this role is assigned to the firewallvm.
 
+### Configure firewall with OpenBSD-like netvm
+
+OpenBSD is currently unable to be used as netvm, so if you want to use a BSD as your sys-net VM, you'll need to set its netvm to qubes-mirage-firewall (see https://github.com/mirage/qubes-mirage-firewall/issues/146 for more information).
+That means you'll have `AppVMs -> qubes-mirage-firewall <- OpenBSD` with the arrow standing for the netvm property setting.
+
+In that case you'll have to tell qubes-mirage-firewall which AppVM client should be used as uplink:
+```
+qvm-prefs --set mirage-firewall -- kernelopts '--ipv4=X.X.X.X --ipv4-gw=Y.Y.Y.Y'
+```
+with `X.X.X.X` the IP address for mirage-firewall and `Y.Y.Y.Y` the IP address of your OpenBSD HVM.
+
 ### Components
 
 This diagram show the main components (each box corresponds to a source `.ml` file with the same name):

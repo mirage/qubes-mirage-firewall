@@ -17,7 +17,7 @@ type host =
    disconnected client.
    See: https://github.com/talex5/qubes-mirage-firewall/issues/9#issuecomment-246956850 *)
 
-val create : client_gw:Ipaddr.V4.t -> t
+val create : Dao.network_config -> t Lwt.t
 (** [create ~client_gw] is a network of client machines.
     Qubes will have configured the client machines to use [client_gw] as their default gateway. *)
 

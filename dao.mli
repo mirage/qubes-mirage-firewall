@@ -20,10 +20,9 @@ val watch_clients : (Ipaddr.V4.t VifMap.t -> unit) -> 'a Lwt.t
     in XenStore, and again each time XenStore updates. *)
 
 type network_config = {
-  uplink_netvm_ip : Ipaddr.V4.t;      (* The IP address of NetVM (our gateway) *)
-  uplink_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
-
-  clients_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to our client VMs (their gateway) *)
+  from_cmdline : bool;         (* Specify if we have network configuration from command line or from qubesDB*)
+  netvm_ip : Ipaddr.V4.t;      (* The IP address of NetVM (our gateway) *)
+  our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
   dns : Ipaddr.V4.t;
   dns2 : Ipaddr.V4.t;
 }
@@ -38,5 +37,7 @@ val db_root : Ipaddr.V4.t -> string
 val read_rules : string Qubes.DB.KeyMap.t -> Ipaddr.V4.t -> Pf_qubes.Parse_qubes.rule list
 (** [read_rules bindings ip] extracts firewall rule information for [ip] from [bindings].
     If any rules fail to parse, it will return only one rule denying all traffic. *)
+
+val print_network_config : network_config -> unit
 
 val set_iptables_error : Qubes.DB.t -> string -> unit Lwt.t
