@@ -525,7 +525,7 @@ struct
   let uplink_wait_update qubesDB router =
     let rec aux current_db =
       let netvm = "/qubes-gateway" in
-      Log.info (fun f -> f "Waiting for netvm changes from %S...%!" netvm);
+      Log.info (fun f -> f "Waiting for netvm changes to %S...%!" netvm);
       Qubes.DB.after qubesDB current_db >>= fun new_db ->
       (match (router.uplink, Qubes.DB.KeyMap.find_opt netvm new_db) with
       | Some uplink, Some netvm
