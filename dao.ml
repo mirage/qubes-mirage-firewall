@@ -153,7 +153,7 @@ let read_network_config qubesDB =
   aux (DB.bindings qubesDB)
 
 let print_network_config config =
-  Log.info (fun f -> f "@[<v2>Got network configuration from QubesDB:@,\
+  Log.info (fun f -> f "@[<v2>Current network configuration (QubesDB or command line):@,\
                         NetVM IP on uplink network: %a@,\
                         Our IP on client networks:  %a@,\
                         DNS primary resolver:       %a@,\

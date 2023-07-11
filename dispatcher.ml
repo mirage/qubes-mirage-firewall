@@ -73,7 +73,9 @@ struct
   }
 
   type t = {
-    uplink_wait_config : unit Lwt_condition.t;
+    uplink_connected : unit Lwt_condition.t;
+    uplink_disconnect : unit Lwt_condition.t;
+    uplink_disconnected : unit Lwt_condition.t;
     mutable config : Dao.network_config;
     clients : Client_eth.t;
     nat : My_nat.t;
@@ -82,7 +84,9 @@ struct
 
   let create ~config ~clients ~nat ?uplink =
     {
-      uplink_wait_config = Lwt_condition.create ();
+      uplink_connected = Lwt_condition.create ();
+      uplink_disconnect = Lwt_condition.create ();
+      uplink_disconnected = Lwt_condition.create ();
       config;
       clients;
       nat;
@@ -444,12 +448,17 @@ struct
           Lwt_mvar.put dns_responses (header, packet)
       | _ -> ipv4_from_netvm router (`IPv4 (ip_header, ip_packet))
     in
+    Lwt_condition.wait router.uplink_connected >>= fun () ->
     match router.uplink with
     | None ->
-        Lwt_condition.wait router.uplink_wait_config >>= fun () ->
+          Log.err (fun f ->
+              f
+                "Uplink is connected but not found in the router, retrying...%!");
         uplink_listen get_ts dns_responses router
     | Some uplink ->
         let listen =
+        Lwt.catch
+        (fun () ->
           Netif.listen uplink.net ~header_size:Ethernet.Packet.sizeof_ethernet
             (fun frame ->
               (* Handle one Ethernet frame from NetVM *)
@@ -471,13 +480,26 @@ struct
                       handle_packet header packet)
                 ~ipv6:(fun _ip -> Lwt.return_unit)
                 frame)
-          >|= or_raise "Uplink listen loop" Netif.pp_error
+          >|= or_raise "Uplink listen loop" Netif.pp_error)
+          (function Lwt.Canceled ->
+            (* We can be cancelled if reconnect_uplink is achieved (via the Lwt_condition), so we need to disconnect and broadcast when it's done
+               currently we delay 1s as Netif.disconnect is non-blocking... (need to fix upstream?) *)
+            Log.info (fun f ->
+               f "disconnecting from our uplink");
+            Netif.disconnect uplink.net;
+            Time.sleep_ns (Duration.of_sec 1) >>= fun () ->
+            Lwt_condition.broadcast router.uplink_disconnected ();
+            Lwt.return_unit
+          | e -> Lwt.fail e)
         in
         let reconnect_uplink =
-          Lwt_condition.wait router.uplink_wait_config >>= fun () ->
-          uplink_listen get_ts dns_responses router
+          Lwt_condition.wait router.uplink_disconnect >>= fun () ->
+          Log.info (fun f ->
+             f "we need to reconnect to the new uplink");
+          Lwt.return_unit
         in
-        Lwt.pick [ listen; reconnect_uplink ]
+        Lwt.pick [ listen ; reconnect_uplink ] >>= fun () ->
+        uplink_listen get_ts dns_responses router
 
   (** Connect to our uplink backend (we must have an uplink here...). *)
   let connect config =
@@ -514,14 +536,14 @@ struct
               f "Our netvm IP has changed, before it was %s, now it's: %s%!"
                 (Ipaddr.V4.to_string uplink.interface#other_ip)
                 netvm);
-          Netif.disconnect uplink.net;
+          Lwt_condition.broadcast router.uplink_disconnect ();
+          (* wait for uplink disconnexion *)
+          Lwt_condition.wait router.uplink_disconnected >>= fun () ->
           Dao.read_network_config qubesDB >>= fun config ->
           Dao.print_network_config config;
-          Time.sleep_ns (Duration.of_sec 1) >>= fun () ->
-          (* We need to wait for uplink_listen callback to be killed off *)
           connect config >>= fun uplink ->
           update router ~config ?uplink:(Some uplink) >>= fun () ->
-          Lwt_condition.broadcast router.uplink_wait_config ();
+          Lwt_condition.broadcast router.uplink_connected ();
           Lwt.return_unit
       | None, Some _ ->
           (* a new interface is attributed to qubes-mirage-firewall *)
@@ -530,15 +552,13 @@ struct
           Dao.print_network_config config;
           connect config >>= fun uplink ->
           update router ~config ?uplink:(Some uplink) >>= fun () ->
-          Lwt_condition.broadcast router.uplink_wait_config ();
+          Lwt_condition.broadcast router.uplink_connected ();
           Lwt.return_unit
       | Some uplink, None ->
-          (* qubes-mirage-firewall now have netvm set to none: this is currently not supported... *)
+          (* This currently is never triggered :( *)
           Log.info (fun f ->
               f "TODO: Our netvm disapeared, troubles are coming!%!");
-          Netif.disconnect uplink.net;
-          Dao.read_network_config qubesDB >>= fun config ->
-          update router ~config ?uplink:None
+          Lwt.return_unit
       | Some _, Some _ (* The new netvm IP is unchanged (it's our old netvm IP) *)
       | None, None  ->
           Log.info (fun f ->
