@@ -487,7 +487,6 @@ struct
             Log.info (fun f ->
                f "disconnecting from our uplink");
             Netif.disconnect uplink.net;
-            Time.sleep_ns (Duration.of_sec 1) >>= fun () ->
             Lwt_condition.broadcast router.uplink_disconnected ();
             Lwt.return_unit
           | e -> Lwt.fail e)
