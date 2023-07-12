@@ -290,9 +290,17 @@ struct
         match Client_eth.ARP.input fixed_arp arp with
         | None -> Lwt.return_unit
         | Some response ->
-            iface#writev `ARP (fun b ->
-                Arp_packet.encode_into response b;
-                Arp_packet.size))
+          Lwt.catch
+            (fun () ->
+                  iface#writev `ARP (fun b ->
+                      Arp_packet.encode_into response b;
+                      Arp_packet.size))
+            (fun ex ->
+              Log.warn (fun f ->
+                  f "Failed to write APR to %a: %s" Ipaddr.V4.pp iface#other_ip
+                    (Printexc.to_string ex));
+              Lwt.return_unit)
+     )
 
   (** Handle an IPv4 packet from the client. *)
   let client_handle_ipv4 get_ts cache ~iface ~router dns_client dns_servers
