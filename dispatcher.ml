@@ -57,9 +57,16 @@ struct
       method other_ip = other_ip
 
       method writev ethertype fillfn =
-        mac >>= fun dst ->
-        UplinkEth.write eth dst ethertype fillfn
-        >|= or_raise "Write to uplink" UplinkEth.pp_error
+        Lwt.catch
+          (fun () ->
+            mac >>= fun dst ->
+            UplinkEth.write eth dst ethertype fillfn
+            >|= or_raise "Write to uplink" UplinkEth.pp_error)
+          (fun ex ->
+            Log.err (fun f ->
+                f "uncaught exception trying to send to uplink: @[%s@]"
+                  (Printexc.to_string ex));
+            Lwt.return_unit)
     end
 
   type uplink = {
@@ -158,9 +165,17 @@ struct
 
   let forward_ipv4 t packet =
     let (`IPv4 (ip, _)) = packet in
-    match target t ip with
-    | Some iface -> transmit_ipv4 packet iface
-    | None -> Lwt.return_unit
+    Lwt.catch
+    (fun () ->
+      match target t ip with
+      | Some iface -> transmit_ipv4 packet iface
+      | None -> Lwt.return_unit)
+    (fun ex ->
+      let dst_ip = ip.Ipv4_packet.dst in
+      Log.warn (fun f ->
+          f "Failed to lookup for target %a: %s" Ipaddr.V4.pp dst_ip
+            (Printexc.to_string ex));
+      Lwt.return_unit)
 
   (* NAT *)
 
@@ -433,29 +448,21 @@ struct
         Log.err (fun f -> f "No uplink interface");
         Lwt.return (Error (`Msg "failure"))
     | Some t -> (
-        U.write ~src_port ~dst ~dst_port t.udp buf >|= function
-        | Error s ->
-            Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s);
-            Error (`Msg "failure")
-        | Ok () -> Ok ())
+        Lwt.catch
+          (fun () ->
+            U.write ~src_port ~dst ~dst_port t.udp buf >|= function
+            | Error s ->
+                Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s);
+                Error (`Msg "failure")
+            | Ok () -> Ok ())
+          (fun ex ->
+            Log.err (fun f ->
+                f "uncaught exception trying to send DNS request to uplink: @[%s@]"
+                  (Printexc.to_string ex));
+            Lwt.return (Error (`Msg "DNS request not sent"))))
 
   (** Wait for packet from our uplink (we must have an uplink here...). *)
   let rec uplink_listen get_ts dns_responses router =
-    let handle_packet ip_header ip_packet =
-      let open Udp_packet in
-      Log.debug (fun f ->
-          f "received ipv4 packet from %a on uplink" Ipaddr.V4.pp
-            ip_header.Ipv4_packet.src);
-      match ip_packet with
-      | `UDP (header, packet) when My_nat.dns_port router.nat header.dst_port ->
-          Log.debug (fun f ->
-              f
-                "found a DNS packet whose dst_port (%d) was in the list of \
-                 dns_client ports"
-                header.dst_port);
-          Lwt_mvar.put dns_responses (header, packet)
-      | _ -> ipv4_from_netvm router (`IPv4 (ip_header, ip_packet))
-    in
     Lwt_condition.wait router.uplink_connected >>= fun () ->
     match router.uplink with
     | None ->
@@ -477,7 +484,7 @@ struct
                       ip
                   in
                   uplink.fragments <- cache;
-                  match r with
+                  begin match r with
                   | Error e ->
                       Log.warn (fun f ->
                           f "Ignored unknown IPv4 message from uplink: %a"
@@ -485,7 +492,21 @@ struct
                       Lwt.return ()
                   | Ok None -> Lwt.return_unit
                   | Ok (Some (`IPv4 (header, packet))) ->
-                      handle_packet header packet)
+                      let open Udp_packet in
+                      Log.debug (fun f ->
+                          f "received ipv4 packet from %a on uplink" Ipaddr.V4.pp
+                            header.Ipv4_packet.src);
+                      begin match packet with
+                      | `UDP (header, packet) when My_nat.dns_port router.nat header.dst_port ->
+                          Log.debug (fun f ->
+                              f
+                                "found a DNS packet whose dst_port (%d) was in the list of \
+                                 dns_client ports"
+                                header.dst_port);
+                          Lwt_mvar.put dns_responses (header, packet)
+                      | _ -> ipv4_from_netvm router (`IPv4 (header, packet))
+                      end
+                   end)
                 ~ipv6:(fun _ip -> Lwt.return_unit)
                 frame)
           >|= or_raise "Uplink listen loop" Netif.pp_error)
