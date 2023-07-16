@@ -515,6 +515,12 @@ struct
                currently we delay 1s as Netif.disconnect is non-blocking... (need to fix upstream?) *)
             Log.info (fun f ->
                f "disconnecting from our uplink");
+            U.disconnect uplink.udp;
+            I.disconnect uplink.ip;
+            (* mutable fragments : Fragments.Cache.t; *)
+            (* interface : interface; *)
+            Arp.disconnect uplink.arp;
+            UplinkEth.disconnect uplink.eth;
             Netif.disconnect uplink.net;
             Lwt_condition.broadcast router.uplink_disconnected ();
             Lwt.return_unit
