@@ -46,8 +46,8 @@ let main =
       package ~min:"2.3.0" ~sublibs:["mirage"] "arp";
       package ~min:"3.0.0" "ethernet";
       package "shared-memory-ring" ~min:"3.0.0";
-      package ~min:"2.1.2" "netchannel";
-      package "mirage-net-xen";
+      package ~min:"2.1.3" "netchannel";
+      package ~min:"2.1.3" "mirage-net-xen";
       package "ipaddr" ~min:"5.2.0";
       package "mirage-qubes" ~min:"0.9.1";
       package ~min:"3.0.1" "mirage-nat";
