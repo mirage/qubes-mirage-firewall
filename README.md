@@ -49,6 +49,7 @@ However, it should still work fine.
 
 ## Deploy
 
+### Manual deployment
 If you want to deploy manually, unpack `mirage-firewall.tar.bz2` in domU. The tarball contains `vmlinuz`,
 which is the unikernel itself, plus a dummy initramfs file that Qubes requires:
 
@@ -83,6 +84,9 @@ qvm-create \
 qvm-features mirage-firewall qubes-firewall 1
 qvm-features mirage-firewall no-default-kernelopts 1
 ```
+
+### Deployment using saltstack
+If you're familiar how to run salt states in Qubes, you can also use the script "SaltScriptToDownloadAndInstallMirageFirewallInQubes.sls" to automatically deploy the latest version of mirage firewall in your Qubes OS. The script checks the checksum from the integration server and compares with the latest version provided in the github releases. It might be necessary to adjust the VM templates in the script which are used for downloading of the mirage unikernel. Also don't forget to change the VMs in which the uni kernel should be used or adjust the "Qubes Global Settings".
 
 ## Upgrading
 
