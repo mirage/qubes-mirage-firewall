@@ -86,7 +86,7 @@ qvm-features mirage-firewall no-default-kernelopts 1
 ```
 
 ### Deployment using saltstack
-If you're familiar how to run salt states in Qubes, you can also use the script `SaltScriptToDownloadAndInstallMirageFirewallInQubes.sls` to automatically deploy the latest version of mirage firewall in your Qubes OS. The script checks the checksum from the integration server and compares with the latest version provided in the github releases. It might be necessary to adjust the VM templates in the script which are used for downloading of the mirage unikernel. Also don't forget to change the VMs in which the uni kernel should be used or adjust the "Qubes Global Settings".
+If you're familiar how to run salt states in Qubes, you can also use the script `SaltScriptToDownloadAndInstallMirageFirewallInQubes.sls` to automatically deploy the latest version of mirage firewall in your Qubes OS. An introduction can be found [here](https://forum.qubes-os.org/t/qubes-salt-beginners-guide/20126) and [here](https://www.qubes-os.org/doc/salt/). Following the instructions from the former link, you can run the script in dom0 with the command `sudo qubesctl --show-output state.apply SaltScriptToDownloadAndInstallMirageFirewallInQubes saltenv=user`. The script checks the checksum from the integration server and compares with the latest version provided in the github releases. It might be necessary to adjust the VM templates in the script which are used for downloading of the mirage unikernel, if your default templates do not have the tools `curl` and `tar` installed by default. Also don't forget to change the VMs in which the uni kernel should be used or adjust the "Qubes Global Settings".
 
 ## Upgrading
 
