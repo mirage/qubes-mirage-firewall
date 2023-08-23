@@ -3,9 +3,9 @@
 # After the install, you have to switch your AppVMs to use the mirage firewall vm created by this script e.g. by using "Qubes Global Settings"
 # inspired by: https://github.com/one7two99/my-qubes/tree/master/mirage-firewall
 
-# You might want to adjust the following 2 variables to use up-to-date templates on your qubes
-{% set DownloadVMTemplate = "fedora-38" %}
-{% set DispVM = "fedora-38-dvm" %}
+# default template + dispvm template are used. Possible optimization is to use min-dvms
+{% set DownloadVMTemplate = salt['cmd.shell']("qubes-prefs default_template") %}
+{% set DispVM = salt['cmd.shell']("qubes-prefs default_dispvm") %}
 
 {% set DownloadVM = "DownloadVmMirage" %}
 {% set MirageFW = "sys-mirage-fw" %}
@@ -33,7 +33,7 @@ create-downloader-VM:
 download-and-unpack-in-DownloadVM4mirage:
   cmd.run: 
     - names:
-      - qvm-run --pass-io {{ DownloadVM }} {{ "wget " ~ DownloadBinary }}
+      - qvm-run --pass-io {{ DownloadVM }} {{ "curl -L -O " ~ DownloadBinary }}
       - qvm-run --pass-io {{ DownloadVM }} {{ "tar -xvjf " ~ Filename }}
     - require: 
       - create-downloader-VM
