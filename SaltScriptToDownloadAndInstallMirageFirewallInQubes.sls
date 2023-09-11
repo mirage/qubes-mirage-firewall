@@ -73,8 +73,8 @@ create-sys-mirage-fw:
       - kernel: mirage-firewall
       - kernelopts:
       - include-in-backups: False
-      - memory: 32
-      - maxmem: 32
+      - memory: 64
+      - maxmem: 64
       - netvm: sys-net
       - provides-network: True
       - vcpus: 1
