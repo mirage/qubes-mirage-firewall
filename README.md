@@ -14,22 +14,23 @@ See the [Deploy](#deploy) section below for installation instructions.
 ## Build from source
 
 Note: The most reliable way to build is using Docker.
-Fedora 35 works well for this and Debian 11 also works, but you'll need to follow the instructions at [docker.com][debian-docker] to get Docker
+Fedora 38 works well for this, Debian 12 also works, but you'll need to follow the instructions at [docker.com][debian-docker] to get Docker
 (don't use Debian's version).
 
-Create a new Fedora-35 AppVM (or reuse an existing one). In the Qube's Settings (Basic / Disk storage), increase the private storage max size from the default 2048 MiB to 4096 MiB. Open a terminal.
+Create a new Fedora-38 AppVM (or reuse an existing one). In the Qube's Settings (Basic / Disk storage), increase the private storage max size from the default 2048 MiB to 8192 MiB. Open a terminal.
 
-Clone this Git repository and run the `build-with-docker.sh` script:
+Clone this Git repository and run the `build-with-docker.sh` script (Note: The `chcon` call is mandatory on Fedora with new SELinux policies which do not allow to standardly keep the docker images in homedir):
 
     mkdir /home/user/docker
     sudo ln -s /home/user/docker /var/lib/docker
+    sudo chcon -Rt container_file_t /home/user/docker
     sudo dnf install docker
     sudo systemctl start docker
     git clone https://github.com/mirage/qubes-mirage-firewall.git
     cd qubes-mirage-firewall
     sudo ./build-with-docker.sh
 
-This took about 10 minutes on my laptop (it will be much quicker if you run it again).
+This took about 15 minutes on my laptop (it will be much quicker if you run it again).
 The symlink step at the start isn't needed if your build VM is standalone.
 It gives Docker more disk space and avoids losing the Docker image cache when you reboot the Qube.
 
@@ -141,7 +142,7 @@ The boot process:
 For development, use the [test-mirage][] scripts to deploy the unikernel (`qubes-firewall.xen`) from your development AppVM.
 This takes a little more setting up the first time, but will be much quicker after that. e.g.
 
-    $ test-mirage dist/qubes-firewall.xen mirage-firewall
+    [user@dev ~]$ test-mirage dist/qubes-firewall.xen mirage-firewall
     Waiting for 'Ready'... OK
     Uploading 'dist/qubes-firewall.xen' (7454880 bytes) to "mirage-test"
     Waiting for 'Booting'... OK
