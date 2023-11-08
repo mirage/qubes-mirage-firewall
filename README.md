@@ -17,7 +17,7 @@ Note: The most reliable way to build is using Docker.
 Fedora 38 works well for this, Debian 12 also works, but you'll need to follow the instructions at [docker.com][debian-docker] to get Docker
 (don't use Debian's version).
 
-Create a new Fedora-38 AppVM (or reuse an existing one). In the Qube's Settings (Basic / Disk storage), increase the private storage max size from the default 2048 MiB to 4096 MiB. Open a terminal.
+Create a new Fedora-38 AppVM (or reuse an existing one). In the Qube's Settings (Basic / Disk storage), increase the private storage max size from the default 2048 MiB to 8192 MiB. Open a terminal.
 
 Clone this Git repository and run the `build-with-docker.sh` script (Note: The `chcon` call is mandatory on Fedora with new SELinux policies which do not allow to standardly keep the docker images in homedir):
 
