@@ -26,4 +26,7 @@ RUN opam exec -- opam install -y mirage opam-monorepo ocaml-solo5
 RUN mkdir /tmp/orb-build
 ADD config.ml /tmp/orb-build/config.ml
 WORKDIR /tmp/orb-build
-CMD opam exec -- sh -exc 'mirage configure -t xen --allocation-policy=best-fit && make depend && make tar'
+CMD opam exec -- sh -exc 'mirage configure -t xen --extra-repos=\
+opam-overlays:https://github.com/dune-universe/opam-overlays.git#91a371754a2c9f4febbb6c7bb039649ad49a3c13,\
+mirage-overlays:https://github.com/dune-universe/mirage-opam-overlays.git#05f1c1823d891ce4d8adab91f5db3ac51d86dc0b \
+--allocation-policy=best-fit && make depend && make tar'
