@@ -3,7 +3,7 @@
 # changes some compiler optimisations (unlikely).
 # bookworm-slim taken from https://hub.docker.com/_/debian/tags?page=1&name=bookworm-slim
 FROM debian@sha256:ea5ad531efe1ac11ff69395d032909baf423b8b88e9aade07e11b40b2e5a1338
-# install ca-certificates and remove default packages repository
+# install remove default packages repository
 RUN rm /etc/apt/sources.list.d/debian.sources
 # and set the package source to a specific release too
 # taken from https://snapshot.debian.org/archive/debian
@@ -13,6 +13,9 @@ RUN printf "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian
 
 RUN apt update && apt install --no-install-recommends --no-install-suggests -y wget ca-certificates git patch unzip bzip2 make gcc g++ libc-dev
 RUN wget -O /usr/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-i686-linux && chmod 755 /usr/bin/opam
+# taken from https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh
+RUN test `sha512sum /usr/bin/opam | cut -d' ' -f1` = \
+"38802b3079eeceb27aab3465bfd0f9f05a710dccf9487eb35fa2c02fbaf9a0659e1447aa19dd36df9cd01f760229de28c523c08c1c86a3aa3f5e25dbe7b551dd" || exit
 
 ENV OPAMROOT=/tmp
 ENV OPAMCONFIRMLEVEL=unsafe-yes
