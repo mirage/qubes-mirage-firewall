@@ -72,8 +72,8 @@ Run this command in dom0 to create a `mirage-firewall` VM using the `mirage-fire
 qvm-create \
   --property kernel=mirage-firewall \
   --property kernelopts='' \
-  --property memory=64 \
-  --property maxmem=64 \
+  --property memory=32 \
+  --property maxmem=32 \
   --property netvm=sys-net \
   --property provides_network=True \
   --property vcpus=1 \
