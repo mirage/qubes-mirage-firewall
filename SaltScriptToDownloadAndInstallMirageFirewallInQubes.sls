@@ -42,9 +42,9 @@ download-and-unpack-in-DownloadVM4mirage:
 check-checksum-in-DownloadVM:
   cmd.run: 
     - names:
-      - qvm-run --pass-io {{ DownloadVM }} {{ "\"echo \\\"Checksum of last build on github:\\\";curl -s https://raw.githubusercontent.com/mirage/qubes-mirage-firewall/main/build-with-docker.sh  | grep \\\"SHA2 last known:\\\" | cut -d\' \' -f5 | tr -d \\\\\\\"\"" }}
+      - qvm-run --pass-io {{ DownloadVM }} {{ "\"echo \\\"Checksum of last build on github:\\\";curl -s https://raw.githubusercontent.com/mirage/qubes-mirage-firewall/main/build-with.sh  | grep \\\"SHA2 last known:\\\" | cut -d\' \' -f5 | tr -d \\\\\\\"\"" }}
       - qvm-run --pass-io {{ DownloadVM }} {{ "\"echo \\\"Checksum of downloaded local file:\\\";sha256sum ~/mirage-firewall/vmlinuz | cut -d\' \' -f1\"" }}
-      - qvm-run --pass-io {{ DownloadVM }} {{ "\"diff <(curl -s https://raw.githubusercontent.com/mirage/qubes-mirage-firewall/main/build-with-docker.sh  | grep \\\"SHA2 last known:\\\" | cut -d\' \' -f5 | tr -d \\\\\\\") <(sha256sum ~/mirage-firewall/vmlinuz | cut -d\' \' -f1) && echo \\\"Checksums DO match.\\\" || (echo \\\"Checksums do NOT match.\\\";exit 101)\"" }} #~/mirage-firewall/modules.img
+      - qvm-run --pass-io {{ DownloadVM }} {{ "\"diff <(curl -s https://raw.githubusercontent.com/mirage/qubes-mirage-firewall/main/build-with.sh  | grep \\\"SHA2 last known:\\\" | cut -d\' \' -f5 | tr -d \\\\\\\") <(sha256sum ~/mirage-firewall/vmlinuz | cut -d\' \' -f1) && echo \\\"Checksums DO match.\\\" || (echo \\\"Checksums do NOT match.\\\";exit 101)\"" }} #~/mirage-firewall/modules.img
     - require: 
       - download-and-unpack-in-DownloadVM4mirage
 
