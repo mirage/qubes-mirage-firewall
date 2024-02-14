@@ -13,42 +13,51 @@ See the [Deploy](#deploy) section below for installation instructions.
 
 ## Build from source
 
-Note: The most reliable way to build is using Docker.
-Fedora 35 works well for this and Debian 11 also works, but you'll need to follow the instructions at [docker.com][debian-docker] to get Docker
+Note: The most reliable way to build is using Docker or Podman.
+Fedora 38 works well for this, Debian 12 also works, but you'll need to follow the instructions at [docker.com][debian-docker] to get Docker
 (don't use Debian's version).
 
-Create a new Fedora-35 AppVM (or reuse an existing one). In the Qube's Settings (Basic / Disk storage), increase the private storage max size from the default 2048 MiB to 4096 MiB. Open a terminal.
+Create a new Fedora-38 AppVM (or reuse an existing one). In the Qube's Settings (Basic / Disk storage), increase the private storage max size from the default 2048 MiB to 8192 MiB. Open a terminal.
 
-Clone this Git repository and run the `build-with-docker.sh` script:
+Clone this Git repository and run the `build-with.sh` script with either `docker` or `podman` as argument (Note: The `chcon` call is mandatory on Fedora with new SELinux policies which do not allow to standardly keep the docker images in homedir):
 
     mkdir /home/user/docker
     sudo ln -s /home/user/docker /var/lib/docker
+    sudo chcon -Rt container_file_t /home/user/docker
     sudo dnf install docker
     sudo systemctl start docker
     git clone https://github.com/mirage/qubes-mirage-firewall.git
     cd qubes-mirage-firewall
-    sudo ./build-with-docker.sh
+    sudo ./build-with.sh docker
 
-This took about 10 minutes on my laptop (it will be much quicker if you run it again).
-The symlink step at the start isn't needed if your build VM is standalone.
-It gives Docker more disk space and avoids losing the Docker image cache when you reboot the Qube.
+Or
+
+    sudo systemctl start podman
+    git clone https://github.com/mirage/qubes-mirage-firewall.git
+    cd qubes-mirage-firewall
+    ./build-with.sh podman
+
+This took about 15 minutes on my laptop (it will be much quicker if you run it again).
+The symlink step at the start isn't needed if your build VM is standalone. It gives Docker more disk space and avoids losing the Docker image cache when you reboot the Qube.
+It's not needed with Podman as the containers lives in your home directory by default.
 
 Note: the object files are stored in the `_build` directory to speed up incremental builds.
 If you change the dependencies, you will need to delete this directory before rebuilding.
 
-It's OK to install the Docker package in a template VM if you want it to remain
+It's OK to install the Docker or Podman package in a template VM if you want it to remain
 after a reboot, but the build of the firewall itself should be done in a regular AppVM.
 
-You can also build without Docker, as for any normal Mirage unikernel;
+You can also build without that script, as for any normal Mirage unikernel;
 see [the Mirage installation instructions](https://mirage.io/wiki/install) for details.
 
-The Docker build fixes the versions of the libraries it uses, ensuring that you will get
-exactly the same binary that is in the release. If you build without Docker, it will build
+The build script fixes the versions of the libraries it uses, ensuring that you will get
+exactly the same binary that is in the release. If you build without it, it will build
 against the latest versions instead (and the hash will therefore probably not match).
 However, it should still work fine.
 
 ## Deploy
 
+### Manual deployment
 If you want to deploy manually, unpack `mirage-firewall.tar.bz2` in domU. The tarball contains `vmlinuz`,
 which is the unikernel itself, plus a dummy initramfs file that Qubes requires:
 
@@ -83,6 +92,9 @@ qvm-create \
 qvm-features mirage-firewall qubes-firewall 1
 qvm-features mirage-firewall no-default-kernelopts 1
 ```
+
+### Deployment using saltstack
+If you're familiar how to run salt states in Qubes, you can also use the script `SaltScriptToDownloadAndInstallMirageFirewallInQubes.sls` to automatically deploy the latest version of mirage firewall in your Qubes OS. An introduction can be found [here](https://forum.qubes-os.org/t/qubes-salt-beginners-guide/20126) and [here](https://www.qubes-os.org/doc/salt/). Following the instructions from the former link, you can run the script in dom0 with the command `sudo qubesctl --show-output state.apply SaltScriptToDownloadAndInstallMirageFirewallInQubes saltenv=user`. The script checks the checksum from the integration server and compares with the latest version provided in the github releases. It might be necessary to adjust the VM templates in the script which are used for downloading of the mirage unikernel, if your default templates do not have the tools `curl` and `tar` installed by default. Also don't forget to change the VMs in which the uni kernel should be used or adjust the "Qubes Global Settings".
 
 ## Upgrading
 
@@ -148,7 +160,7 @@ The boot process:
 For development, use the [test-mirage][] scripts to deploy the unikernel (`qubes-firewall.xen`) from your development AppVM.
 This takes a little more setting up the first time, but will be much quicker after that. e.g.
 
-    $ test-mirage dist/qubes-firewall.xen mirage-firewall
+    [user@dev ~]$ test-mirage dist/qubes-firewall.xen mirage-firewall
     Waiting for 'Ready'... OK
     Uploading 'dist/qubes-firewall.xen' (7454880 bytes) to "mirage-test"
     Waiting for 'Booting'... OK
