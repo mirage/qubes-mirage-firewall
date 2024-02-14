@@ -10,7 +10,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 type t = {
   mutable iface_of_ip : client_link IpMap.t;
   changed : unit Lwt_condition.t;   (* Fires when [iface_of_ip] changes. *)
-  client_gw : Ipaddr.V4.t;  (* The IP that clients are given as their default gateway. *)
+  my_ip : Ipaddr.V4.t;  (* The IP that clients are given as their default gateway. *)
 }
 
 type host =
@@ -18,11 +18,12 @@ type host =
   | `Firewall
   | `External of Ipaddr.t ]
 
-let create ~client_gw =
+let create config =
   let changed = Lwt_condition.create () in
-  { iface_of_ip = IpMap.empty; client_gw; changed }
+  let my_ip = config.Dao.our_ip in
+  Lwt.return { iface_of_ip = IpMap.empty; my_ip; changed }
 
-let client_gw t = t.client_gw
+let client_gw t = t.my_ip
 
 let add_client t iface =
   let ip = iface#other_ip in
@@ -52,14 +53,14 @@ let classify t ip =
   match ip with
   | Ipaddr.V6 _ -> `External ip
   | Ipaddr.V4 ip4 ->
-    if ip4 = t.client_gw then `Firewall
+    if ip4 = t.my_ip then `Firewall
     else match lookup t ip4 with
       | Some client_link -> `Client client_link
       | None -> `External ip
 
 let resolve t : host -> Ipaddr.t = function
   | `Client client_link -> Ipaddr.V4 client_link#other_ip
-  | `Firewall -> Ipaddr.V4 t.client_gw
+  | `Firewall -> Ipaddr.V4 t.my_ip
   | `External addr -> addr
 
 module ARP = struct
@@ -69,7 +70,7 @@ module ARP = struct
   }
 
   let lookup t ip =
-    if ip = t.net.client_gw then Some t.client_link#my_mac
+    if ip = t.net.my_ip then Some t.client_link#my_mac
     else if (Ipaddr.V4.to_octets ip).[3] = '\x01' then (
       Log.info (fun f -> f ~header:t.client_link#log_header
                    "Request for %a is invalid, but pretending it's me (see Qubes issue #5022)" Ipaddr.V4.pp ip);

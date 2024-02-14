@@ -123,10 +123,9 @@ let watch_clients fn =
   )
 
 type network_config = {
-  uplink_netvm_ip : Ipaddr.V4.t;      (* The IP address of NetVM (our gateway) *)
-  uplink_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
-
-  clients_our_ip : Ipaddr.V4.t;        (* The IP address of our interface to our client VMs (their gateway) *)
+  from_cmdline : bool;         (* Specify if we have network configuration from command line or from qubesDB*)
+  netvm_ip : Ipaddr.V4.t;      (* The IP address of NetVM (our gateway) *)
+  our_ip : Ipaddr.V4.t;        (* The IP address of our interface to NetVM *)
   dns : Ipaddr.V4.t;
   dns2 : Ipaddr.V4.t;
 }
@@ -137,24 +136,12 @@ let try_read_network_config db =
   let get name =
     match DB.KeyMap.find_opt name db with
     | None -> raise (Missing_key name)
-    | Some value -> value in
-  let uplink_our_ip = get "/qubes-ip" |> Ipaddr.V4.of_string_exn in
-  let uplink_netvm_ip = get "/qubes-gateway" |> Ipaddr.V4.of_string_exn in
-  let clients_our_ip = get "/qubes-netvm-gateway" |> Ipaddr.V4.of_string_exn in
-  let dns = get "/qubes-primary-dns" |> Ipaddr.V4.of_string_exn in
-  let dns2 = get "/qubes-secondary-dns" |> Ipaddr.V4.of_string_exn in
-  Log.info (fun f -> f "@[<v2>Got network configuration from QubesDB:@,\
-                        NetVM IP on uplink network: %a@,\
-                        Our IP on uplink network:   %a@,\
-                        Our IP on client networks:  %a@,\
-                        DNS primary resolver:       %a@,\
-                        DNS secondary resolver:     %a@]"
-               Ipaddr.V4.pp uplink_netvm_ip
-               Ipaddr.V4.pp uplink_our_ip
-               Ipaddr.V4.pp clients_our_ip
-               Ipaddr.V4.pp dns
-               Ipaddr.V4.pp dns2);
-  { uplink_netvm_ip; uplink_our_ip; clients_our_ip ; dns ; dns2 }
+    | Some value -> Ipaddr.V4.of_string_exn value in
+  let our_ip = get "/qubes-ip" in (* - IP address for this VM (only when VM has netvm set) *)
+  let netvm_ip = get "/qubes-gateway" in (* - default gateway IP (only when VM has netvm set); VM should add host route to this address directly via eth0 (or whatever default interface name is) *)
+  let dns = get "/qubes-primary-dns" in
+  let dns2 = get "/qubes-secondary-dns" in
+  { from_cmdline=false; netvm_ip ; our_ip ; dns ; dns2 }
 
 let read_network_config qubesDB =
   let rec aux bindings =
@@ -164,5 +151,16 @@ let read_network_config qubesDB =
       DB.after qubesDB bindings >>= aux
   in
   aux (DB.bindings qubesDB)
+
+let print_network_config config =
+  Log.info (fun f -> f "@[<v2>Current network configuration (QubesDB or command line):@,\
+                        NetVM IP on uplink network: %a@,\
+                        Our IP on client networks:  %a@,\
+                        DNS primary resolver:       %a@,\
+                        DNS secondary resolver:     %a@]"
+               Ipaddr.V4.pp config.netvm_ip
+               Ipaddr.V4.pp config.our_ip
+               Ipaddr.V4.pp config.dns
+               Ipaddr.V4.pp config.dns2)
 
 let set_iptables_error db = Qubes.DB.write db "/qubes-iptables-error"

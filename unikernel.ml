@@ -8,18 +8,19 @@ let src = Logs.Src.create "unikernel" ~doc:"Main unikernel code"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_time.S) = struct
-  module Uplink = Uplink.Make(R)(Clock)(Time)
+  module Dispatcher = Dispatcher.Make(R)(Clock)(Time)
   module Dns_transport = My_dns.Transport(R)(Clock)(Time)
   module Dns_client = Dns_client.Make(Dns_transport)
 
   (* Set up networking and listen for incoming packets. *)
-  let network dns_client dns_responses dns_servers uplink qubesDB router =
+  let network dns_client dns_responses dns_servers qubesDB router =
     (* Report success *)
     Dao.set_iptables_error qubesDB "" >>= fun () ->
     (* Handle packets from both networks *)
     Lwt.choose [
-      Client_net.listen Clock.elapsed_ns dns_client dns_servers qubesDB router;
-      Uplink.listen uplink Clock.elapsed_ns dns_responses router
+      Dispatcher.wait_clients Clock.elapsed_ns dns_client dns_servers qubesDB router ;
+      Dispatcher.uplink_wait_update qubesDB router ;
+      Dispatcher.uplink_listen Clock.elapsed_ns dns_responses router
     ]
 
   (* Main unikernel entry point (called from auto-generated main.ml). *)
@@ -47,27 +48,48 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
     let max_entries = Key_gen.nat_table_size () in
     let nat = My_nat.create ~max_entries in
 
-    (* Read network configuration from QubesDB *)
-    Dao.read_network_config qubesDB >>= fun config ->
+    let netvm_ip = Ipaddr.V4.of_string_exn (Key_gen.ipv4_gw ()) in
+    let our_ip = Ipaddr.V4.of_string_exn (Key_gen.ipv4 ()) in
+    let dns = Ipaddr.V4.of_string_exn (Key_gen.ipv4_dns ()) in
+    let dns2 = Ipaddr.V4.of_string_exn (Key_gen.ipv4_dns2 ()) in
+    
+    let zero_ip = (Ipaddr.V4.make 0 0 0 0) in
+    
+    let network_config  =
+      if (netvm_ip = zero_ip && our_ip = zero_ip) then (* Read network configuration from QubesDB *)
+        Dao.read_network_config qubesDB >>= fun config ->
+        if config.netvm_ip = zero_ip || config.our_ip = zero_ip then
+          Log.info (fun f -> f "We currently have no netvm nor command line for setting it up, aborting...");
+        assert (config.netvm_ip <> zero_ip && config.our_ip <> zero_ip);
+        Lwt.return config
+      else begin
+        let config:Dao.network_config = {from_cmdline=true; netvm_ip; our_ip; dns; dns2} in
+        Lwt.return config
+      end
+    in
+    network_config >>= fun config ->
 
-    Uplink.connect config >>= fun uplink ->
+    (* We now must have a valid netvm IP address and our IP address or crash *)
+    Dao.print_network_config config ;
+
     (* Set up client-side networking *)
-    let client_eth = Client_eth.create
-      ~client_gw:config.Dao.clients_our_ip in
+    Client_eth.create config >>= fun clients ->
+
     (* Set up routing between networks and hosts *)
-    let router = Router.create
-      ~client_eth
-      ~uplink:(Uplink.interface uplink)
+    let router = Dispatcher.create
+      ~config
+      ~clients
       ~nat
+      ?uplink:None
     in
 
-    let send_dns_query = Uplink.send_dns_client_query uplink in
+    let send_dns_query = Dispatcher.send_dns_client_query None in
     let dns_mvar = Lwt_mvar.create_empty () in
     let nameservers = `Udp, [ config.Dao.dns, 53 ; config.Dao.dns2, 53 ] in
     let dns_client = Dns_client.create ~nameservers (router, send_dns_query, dns_mvar) in
 
     let dns_servers = [ config.Dao.dns ; config.Dao.dns2 ] in
-    let net_listener = network (Dns_client.getaddrinfo dns_client Dns.Rr_map.A) dns_mvar dns_servers uplink qubesDB router in
+    let net_listener = network (Dns_client.getaddrinfo dns_client Dns.Rr_map.A) dns_mvar dns_servers qubesDB router in
 
     (* Report memory usage to XenStore *)
     Memory_pressure.init ();

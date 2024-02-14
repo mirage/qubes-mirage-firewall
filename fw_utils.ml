@@ -8,6 +8,7 @@ module IpMap = struct
   let find x map =
     try Some (find x map)
     with Not_found -> None
+    | e -> Logs.err( fun f -> f "uncaught exception in find...%!"); None
 end
 
 (** An Ethernet interface. *)
