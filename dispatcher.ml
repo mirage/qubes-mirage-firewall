@@ -333,6 +333,9 @@ struct
         let src = ip.Ipv4_packet.src in
         if src = iface#other_ip then
           ipv4_from_client dns_client dns_servers router ~src:iface packet
+        else if iface#other_ip = router.config.netvm_ip then
+          (* This can occurs when used with *BSD as netvm (and a gateway is set) *)
+          ipv4_from_netvm router packet
         else (
           Log.warn (fun f ->
               f "Incorrect source IP %a in IP packet from %a (dropping)"
