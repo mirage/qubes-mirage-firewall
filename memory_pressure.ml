@@ -1,17 +1,16 @@
 (* Copyright (C) 2015, Thomas Leonard <thomas.leonard@unikernel.com>
    See the README file for details. *)
 
-open Lwt
-
 let src = Logs.Src.create "memory_pressure" ~doc:"Memory pressure monitor"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let wordsize_in_bytes = Sys.word_size / 8
+(* let wordsize_in_bytes = Sys.word_size / 8 *)
 
 let fraction_free stats =
   let { Xen_os.Memory.free_words; heap_words; _ } = stats in
   float free_words /. float heap_words
 
+(* unused now
 let meminfo stats =
   let { Xen_os.Memory.free_words; heap_words; _ } = stats in
   let mem_total = heap_words * wordsize_in_bytes in
@@ -26,6 +25,7 @@ let meminfo stats =
                   Cached: 0 kB\n\
                   SwapTotal: 0 kB\n\
                   SwapFree: 0 kB\n" (mem_total / 1024) (mem_free / 1024)
+*)
 
 let init () =
   Gc.full_major ()
