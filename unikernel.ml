@@ -3,9 +3,14 @@
 
 open Lwt
 open Qubes
+open Cmdliner
 
 let src = Logs.Src.create "unikernel" ~doc:"Main unikernel code"
 module Log = (val Logs.src_log src : Logs.LOG)
+
+let nat_table_size =
+  let doc = Arg.info ~doc:"The number of NAT entries to allocate." [ "nat-table-size" ] in
+  Arg.(value & opt int 5_000 doc)
 
 module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_time.S) = struct
   module Uplink = Uplink.Make(R)(Clock)(Time)
@@ -23,7 +28,7 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
     ]
 
   (* Main unikernel entry point (called from auto-generated main.ml). *)
-  let start _random _clock _time =
+  let start _random _clock _time nat_table_size =
     let start_time = Clock.elapsed_ns () in
     (* Start qrexec agent and QubesDB agent in parallel *)
     let qrexec = RExec.connect ~domid:0 () in
@@ -44,8 +49,7 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
       Xen_os.Lifecycle.await_shutdown_request () >>= fun (`Poweroff | `Reboot) ->
       Lwt.return_unit in
     (* Set up networking *)
-    let max_entries = Key_gen.nat_table_size () in
-    let nat = My_nat.create ~max_entries in
+    let nat = My_nat.create ~max_entries:nat_table_size in
 
     (* Read network configuration from QubesDB *)
     Dao.read_network_config qubesDB >>= fun config ->
