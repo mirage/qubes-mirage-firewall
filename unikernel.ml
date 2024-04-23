@@ -100,7 +100,7 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
       ~config
       ~clients
       ~nat
-      ?uplink:None
+      ~uplink:None
     in
 
     let send_dns_query = Dispatcher.send_dns_client_query None in

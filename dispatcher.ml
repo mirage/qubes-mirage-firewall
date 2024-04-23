@@ -89,7 +89,7 @@ struct
     mutable uplink : uplink option;
   }
 
-  let create ~config ~clients ~nat ?uplink =
+  let create ~config ~clients ~nat ~uplink =
     {
       uplink_connected = Lwt_condition.create ();
       uplink_disconnect = Lwt_condition.create ();
@@ -100,7 +100,7 @@ struct
       uplink;
     }
 
-  let update t ~config ?uplink =
+  let update t ~config ~uplink =
     t.config <- config;
     t.uplink <- uplink;
     Lwt.return_unit
@@ -518,13 +518,13 @@ struct
                currently we delay 1s as Netif.disconnect is non-blocking... (need to fix upstream?) *)
             Log.info (fun f ->
                f "disconnecting from our uplink");
-            U.disconnect uplink.udp;
-            I.disconnect uplink.ip;
+            U.disconnect uplink.udp >>= fun () ->
+            I.disconnect uplink.ip  >>= fun () ->
             (* mutable fragments : Fragments.Cache.t; *)
             (* interface : interface; *)
-            Arp.disconnect uplink.arp;
-            UplinkEth.disconnect uplink.eth;
-            Netif.disconnect uplink.net;
+            Arp.disconnect uplink.arp >>= fun () ->
+            UplinkEth.disconnect uplink.eth >>= fun () ->
+            Netif.disconnect uplink.net >>= fun () ->
             Lwt_condition.broadcast router.uplink_disconnected ();
             Lwt.return_unit
           | e -> Lwt.fail e)
@@ -579,7 +579,7 @@ struct
           Dao.read_network_config qubesDB >>= fun config ->
           Dao.print_network_config config;
           connect config >>= fun uplink ->
-          update router ~config ?uplink:(Some uplink) >>= fun () ->
+          update router ~config ~uplink:(Some uplink) >>= fun () ->
           Lwt_condition.broadcast router.uplink_connected ();
           Lwt.return_unit
       | None, Some _ ->
@@ -588,10 +588,10 @@ struct
           Dao.read_network_config qubesDB >>= fun config ->
           Dao.print_network_config config;
           connect config >>= fun uplink ->
-          update router ~config ?uplink:(Some uplink) >>= fun () ->
+          update router ~config ~uplink:(Some uplink) >>= fun () ->
           Lwt_condition.broadcast router.uplink_connected ();
           Lwt.return_unit
-      | Some uplink, None ->
+      | Some _, None ->
           (* This currently is never triggered :( *)
           Log.info (fun f ->
               f "TODO: Our netvm disapeared, troubles are coming!%!");
