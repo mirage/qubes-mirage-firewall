@@ -18,7 +18,6 @@ let main =
     ~packages:[
       package "vchan" ~min:"4.0.2";
       package "cstruct";
-      package "astring";
       package "tcpip" ~min:"3.7.0";
       package ~min:"2.3.0" ~sublibs:["mirage"] "arp";
       package ~min:"3.0.0" "ethernet";
