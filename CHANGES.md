@@ -1,3 +1,21 @@
+### 0.9.0 (2024-04-24)
+
+- Fix an incorrect free memory estimation (fix in mirage/ocaml-solo5#135
+  @palainp)
+- Update to mirage 4.5.0, allowing openBSD to be used as netvm (#146 reported
+  by @Szewcson), and recover from a netvm change (#156 reported by @xaki-23)
+  (#178 @palainp)
+
+### 0.8.6 (2023-11-08)
+
+- Fix Docker build issue with newest SELinux policies (#183 @palainp, reported
+  by @Szewcson)
+- Update build script (change to debian repositories, update debian image, update
+  opam-repository commit, set commit for opam-overlay and mirage-overlay) (#184
+  @palainp, reported by @ben-grande)
+- Update disk usage value during local compilation (#186 @palainp, reported by
+  @ben-grande)
+
 ### 0.8.5 (2023-07-05)
 
 - Remove memreport to Xen to avoid Qubes trying to get back some memory
