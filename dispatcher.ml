@@ -1,6 +1,6 @@
 open Lwt.Infix
 open Fw_utils
-module Netback = Netchannel.Backend.Make (Netchannel.Xenstore.Make (Xen_os.Xs))
+module Netback = Backend.Make (Xenstore.Make (Xen_os.Xs))
 module ClientEth = Ethernet.Make (Netback)
 module UplinkEth = Ethernet.Make (Netif)
 
