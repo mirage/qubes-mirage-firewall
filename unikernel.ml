@@ -103,7 +103,7 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
       ~uplink:None
     in
 
-    let send_dns_query = Dispatcher.send_dns_client_query None in
+    let send_dns_query = Dispatcher.send_dns_client_query router in
     let dns_mvar = Lwt_mvar.create_empty () in
     let nameservers = `Udp, [ config.Dao.dns, 53 ; config.Dao.dns2, 53 ] in
     let dns_client = Dns_client.create ~nameservers (router, send_dns_query, dns_mvar) in

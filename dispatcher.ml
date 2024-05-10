@@ -1,6 +1,6 @@
 open Lwt.Infix
 open Fw_utils
-module Netback = Netchannel.Backend.Make (Netchannel.Xenstore.Make (Xen_os.Xs))
+module Netback = Backend.Make (Xenstore.Make (Xen_os.Xs))
 module ClientEth = Ethernet.Make (Netback)
 module UplinkEth = Ethernet.Make (Netif)
 
@@ -446,14 +446,14 @@ struct
                  clients := !clients |> Dao.VifMap.add key cleanup)))
 
   let send_dns_client_query t ~src_port ~dst ~dst_port buf =
-    match t with
+    match t.uplink with
     | None ->
         Log.err (fun f -> f "No uplink interface");
         Lwt.return (Error (`Msg "failure"))
-    | Some t -> (
+    | Some uplink -> (
         Lwt.catch
           (fun () ->
-            U.write ~src_port ~dst ~dst_port t.udp buf >|= function
+            U.write ~src_port ~dst ~dst_port uplink.udp buf >|= function
             | Error s ->
                 Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s);
                 Error (`Msg "failure")

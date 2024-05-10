@@ -3,7 +3,6 @@
 
 open Lwt.Infix
 open Qubes
-open Astring
 
 let src = Logs.Src.create "dao" ~doc:"QubesDB data access"
 module Log = (val Logs.src_log src : Logs.LOG)
@@ -66,26 +65,26 @@ let read_rules rules client_ip =
                              number = 0;})]
 
 let vifs client domid =
-  match String.to_int domid with
+  match int_of_string_opt domid with
   | None -> Log.err (fun f -> f "Invalid domid %S" domid); Lwt.return []
   | Some domid ->
     let path = Printf.sprintf "backend/vif/%d" domid in
     Xen_os.Xs.immediate client (fun handle ->
         directory ~handle path >>=
         Lwt_list.filter_map_p (fun device_id ->
-            match String.to_int device_id with
+            match int_of_string_opt device_id with
             | None -> Log.err (fun f -> f "Invalid device ID %S for domid %d" device_id domid); Lwt.return_none
             | Some device_id ->
               let vif = { ClientVif.domid; device_id } in
               Lwt.try_bind
                 (fun () -> Xen_os.Xs.read handle (Printf.sprintf "%s/%d/ip" path device_id))
                 (fun client_ip ->
-                   let client_ip' = match String.cuts ~sep:" " client_ip with
+                   let client_ip' = match String.split_on_char ' ' client_ip with
                      | [] -> Log.err (fun m -> m "unexpected empty list"); ""
                      | [ ip ] -> ip
                      | ip::rest ->
                        Log.warn (fun m -> m "ignoring IPs %s from %a, we support one IP per client"
-                                    (String.concat ~sep:" " rest) ClientVif.pp vif);
+                                    (String.concat " " rest) ClientVif.pp vif);
                        ip
                    in
                    match Ipaddr.V4.of_string client_ip' with
