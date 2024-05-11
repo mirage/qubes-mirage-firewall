@@ -1,3 +1,10 @@
+### 0.9.1 (2024-05-10)
+
+- Drop astring dependency, update mirage-net-xen, and OCaml 4.14.2 -- the
+  latest LTS release (#193, @hannesm)
+- Allow the firewall to use domains requests in rules (#193, @palainp,
+  reported in the Qubes forum, fix confirmed by @neoniobium)
+
 ### 0.9.0 (2024-04-24)
 
 - Fix an incorrect free memory estimation (fix in mirage/ocaml-solo5#135
