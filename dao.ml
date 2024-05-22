@@ -70,19 +70,19 @@ let vifs client domid =
   | None -> Log.err (fun f -> f "Invalid domid %S" domid); Lwt.return []
   | Some domid ->
     let path = Fmt.str "backend/vif/%d" domid in
-    let fn handle =
-      let* entries = directory ~handle path in
-      let fn device_id = match int_of_string_opt device_id with
+    let vifs_of_domain handle =
+      let* devices = directory ~handle path in
+      let ip_of_vif device_id = match int_of_string_opt device_id with
         | None ->
           Log.err (fun f -> f "Invalid device ID %S for domid %d" device_id domid);
           Lwt.return_none
         | Some device_id ->
           let vif = { ClientVif.domid; device_id } in
-          let fn () =
+          let get_client_ip () =
             let* str = Xen_os.Xs.read handle (Fmt.str "%s/%d/ip" path device_id) in
             let[@warning "-8"] client_ip :: _ = String.split_on_char ' ' str in
             Lwt.return_some (vif, Ipaddr.V4.of_string_exn client_ip) in
-          Lwt.catch fn @@ function
+          Lwt.catch get_client_ip @@ function
           | Xs_protocol.Enoent _ -> Lwt.return_none
           | Ipaddr.Parse_error (msg, client_ip) ->
             Log.err (fun f -> f "Error parsing IP address of %a from %s: %s"
@@ -92,8 +92,8 @@ let vifs client domid =
             Log.err (fun f -> f "Error getting IP address of %a: %s"
               ClientVif.pp vif (Printexc.to_string exn));
             Lwt.return_none in
-      Lwt_list.filter_map_p fn entries in
-    Xen_os.Xs.immediate client fn
+      Lwt_list.filter_map_p ip_of_vif devices in
+    Xen_os.Xs.immediate client vifs_of_domain
 
 let watch_clients fn =
   Xen_os.Xs.make () >>= fun xs ->
