@@ -81,7 +81,8 @@ let vifs client domid =
           let get_client_ip () =
             let* str = Xen_os.Xs.read handle (Fmt.str "%s/%d/ip" path device_id) in
             let client_ip = List.hd (String.split_on_char ' ' str) in
-            Lwt.return_some (vif, Ipaddr.V4.of_string_exn client_ip) in
+            Lwt.return_some (vif, Ipaddr.V4.of_string_exn client_ip)
+          in
           Lwt.catch get_client_ip @@ function
           | Xs_protocol.Enoent _ -> Lwt.return_none
           | Ipaddr.Parse_error (msg, client_ip) ->
@@ -91,8 +92,10 @@ let vifs client domid =
           | exn ->
             Log.err (fun f -> f "Error getting IP address of %a: %s"
               ClientVif.pp vif (Printexc.to_string exn));
-            Lwt.return_none in
-      Lwt_list.filter_map_p ip_of_vif devices in
+            Lwt.return_none
+      in
+      Lwt_list.filter_map_p ip_of_vif devices
+    in
     Xen_os.Xs.immediate client vifs_of_domain
 
 let watch_clients fn =
