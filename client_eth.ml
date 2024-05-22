@@ -8,7 +8,7 @@ let src = Logs.Src.create "client_eth" ~doc:"Ethernet networks for NetVM clients
 module Log = (val Logs.src_log src : Logs.LOG)
 
 type t = {
-  mutable iface_of_ip : client_link IpMap.t;
+  mutable iface_of_ip : client_link Ipaddr.V4.Map.t;
   changed : unit Lwt_condition.t;   (* Fires when [iface_of_ip] changes. *)
   my_ip : Ipaddr.V4.t;  (* The IP that clients are given as their default gateway. *)
 }
@@ -21,21 +21,21 @@ type host =
 let create config =
   let changed = Lwt_condition.create () in
   let my_ip = config.Dao.our_ip in
-  Lwt.return { iface_of_ip = IpMap.empty; my_ip; changed }
+  Lwt.return { iface_of_ip = Ipaddr.V4.Map.empty; my_ip; changed }
 
 let client_gw t = t.my_ip
 
 let add_client t iface =
   let ip = iface#other_ip in
   let rec aux () =
-    match IpMap.find ip t.iface_of_ip with
+    match Ipaddr.V4.Map.find_opt ip t.iface_of_ip with
     | Some old ->
       (* Wait for old client to disappear before adding one with the same IP address.
          Otherwise, its [remove_client] call will remove the new client instead. *)
       Log.info (fun f -> f ~header:iface#log_header "Waiting for old client %s to go away before accepting new one" old#log_header);
       Lwt_condition.wait t.changed >>= aux
     | None ->
-      t.iface_of_ip <- t.iface_of_ip |> IpMap.add ip iface;
+      t.iface_of_ip <- t.iface_of_ip |> Ipaddr.V4.Map.add ip iface;
       Lwt_condition.broadcast t.changed ();
       Lwt.return_unit
   in
@@ -43,11 +43,11 @@ let add_client t iface =
 
 let remove_client t iface =
   let ip = iface#other_ip in
-  assert (IpMap.mem ip t.iface_of_ip);
-  t.iface_of_ip <- t.iface_of_ip |> IpMap.remove ip;
+  assert (Ipaddr.V4.Map.mem ip t.iface_of_ip);
+  t.iface_of_ip <- t.iface_of_ip |> Ipaddr.V4.Map.remove ip;
   Lwt_condition.broadcast t.changed ()
 
-let lookup t ip = IpMap.find ip t.iface_of_ip
+let lookup t ip = Ipaddr.V4.Map.find_opt ip t.iface_of_ip
 
 let classify t ip =
   match ip with
@@ -79,7 +79,7 @@ module ARP = struct
   (* We're now treating client networks as point-to-point links,
      so we no longer respond on behalf of other clients. *)
     (*
-    else match IpMap.find ip t.net.iface_of_ip with
+    else match Ipaddr.V4.Map.find_opt ip t.net.iface_of_ip with
     | Some client_iface -> Some client_iface#other_mac
     | None -> None
      *)
