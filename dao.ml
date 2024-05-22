@@ -113,7 +113,7 @@ let watch_clients fn =
     end >>= fun items ->
     Xen_os.Xs.make () >>= fun xs ->
     Lwt_list.map_p (vifs xs) items >>= fun items ->
-    fn (List.concat items |> VifMap.of_list);
+    fn (List.concat items |> VifMap.of_list) >>= fun () ->
     (* Wait for further updates *)
     Lwt.fail Xs_protocol.Eagain
   )
