@@ -3,14 +3,6 @@
 
 (** General utility functions. *)
 
-module IpMap = struct
-  include Map.Make(Ipaddr.V4)
-  let find x map =
-    try Some (find x map)
-    with Not_found -> None
-    | _ -> Logs.err( fun f -> f "uncaught exception in find...%!"); None
-end
-
 (** An Ethernet interface. *)
 class type interface = object
   method my_mac : Macaddr.t
