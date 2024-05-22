@@ -80,7 +80,7 @@ let vifs client domid =
           let vif = { ClientVif.domid; device_id } in
           let get_client_ip () =
             let* str = Xen_os.Xs.read handle (Fmt.str "%s/%d/ip" path device_id) in
-            let[@warning "-8"] client_ip :: _ = String.split_on_char ' ' str in
+            let client_ip = List.hd (String.split_on_char ' ' str) in
             Lwt.return_some (vif, Ipaddr.V4.of_string_exn client_ip) in
           Lwt.catch get_client_ip @@ function
           | Xs_protocol.Enoent _ -> Lwt.return_none
