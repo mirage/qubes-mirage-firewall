@@ -10,25 +10,25 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 let nat_table_size =
   let doc = Arg.info ~doc:"The number of NAT entries to allocate." [ "nat-table-size" ] in
-  Arg.(value & opt int 5_000 doc)
+  Mirage_runtime.register_arg Arg.(value & opt int 5_000 doc)
 
 let ipv4 =
   let doc = Arg.info ~doc:"Manual IP setting." [ "ipv4" ] in
-  Arg.(value & opt string "0.0.0.0" doc)
+  Mirage_runtime.register_arg Arg.(value & opt string "0.0.0.0" doc)
 
 let ipv4_gw =
   let doc = Arg.info ~doc:"Manual Gateway IP setting." [ "ipv4-gw" ] in
-  Arg.(value & opt string "0.0.0.0" doc)
+  Mirage_runtime.register_arg Arg.(value & opt string "0.0.0.0" doc)
 
 let ipv4_dns =
   let doc = Arg.info ~doc:"Manual DNS IP setting." [ "ipv4-dns" ] in
-  Arg.(value & opt string "10.139.1.1" doc)
+  Mirage_runtime.register_arg Arg.(value & opt string "10.139.1.1" doc)
 
 let ipv4_dns2 =
   let doc = Arg.info ~doc:"Manual Second DNS IP setting." [ "ipv4-dns2" ] in
-  Arg.(value & opt string "10.139.1.2" doc)
+  Mirage_runtime.register_arg Arg.(value & opt string "10.139.1.2" doc)
 
-module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_time.S) = struct
+module Main (R : Mirage_crypto_rng_mirage.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_time.S) = struct
   module Dispatcher = Dispatcher.Make(R)(Clock)(Time)
   module Dns_transport = My_dns.Transport(R)(Clock)(Time)
   module Dns_client = Dns_client.Make(Dns_transport)
@@ -45,7 +45,7 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
     ]
 
   (* Main unikernel entry point (called from auto-generated main.ml). *)
-  let start _random _clock _time nat_table_size ipv4 ipv4_gw ipv4_dns ipv4_dns2 =
+  let start _random _clock _time =
     let start_time = Clock.elapsed_ns () in
     (* Start qrexec agent and QubesDB agent in parallel *)
     let qrexec = RExec.connect ~domid:0 () in
@@ -66,15 +66,15 @@ module Main (R : Mirage_random.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_tim
       Xen_os.Lifecycle.await_shutdown_request () >>= fun (`Poweroff | `Reboot) ->
       Lwt.return_unit in
     (* Set up networking *)
-    let nat = My_nat.create ~max_entries:nat_table_size in
+    let nat = My_nat.create ~max_entries:(nat_table_size ()) in
 
-    let netvm_ip = Ipaddr.V4.of_string_exn ipv4_gw in
-    let our_ip = Ipaddr.V4.of_string_exn ipv4 in
-    let dns = Ipaddr.V4.of_string_exn ipv4_dns in
-    let dns2 = Ipaddr.V4.of_string_exn ipv4_dns2 in
-    
-    let zero_ip = (Ipaddr.V4.make 0 0 0 0) in
-    
+    let netvm_ip = Ipaddr.V4.of_string_exn (ipv4_gw ()) in
+    let our_ip = Ipaddr.V4.of_string_exn (ipv4 ()) in
+    let dns = Ipaddr.V4.of_string_exn (ipv4_dns ()) in
+    let dns2 = Ipaddr.V4.of_string_exn (ipv4_dns2 ()) in
+
+    let zero_ip = Ipaddr.V4.any in
+
     let network_config  =
       if (netvm_ip = zero_ip && our_ip = zero_ip) then (* Read network configuration from QubesDB *)
         Dao.read_network_config qubesDB >>= fun config ->

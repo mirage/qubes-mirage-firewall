@@ -9,7 +9,7 @@ let src = Logs.Src.create "dispatcher" ~doc:"Networking dispatch"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 module Make
-    (R : Mirage_random.S)
+    (R : Mirage_crypto_rng_mirage.S)
     (Clock : Mirage_clock.MCLOCK)
     (Time : Mirage_time.S) =
 struct
@@ -453,7 +453,7 @@ struct
     | Some uplink -> (
         Lwt.catch
           (fun () ->
-            U.write ~src_port ~dst ~dst_port uplink.udp buf >|= function
+            U.write ~src_port ~dst ~dst_port uplink.udp (Cstruct.of_string buf) >|= function
             | Error s ->
                 Log.err (fun f -> f "error sending udp packet: %a" U.pp_error s);
                 Error (`Msg "failure")
@@ -506,7 +506,7 @@ struct
                                 "found a DNS packet whose dst_port (%d) was in the list of \
                                  dns_client ports"
                                 header.dst_port);
-                          Lwt_mvar.put dns_responses (header, packet)
+                          Lwt_mvar.put dns_responses (header, Cstruct.to_string packet)
                       | _ -> ipv4_from_netvm router (`IPv4 (header, packet))
                       end
                    end)
