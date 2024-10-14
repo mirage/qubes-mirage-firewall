@@ -1,4 +1,4 @@
-(* mirage >= 4.8.0 & < 5.0.0 *)
+(* mirage >= 4.8.0 & < 4.9.0 *)
 (* Copyright (C) 2017, Thomas Leonard <thomas.leonard@unikernel.com>
    See the README file for details. *)
 
