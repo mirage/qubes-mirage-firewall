@@ -1,4 +1,4 @@
-(* mirage >= 4.5.0 & < 5.0.0 *)
+(* mirage >= 4.8.0 & < 4.9.0 *)
 (* Copyright (C) 2017, Thomas Leonard <thomas.leonard@unikernel.com>
    See the README file for details. *)
 
@@ -6,15 +6,8 @@
 
 open Mirage
 
-let nat_table_size = runtime_arg ~pos:__POS__ "Unikernel.nat_table_size"
-let ipv4 = runtime_arg ~pos:__POS__ "Unikernel.ipv4"
-let ipv4_gw = runtime_arg ~pos:__POS__ "Unikernel.ipv4_gw"
-let ipv4_dns = runtime_arg ~pos:__POS__ "Unikernel.ipv4_dns"
-let ipv4_dns2 = runtime_arg ~pos:__POS__ "Unikernel.ipv4_dns2"
-
 let main =
    main
-    ~runtime_args:[ nat_table_size; ipv4; ipv4_gw; ipv4_dns; ipv4_dns2; ]
     ~packages:[
       package "vchan" ~min:"4.0.2";
       package "cstruct";

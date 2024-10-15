@@ -1,10 +1,12 @@
 open Lwt.Infix
 
-module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) (Time : Mirage_time.S) = struct
+module Transport (R : Mirage_crypto_rng_mirage.S) (C : Mirage_clock.MCLOCK) (Time : Mirage_time.S) = struct
   type +'a io = 'a Lwt.t
   type io_addr = Ipaddr.V4.t * int
   module Dispatcher = Dispatcher.Make(R)(C)(Time)
-  type stack = Dispatcher.t * (src_port:int -> dst:Ipaddr.V4.t -> dst_port:int -> Cstruct.t -> (unit, [ `Msg of string ]) result Lwt.t) * (Udp_packet.t * Cstruct.t) Lwt_mvar.t
+  type stack = Dispatcher.t *
+               (src_port:int -> dst:Ipaddr.V4.t -> dst_port:int -> string -> (unit, [ `Msg of string ]) result Lwt.t) *
+               (Udp_packet.t * string) Lwt_mvar.t
 
   module IM = Map.Make(Int)
 
@@ -13,7 +15,7 @@ module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) (Time : Mirage_
     nameserver : io_addr ;
     stack : stack ;
     timeout_ns : int64 ;
-    mutable requests : Cstruct.t Lwt_condition.t IM.t ;
+    mutable requests : string Lwt_condition.t IM.t ;
   }
   type context = t
 
@@ -24,8 +26,8 @@ module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) (Time : Mirage_
   let rec read t =
     let _, _, answer = t.stack in
     Lwt_mvar.take answer >>= fun (_, data) ->
-    if Cstruct.length data > 2 then begin
-      match IM.find_opt (Cstruct.BE.get_uint16 data 0) t.requests with
+    if String.length data > 2 then begin
+      match IM.find_opt (String.get_uint16_be data 0) t.requests with
       | Some cond -> Lwt_condition.broadcast cond data
       | None -> ()
     end;
@@ -48,13 +50,13 @@ module Transport (R : Mirage_random.S) (C : Mirage_clock.MCLOCK) (Time : Mirage_
 
   let connect (t : t) = Lwt.return (Ok (t.protocol, t))
 
-  let send_recv (ctx : context) buf : (Cstruct.t, [> `Msg of string ]) result Lwt.t =
+  let send_recv (ctx : context) buf : (string, [> `Msg of string ]) result Lwt.t =
     let dst, dst_port = ctx.nameserver in
     let router, send_udp, _ = ctx.stack in
     let src_port, evict =
       My_nat.free_udp_port router.nat ~src:router.config.our_ip ~dst ~dst_port:53
     in
-    let id = Cstruct.BE.get_uint16 buf 0 in
+    let id = String.get_uint16_be buf 0 in
     with_timeout ctx.timeout_ns
       (let cond = Lwt_condition.create () in
        ctx.requests <- IM.add id cond ctx.requests;

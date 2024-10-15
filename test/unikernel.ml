@@ -42,7 +42,7 @@ let netvm = "10.137.0.5"
 (* default "nameserver"s, which netvm redirects to whatever its real nameservers are *)
 let nameserver_1, nameserver_2 = "10.139.1.1", "10.139.1.2"
 
-module Client (R: Mirage_random.S) (Time: Mirage_time.S) (Clock : Mirage_clock.MCLOCK) (NET: Mirage_net.S) (DB : Qubes.S.DB) = struct
+module Client (R: Mirage_crypto_rng_mirage.S) (Time: Mirage_time.S) (Clock : Mirage_clock.MCLOCK) (NET: Mirage_net.S) (DB : Qubes.S.DB) = struct
   module E = Ethernet.Make(NET)
   module A = Arp.Make(E)(Time)
   module I = Qubesdb_ipv4.Make(DB)(R)(Clock)(E)(A)
