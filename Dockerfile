@@ -12,10 +12,10 @@ RUN printf "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian
 RUN printf "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20240419T111010Z bookworm-security main\n" >> /etc/apt/sources.list
 
 RUN apt update && apt install --no-install-recommends --no-install-suggests -y wget ca-certificates git patch unzip bzip2 make gcc g++ libc-dev
-RUN wget -O /usr/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-i686-linux && chmod 755 /usr/bin/opam
+RUN wget -O /usr/bin/opam https://github.com/ocaml/opam/releases/download/2.2.1/opam-2.2.1-i686-linux && chmod 755 /usr/bin/opam
 # taken from https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh
 RUN test `sha512sum /usr/bin/opam | cut -d' ' -f1` = \
-"38802b3079eeceb27aab3465bfd0f9f05a710dccf9487eb35fa2c02fbaf9a0659e1447aa19dd36df9cd01f760229de28c523c08c1c86a3aa3f5e25dbe7b551dd" || exit
+"bf16d573137835ce9abbcf6b99cb94a1da69ab58804a4de7c90233f0b354d5e68e9c47ee16670ca9d59866d58c7db345d9723e6eb5fc3a1cb8dca371f0e90225" || exit
 
 ENV OPAMROOT=/tmp
 ENV OPAMCONFIRMLEVEL=unsafe-yes
