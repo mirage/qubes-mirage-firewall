@@ -447,7 +447,7 @@ struct
         let* cleanup = add_client get_ts dns_client dns_servers ~router key ipaddr qubesDB in
         Log.debug (fun f -> f "client %a arrived" Dao.ClientVif.pp key);
         clients := Dao.VifMap.add key cleanup !clients;
-        go seq 
+        go seq
       | Some (_, seq) -> go seq
     in
     go (Dao.VifMap.to_seq new_set)
