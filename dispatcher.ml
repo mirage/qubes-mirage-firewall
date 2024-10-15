@@ -403,7 +403,7 @@ struct
         (function Lwt.Canceled -> Lwt.return_unit | e -> Lwt.fail e)
     in
     Cleanup.on_cleanup cleanup_tasks (fun () -> Lwt.cancel listener);
-    (* XXX(dinosaure): [qubes_updater] and [listener] can be forgotten, our [cleanup_task]
+    (* NOTE(dinosaure): [qubes_updater] and [listener] can be forgotten, our [cleanup_task]
        will cancel them if the client is disconnected. *)
     Lwt.async (fun () -> Lwt.pick [ qubesdb_updater; listener ]);
     Lwt.return_unit

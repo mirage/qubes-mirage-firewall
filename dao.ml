@@ -81,7 +81,7 @@ let vifs client domid =
           let get_client_ip () =
             let* str = Xen_os.Xs.read handle (Fmt.str "%s/%d/ip" path device_id) in
             let client_ip = List.hd (String.split_on_char ' ' str) in
-            (* XXX(dinosaure): it's safe to use [List.hd] here,
+            (* NOTE(dinosaure): it's safe to use [List.hd] here,
                [String.split_on_char] can not return an empty list. *)
             Lwt.return_some (vif, Ipaddr.V4.of_string_exn client_ip)
           in
