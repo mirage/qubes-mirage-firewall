@@ -46,15 +46,12 @@ module Main (R : Mirage_crypto_rng_mirage.S)(Clock : Mirage_clock.MCLOCK)(Time :
 
   (* Main unikernel entry point (called from auto-generated main.ml). *)
   let start _random _clock _time =
+    let open Lwt.Syntax in
     let start_time = Clock.elapsed_ns () in
     (* Start qrexec agent and QubesDB agent in parallel *)
-    let qrexec = RExec.connect ~domid:0 () in
-    let qubesDB = DB.connect ~domid:0 () in
-
-    (* Wait for clients to connect *)
-    qrexec >>= fun qrexec ->
+    let* qrexec = RExec.connect ~domid:0 () in
     let agent_listener = RExec.listen qrexec Command.handler in
-    qubesDB >>= fun qubesDB ->
+    let* qubesDB = DB.connect ~domid:0 () in
     let startup_time =
       let (-) = Int64.sub in
       let time_in_ns = Clock.elapsed_ns () - start_time in
@@ -93,7 +90,7 @@ module Main (R : Mirage_crypto_rng_mirage.S)(Clock : Mirage_clock.MCLOCK)(Time :
     Dao.print_network_config config ;
 
     (* Set up client-side networking *)
-    Client_eth.create config >>= fun clients ->
+    let* clients = Client_eth.create config in
 
     (* Set up routing between networks and hosts *)
     let router = Dispatcher.create

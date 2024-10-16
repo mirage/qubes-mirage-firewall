@@ -20,5 +20,5 @@ $builder build -t qubes-mirage-firewall .
 echo Building Firewall...
 $builder run --rm -i -v `pwd`:/tmp/orb-build:Z qubes-mirage-firewall
 echo "SHA2 of build:   $(sha256sum ./dist/qubes-firewall.xen)"
-echo "SHA2 last known: 4b1f743bf4540bc8a9366cf8f23a78316e4f2d477af77962e50618753c4adf10"
+echo "SHA2 last known: 2392386d9056b17a648f26b0c5d1c72b93f8a197964c670b2b45e71707727317"
 echo "(hashes should match for released versions)"

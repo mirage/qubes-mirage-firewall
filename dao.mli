@@ -15,7 +15,7 @@ module VifMap : sig
   val find : key -> 'a t -> 'a option
 end
 
-val watch_clients : (Ipaddr.V4.t VifMap.t -> unit) -> 'a Lwt.t
+val watch_clients : (Ipaddr.V4.t VifMap.t -> unit Lwt.t) -> 'a Lwt.t
 (** [watch_clients fn] calls [fn clients] with the list of backend clients
     in XenStore, and again each time XenStore updates. *)
 
