@@ -17,7 +17,7 @@
 #download and install the latest version
 {% set Release = salt['cmd.shell']("qvm-run --dispvm " ~ DispVM ~ " --pass-io \"curl --silent --location -o /dev/null -w %{url_effective} " ~ GithubUrl ~ "/releases/latest | rev | cut -d \"/\" -f 1 | rev\"") %}
 
-{% if Release != salt['cmd.shell']("[ ! -f " ~ MirageInstallDir ~ "/version.txt" ~ " ] && touch " ~ MirageInstallDir ~ "/version.txt" ~ ";cat " ~ MirageInstallDir ~ "/version.txt") %}
+{% if Release != salt['cmd.shell']("test -e " ~ MirageInstallDir ~ "/version.txt" ~ " || mkdir " ~ MirageInstallDir ~ " ; touch " ~ MirageInstallDir ~ "/version.txt" ~ " ; cat " ~ MirageInstallDir ~ "/version.txt") %}
 
 create-downloader-VM:
   qvm.vm:
@@ -52,15 +52,14 @@ check-checksum-in-DownloadVM:
 
 copy-mirage-kernel-to-dom0:
   cmd.run: 
-    - name: mkdir -p {{ MirageInstallDir }}; qvm-run --pass-io --no-gui {{ DownloadVM }} "cat " ~ Kernel > {{ MirageInstallDir ~ "/" ~ Kernel }}
+    - name: mkdir -p {{ MirageInstallDir }}; qvm-run --pass-io --no-gui {{ DownloadVM }} {{ "cat " ~ Kernel }} > {{ MirageInstallDir ~ "/vmlinuz" }}
     - require: 
       - download-and-unpack-in-DownloadVM4mirage
       - check-checksum-in-DownloadVM
 
-create-initramfs:
+update-version:
   cmd.run: 
     - names: 
-      - gzip -n9 < /dev/null > {{ MirageInstallDir ~ "/initramfs" }}
       - echo {{ Release }} > {{ MirageInstallDir ~ "/version.txt" }}
     - require: 
       - copy-mirage-kernel-to-dom0
@@ -94,7 +93,7 @@ cleanup-in-DownloadVM:
    - names:
       - qvm-run -a --pass-io --no-gui {{ DownloadVM }} "{{ "rm " ~ Kernel ~ " " ~ Shasum }}"
    - require: 
-     - create-initramfs
+     - update-version 
 
 remove-DownloadVM4mirage:
   qvm.absent:
