@@ -210,6 +210,10 @@ To use it, run `test.sh` and follow the instructions to set up the test environm
 
 See [issues tagged "security"](https://github.com/mirage/qubes-mirage-firewall/issues?utf8=%E2%9C%93&q=label%3Asecurity+) for security advisories affecting the firewall.
 
+# LICENSE
+
+See [LICENSE.md](https://github.com/mirage/qubes-mirage-firewall/blob/main/LICENSE.md)
+
 [test-mirage]: https://github.com/talex5/qubes-test-mirage
 [mirage-qubes]: https://github.com/mirage/mirage-qubes
 [A Unikernel Firewall for QubesOS]: http://roscidus.com/blog/blog/2016/01/01/a-unikernel-firewall-for-qubesos/
