@@ -23,7 +23,7 @@ jobs:
 
       - run: ./build-with.sh docker
 
-      - run: sh -exc 'if [ $(sha256sum dist/qubes-firewall.xen) = $(cat qubes-firewall.sha256) ]; then echo "SHA256 MATCHES"; else exit 42; fi'
+      - run: sh -exc 'if [ "$(sha256sum dist/qubes-firewall.xen)" = "$(cat qubes-firewall.sha256)" ]; then echo "SHA256 MATCHES"; else exit 42; fi'
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v3
