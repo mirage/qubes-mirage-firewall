@@ -1,3 +1,9 @@
+### 0.9.2 (2024-10-16)
+
+- Code refactoring and improvements (#197, @dinosaure)
+- Build tooling updates: opam 2.2.1, solo5 0.9, mirage 4.8.1 (#199, #201, #202,
+  #203, @hannesm)
+
 ### 0.9.1 (2024-05-10)
 
 - Drop astring dependency, update mirage-net-xen, and OCaml 4.14.2 -- the
