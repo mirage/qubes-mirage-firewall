@@ -28,5 +28,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: mirage-firewall.tar.bz2
-          path: mirage-firewall.tar.bz2
+          name: qubes-firewall.xen
+          path: qubes-firewall.xen
