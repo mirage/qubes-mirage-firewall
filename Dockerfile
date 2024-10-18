@@ -32,4 +32,4 @@ WORKDIR /tmp/orb-build
 CMD opam exec -- sh -exc 'mirage configure -t xen --extra-repos=\
 opam-overlays:https://github.com/dune-universe/opam-overlays.git#4e75ee36715b27550d5bdb87686bb4ae4c9e89c4,\
 mirage-overlays:https://github.com/dune-universe/mirage-opam-overlays.git#797cb363df3ff763c43c8fbec5cd44de2878757e \
-&& make depend && make tar'
+&& make depend && make unikernel'

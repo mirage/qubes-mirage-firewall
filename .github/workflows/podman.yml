@@ -19,14 +19,14 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - run: ./build-with.sh podman
 
-      - run: sh -exc 'if [ $(sha256sum dist/qubes-firewall.xen | cut -d " " -f 1) = $(grep "SHA2 last known" build-with.sh | rev | cut -d ":" -f 1 | rev | cut -d "\"" -f 1 | tr -d " ") ]; then echo "SHA256 MATCHES"; else exit 42; fi'
+      - run: sh -exc 'if [ "$(sha256sum dist/qubes-firewall.xen)" = "$(cat qubes-firewall.sha256)" ]; then echo "SHA256 MATCHES"; else exit 42; fi'
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: mirage-firewall.tar.bz2
-          path: mirage-firewall.tar.bz2
+          name: qubes-firewall.xen
+          path: qubes-firewall.xen

@@ -1,13 +1,8 @@
-tar: build
-	rm -rf _build/mirage-firewall
-	mkdir _build/mirage-firewall
+unikernel: build
 	cp dist/qubes-firewall.xen dist/qubes-firewall.xen.debug
 	strip dist/qubes-firewall.xen
-	cp dist/qubes-firewall.xen _build/mirage-firewall/vmlinuz
-	touch _build/mirage-firewall/modules.img
-	cat /dev/null | gzip -n > _build/mirage-firewall/initramfs
-	tar cjf mirage-firewall.tar.bz2 -C _build --mtime=./build-with.sh mirage-firewall
-	sha256sum mirage-firewall.tar.bz2 > mirage-firewall.sha256
+	cp dist/qubes-firewall.xen .
+	sha256sum qubes-firewall.xen
 
 fetchmotron: qubes_firewall.xen
 	test-mirage qubes_firewall.xen mirage-fw-test &
