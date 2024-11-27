@@ -58,20 +58,15 @@ However, it should still work fine.
 ## Deploy
 
 ### Manual deployment
-If you want to deploy manually, unpack `mirage-firewall.tar.bz2` in domU. The tarball contains `vmlinuz`,
-which is the unikernel itself, plus a dummy initramfs file that Qubes requires:
-
-    [user@dev ~]$ tar xjf mirage-firewall.tar.bz2
-
-Copy `vmlinuz` to `/var/lib/qubes/vm-kernels/mirage-firewall` directory in dom0, e.g. (if `dev` is the AppVM where you built it):
+If you want to deploy manually, you just need to download `qubes-firewall.xen` and
+`qubes-firewall.sha256` in domU and check that the `.xen` file has a corresponding
+hashsum. `qubes-firewall.xen` is the unikernel itself and should be copied to
+`vmlinuz` in the `/var/lib/qubes/vm-kernels/mirage-firewall` directory in dom0, e.g.
+(if `dev` is the AppVM where you built it):
 
     [tal@dom0 ~]$ mkdir -p /var/lib/qubes/vm-kernels/mirage-firewall/
     [tal@dom0 ~]$ cd /var/lib/qubes/vm-kernels/mirage-firewall/
-    [tal@dom0 mirage-firewall]$ qvm-run -p dev 'cat mirage-firewall/vmlinuz' > vmlinuz
-
-Finally, create [a dummy file required by Qubes OS](https://github.com/QubesOS/qubes-issues/issues/5516):
-
-    [tal@dom0 mirage-firewall]$ gzip -n9 < /dev/null > initramfs
+    [tal@dom0 mirage-firewall]$ qvm-run -p dev 'cat mirage-firewall/qubes-firewall.xen' > vmlinuz
 
 Run this command in dom0 to create a `mirage-firewall` VM using the `mirage-firewall` kernel you added above
 
