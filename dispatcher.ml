@@ -17,6 +17,8 @@ struct
   module I = Static_ipv4.Make (R) (Clock) (UplinkEth) (Arp)
   module U = Udp.Make (I) (R)
 
+  let clients : Cleanup.t Dao.VifMap.t ref = ref Dao.VifMap.empty
+
   class client_iface eth ~domid ~gateway_ip ~client_ip client_mac : client_link
     =
     let log_header = Fmt.str "dom%d:%a" domid Ipaddr.V4.pp client_ip in
@@ -342,7 +344,7 @@ struct
 
   (** Connect to a new client's interface and listen for incoming frames and firewall rule changes. *)
   let add_vif get_ts { Dao.ClientVif.domid; device_id } dns_client dns_servers
-      ~client_ip ~router ~cleanup_tasks qubesDB () =
+      ~client_ip ~router ~cleanup_tasks qubesDB =
     let open Lwt.Syntax in
     let* backend = Netback.make ~domid ~device_id in
     Log.info (fun f ->
@@ -405,8 +407,7 @@ struct
     Cleanup.on_cleanup cleanup_tasks (fun () -> Lwt.cancel listener);
     (* NOTE(dinosaure): [qubes_updater] and [listener] can be forgotten, our [cleanup_task]
        will cancel them if the client is disconnected. *)
-    Lwt.async (fun () -> Lwt.pick [ qubesdb_updater; listener ]);
-    Lwt.return_unit
+    Lwt.pick [ qubesdb_updater; listener ]
 
   (** A new client VM has been found in XenStore. Find its interface and connect to it. *)
   let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB =
@@ -415,42 +416,39 @@ struct
     Log.info (fun f ->
         f "add client vif %a with IP %a" Dao.ClientVif.pp vif Ipaddr.V4.pp
           client_ip);
-    let* () =
-      Lwt.catch (add_vif get_ts vif dns_client dns_servers ~client_ip ~router
-          ~cleanup_tasks qubesDB)
-      @@ fun exn ->
-        Log.warn (fun f ->
-          f "Error with client %a: %s" Dao.ClientVif.pp vif
-            (Printexc.to_string exn));
-        Lwt.return_unit
-    in
-    Lwt.return cleanup_tasks
+    Lwt.async (fun () ->
+        Lwt.catch
+          (fun () ->
+            add_vif get_ts vif dns_client dns_servers ~client_ip ~router
+              ~cleanup_tasks qubesDB)
+          (fun ex ->
+            Log.warn (fun f ->
+                f "Error with client %a: %s" Dao.ClientVif.pp vif
+                  (Printexc.to_string ex));
+            Lwt.return_unit));
+    cleanup_tasks
 
   (** Watch XenStore for notifications of new clients. *)
   let wait_clients get_ts dns_client dns_servers qubesDB router =
-    let open Lwt.Syntax in
-    let clients : Cleanup.t Dao.VifMap.t ref = ref Dao.VifMap.empty in
-    Dao.watch_clients @@ fun new_set ->
-    (* Check for removed clients *)
-    let clean_up_clients key cleanup =
-      if not (Dao.VifMap.mem key new_set) then begin
-        clients := !clients |> Dao.VifMap.remove key;
-        Log.info (fun f -> f "client %a has gone" Dao.ClientVif.pp key);
-        Cleanup.cleanup cleanup
-      end
-    in
-    Dao.VifMap.iter clean_up_clients !clients;
-    (* Check for added clients *)
-    let rec go seq = match Seq.uncons seq with
-      | None -> Lwt.return_unit
-      | Some ((key, ipaddr), seq) when not (Dao.VifMap.mem key !clients) ->
-        let* cleanup = add_client get_ts dns_client dns_servers ~router key ipaddr qubesDB in
-        Log.debug (fun f -> f "client %a arrived" Dao.ClientVif.pp key);
-        clients := Dao.VifMap.add key cleanup !clients;
-        go seq
-      | Some (_, seq) -> go seq
-    in
-    go (Dao.VifMap.to_seq new_set)
+    Dao.watch_clients (fun new_set ->
+        (* Check for removed clients *)
+        !clients
+        |> Dao.VifMap.iter (fun key cleanup ->
+               if not (Dao.VifMap.mem key new_set) then (
+                 clients := !clients |> Dao.VifMap.remove key;
+                 Log.info (fun f -> f "client %a has gone" Dao.ClientVif.pp key);
+                 Cleanup.cleanup cleanup));
+        (* Check for added clients *)
+        new_set
+        |> Dao.VifMap.iter (fun key ip_addr ->
+               if not (Dao.VifMap.mem key !clients) then (
+                 let cleanup =
+                   add_client get_ts dns_client dns_servers ~router key ip_addr
+                     qubesDB
+                 in
+                 Log.debug (fun f -> f "client %a arrived" Dao.ClientVif.pp key);
+                 clients := !clients |> Dao.VifMap.add key cleanup));
+        Lwt.return_unit)
 
   let send_dns_client_query t ~src_port ~dst ~dst_port buf =
     match t.uplink with
