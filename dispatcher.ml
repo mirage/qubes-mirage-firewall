@@ -341,9 +341,10 @@ struct
           Lwt.return_unit)
 
   (** Connect to a new client's interface and listen for incoming frames and firewall rule changes. *)
-  let add_vif get_ts { Dao.ClientVif.domid; device_id } dns_client dns_servers
+  let add_vif get_ts vif dns_client dns_servers
       ~client_ip ~router ~cleanup_tasks qubesDB =
     let open Lwt.Syntax in
+    let { Dao.ClientVif.domid; device_id } = vif in
     let* backend = Netback.make ~domid ~device_id in
     Log.info (fun f ->
         f "Client %d (IP: %s) ready" domid (Ipaddr.V4.to_string client_ip));
@@ -403,8 +404,6 @@ struct
         (function Lwt.Canceled -> Lwt.return_unit | e -> Lwt.fail e)
     in
     Cleanup.on_cleanup cleanup_tasks (fun () -> Lwt.cancel listener);
-    (* NOTE(dinosaure): [qubes_updater] and [listener] can be forgotten, our [cleanup_task]
-       will cancel them if the client is disconnected. *)
     Lwt.pick [ qubesdb_updater; listener ]
 
   (** A new client VM has been found in XenStore. Find its interface and connect to it. *)
