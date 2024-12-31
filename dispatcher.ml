@@ -423,10 +423,11 @@ struct
                 f "Error with client %a: %s" Dao.ClientVif.pp vif
                   (Printexc.to_string ex));
             Lwt.return_unit));
-    cleanup_tasks
+    Lwt.return cleanup_tasks
 
   (** Watch XenStore for notifications of new clients. *)
   let wait_clients get_ts dns_client dns_servers qubesDB router =
+    let open Lwt.Syntax in
     let clients : Cleanup.t Dao.VifMap.t ref = ref Dao.VifMap.empty in
     Dao.watch_clients @@ fun new_set ->
     (* Check for removed clients *)
@@ -442,7 +443,7 @@ struct
     let rec go seq = match Seq.uncons seq with
       | None -> Lwt.return_unit
       | Some ((key, ipaddr), seq) when not (Dao.VifMap.mem key !clients) ->
-        let cleanup = add_client get_ts dns_client dns_servers ~router key ipaddr qubesDB in
+        let* cleanup = add_client get_ts dns_client dns_servers ~router key ipaddr qubesDB in
         Log.debug (fun f -> f "client %a arrived" Dao.ClientVif.pp key);
         clients := Dao.VifMap.add key cleanup !clients;
         go seq
