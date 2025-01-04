@@ -342,7 +342,7 @@ struct
 
   (** Connect to a new client's interface and listen for incoming frames and firewall rule changes. *)
   let conf_vif get_ts vif backend client_eth dns_client dns_servers
-      ~client_ip ~iface ~router ~cleanup_tasks qubesDB =
+      ~client_ip ~iface ~router ~cleanup_tasks qubesDB () =
     let { Dao.ClientVif.domid; device_id } = vif in
     Log.info (fun f ->
         f "Client %d:%d (IP: %s) ready" domid device_id (Ipaddr.V4.to_string client_ip));
@@ -397,15 +397,9 @@ struct
         (function Lwt.Canceled -> Lwt.return_unit | e -> Lwt.fail e)
     in
     Cleanup.on_cleanup cleanup_tasks (fun () -> Lwt.cancel listener);
-    Lwt.async (fun () ->
-        Lwt.catch
-          (fun () ->
-            Lwt.pick [ qubesdb_updater; listener ])
-              (fun ex ->
-                Log.warn (fun f ->
-                    f "Error with client %a: %s" Dao.ClientVif.pp vif
-                      (Printexc.to_string ex));
-                Lwt.return_unit)) ;
+    (* NOTE(dinosaure): [qubes_updater] and [listener] can be forgotten, our [cleanup_task]
+       will cancel them if the client is disconnected. *)
+    Lwt.async (fun () -> Lwt.pick [ qubesdb_updater; listener ]);
     Lwt.return_unit
 
   (** A new client VM has been found in XenStore. Find its interface and connect to it. *)
@@ -434,8 +428,16 @@ struct
                   (Printexc.to_string ex));
             Lwt.return_unit)) ;
 
-    conf_vif get_ts vif backend client_eth dns_client dns_servers ~client_ip ~iface ~router
-              ~cleanup_tasks qubesDB >>= fun () ->
+   let* () =
+      Lwt.catch (
+          conf_vif get_ts vif backend client_eth dns_client dns_servers ~client_ip ~iface ~router
+              ~cleanup_tasks qubesDB)
+      @@ fun exn ->
+        Log.warn (fun f ->
+          f "Error with client %a: %s" Dao.ClientVif.pp vif
+            (Printexc.to_string exn));
+        Lwt.return_unit
+    in
     Lwt.return cleanup_tasks
 
   (** Watch XenStore for notifications of new clients. *)
