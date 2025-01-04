@@ -1,3 +1,8 @@
+### 0.9.3 (2025-01-04)
+
+- Fix an issue when qubes-mirage-firewall is used along with *BSD sys-net
+  (#209, @palainp, reported in the Qubes forum #208, reviewed by @dinosaure)
+
 ### 0.9.2 (2024-10-16)
 
 - Code refactoring and improvements (#197, @dinosaure)
