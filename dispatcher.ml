@@ -341,18 +341,12 @@ struct
           Lwt.return_unit)
 
   (** Connect to a new client's interface and listen for incoming frames and firewall rule changes. *)
-  let add_vif get_ts vif dns_client dns_servers
-      ~client_ip ~router ~cleanup_tasks qubesDB =
-    let open Lwt.Syntax in
+  let conf_vif get_ts vif backend client_eth dns_client dns_servers
+      ~client_ip ~iface ~router ~cleanup_tasks qubesDB =
     let { Dao.ClientVif.domid; device_id } = vif in
-    let* backend = Netback.make ~domid ~device_id in
     Log.info (fun f ->
-        f "Client %d (IP: %s) ready" domid (Ipaddr.V4.to_string client_ip));
-    let* eth = ClientEth.connect backend in
-    let client_mac = Netback.frontend_mac backend in
-    let client_eth = router.clients in
-    let gateway_ip = Client_eth.client_gw client_eth in
-    let iface = new client_iface eth ~domid ~gateway_ip ~client_ip client_mac in
+        f "Client %d:%d (IP: %s) ready" domid device_id (Ipaddr.V4.to_string client_ip));
+
     (* update the rules whenever QubesDB notices a change for this IP *)
     let qubesdb_updater =
       Lwt.catch
@@ -380,8 +374,7 @@ struct
         (function Lwt.Canceled -> Lwt.return_unit | e -> Lwt.fail e)
     in
     Cleanup.on_cleanup cleanup_tasks (fun () -> Lwt.cancel qubesdb_updater);
-    add_client router iface >>= fun () ->
-    Cleanup.on_cleanup cleanup_tasks (fun () -> remove_client router iface);
+
     let fixed_arp = Client_eth.ARP.create ~net:client_eth iface in
     let fragment_cache = ref (Fragments.Cache.empty (256 * 1024)) in
     let listener =
@@ -404,24 +397,45 @@ struct
         (function Lwt.Canceled -> Lwt.return_unit | e -> Lwt.fail e)
     in
     Cleanup.on_cleanup cleanup_tasks (fun () -> Lwt.cancel listener);
-    Lwt.pick [ qubesdb_updater; listener ]
+    Lwt.async (fun () ->
+        Lwt.catch
+          (fun () ->
+            Lwt.pick [ qubesdb_updater; listener ])
+              (fun ex ->
+                Log.warn (fun f ->
+                    f "Error with client %a: %s" Dao.ClientVif.pp vif
+                      (Printexc.to_string ex));
+                Lwt.return_unit)) ;
+    Lwt.return_unit
 
   (** A new client VM has been found in XenStore. Find its interface and connect to it. *)
   let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB =
+    let open Lwt.Syntax in
     let cleanup_tasks = Cleanup.create () in
     Log.info (fun f ->
         f "add client vif %a with IP %a" Dao.ClientVif.pp vif Ipaddr.V4.pp
           client_ip);
+    let { Dao.ClientVif.domid; device_id } = vif in
+    let* backend = Netback.make ~domid ~device_id in
+    let* eth = ClientEth.connect backend in
+    let client_mac = Netback.frontend_mac backend in
+    let client_eth = router.clients in
+    let gateway_ip = Client_eth.client_gw client_eth in
+    let iface = new client_iface eth ~domid ~gateway_ip ~client_ip client_mac in
+
+    Cleanup.on_cleanup cleanup_tasks (fun () -> remove_client router iface);
     Lwt.async (fun () ->
         Lwt.catch
           (fun () ->
-            add_vif get_ts vif dns_client dns_servers ~client_ip ~router
-              ~cleanup_tasks qubesDB)
+            add_client router iface)
           (fun ex ->
             Log.warn (fun f ->
                 f "Error with client %a: %s" Dao.ClientVif.pp vif
                   (Printexc.to_string ex));
-            Lwt.return_unit));
+            Lwt.return_unit)) ;
+
+    conf_vif get_ts vif backend client_eth dns_client dns_servers ~client_ip ~iface ~router
+              ~cleanup_tasks qubesDB >>= fun () ->
     Lwt.return cleanup_tasks
 
   (** Watch XenStore for notifications of new clients. *)
