@@ -571,7 +571,14 @@ struct
     I.connect ~cidr ~gateway eth arp >>= fun ip ->
     U.connect ip >>= fun udp ->
     let netvm_mac =
-      Arp.query arp gateway >|= or_raise "Getting MAC of our NetVM" Arp.pp_error
+      Arp.query arp gateway >>= function
+        | Error e ->
+          Log.err(fun f -> f "Getting MAC of our NetVM: %a" Arp.pp_error e);
+          (* This mac address is a special address used by Qubes when the device
+             is not managed by Qubes itself. This can occurs inside a service
+             AppVM (e.g. VPN) when the service creates a new interface. *)
+          Lwt.return (Macaddr.of_string_exn "fe:ff:ff:ff:ff:ff")
+        | Ok mac -> Lwt.return mac
     in
     let interface =
       new netvm_iface eth netvm_mac ~my_ip ~other_ip:config.Dao.netvm_ip
