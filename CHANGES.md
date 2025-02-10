@@ -1,3 +1,11 @@
+### 0.9.4 (2025-02-10)
+
+- Fix an issue when qubes-mirage-firewall is used a a mullvad AppVM client. If
+  our netvm does not reply to our ARP requests we can not construct the ethernet
+  header. However in Linux VMs, Qubes adds a default netvm address associated to
+  `fe:ff:ff:ff:ff:ff`, so if ARP fails, we fall back on that address.
+  (#213, @palainp, reported in the Qubes forum #212, reviewed by @hannesm)
+
 ### 0.9.3 (2025-01-04)
 
 - Fix an issue when qubes-mirage-firewall is used along with *BSD sys-net
