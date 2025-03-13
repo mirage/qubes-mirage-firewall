@@ -1,0 +1,45 @@
+name: ocamlformat
+
+on: [pull_request]
+
+jobs:
+  format:
+    name: ocamlformat
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ocaml-version: ["4.14.2"]
+        operating-system: [ubuntu-latest]
+
+    runs-on: ${{ matrix.operating-system }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Use OCaml ${{ matrix.ocaml-version }}
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-version }}
+
+      - name: Install ocamlformat
+        run: grep ^version .ocamlformat | cut -d '=' -f 2 | xargs -I V opam install ocamlformat=V
+
+      - name: Format code
+        run: git ls-files '*.ml' '*.mli' | xargs opam exec -- ocamlformat --inplace
+
+      - name: Check for modified files
+        id: git-check
+        run: echo "modified=$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)" >> $GITHUB_OUTPUT
+
+      - name: Commit and push changes
+        if: steps.git-check.outputs.modified == 'true'
+        run: |
+          git config --global user.name "Automated ocamlformat GitHub action, developed by robur.coop"
+          git config --global user.email "autoformat@robur.coop"
+          git add -A
+          git commit -m "formatted code"
+          git push

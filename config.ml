@@ -1,4 +1,4 @@
-(* mirage >= 4.8.0 & < 4.9.0 *)
+(* mirage >= 4.9.0 & < 4.10.0 *)
 (* Copyright (C) 2017, Thomas Leonard <thomas.leonard@unikernel.com>
    See the README file for details. *)
 
@@ -24,7 +24,7 @@ let main =
       package ~min:"6.4.0" "dns-client";
       package "pf-qubes";
     ]
-    "Unikernel.Main" (random @-> mclock @-> time @-> job)
+    "Unikernel" job
 
 let () =
-  register "qubes-firewall" [main $ default_random $ default_monotonic_clock $ default_time]
+  register "qubes-firewall" [main]

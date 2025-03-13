@@ -8,14 +8,9 @@ let src = Logs.Src.create "dispatcher" ~doc:"Networking dispatch"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make
-    (R : Mirage_crypto_rng_mirage.S)
-    (Clock : Mirage_clock.MCLOCK)
-    (Time : Mirage_time.S) =
-struct
-  module Arp = Arp.Make (UplinkEth) (Time)
-  module I = Static_ipv4.Make (R) (Clock) (UplinkEth) (Arp)
-  module U = Udp.Make (I) (R)
+  module Arp = Arp.Make (UplinkEth)
+  module I = Static_ipv4.Make (UplinkEth) (Arp)
+  module U = Udp.Make (I)
 
   class client_iface eth ~domid ~gateway_ip ~client_ip client_mac : client_link
     =
@@ -632,4 +627,3 @@ struct
       >>= fun () -> aux new_db
     in
     aux Qubes.DB.KeyMap.empty
-end

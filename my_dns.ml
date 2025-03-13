@@ -1,9 +1,7 @@
 open Lwt.Infix
 
-module Transport (R : Mirage_crypto_rng_mirage.S) (C : Mirage_clock.MCLOCK) (Time : Mirage_time.S) = struct
   type +'a io = 'a Lwt.t
   type io_addr = Ipaddr.V4.t * int
-  module Dispatcher = Dispatcher.Make(R)(C)(Time)
   type stack = Dispatcher.t *
                (src_port:int -> dst:Ipaddr.V4.t -> dst_port:int -> string -> (unit, [ `Msg of string ]) result Lwt.t) *
                (Udp_packet.t * string) Lwt_mvar.t
@@ -20,8 +18,8 @@ module Transport (R : Mirage_crypto_rng_mirage.S) (C : Mirage_clock.MCLOCK) (Tim
   type context = t
 
   let nameservers { protocol ; nameserver ; _ } = protocol, [ nameserver ]
-  let rng = R.generate ?g:None
-  let clock = C.elapsed_ns
+  let rng = Mirage_crypto_rng.generate ?g:None
+  let clock = Mirage_mtime.elapsed_ns
 
   let rec read t =
     let _, _, answer = t.stack in
@@ -45,7 +43,7 @@ module Transport (R : Mirage_crypto_rng_mirage.S) (C : Mirage_clock.MCLOCK) (Tim
     t
 
   let with_timeout timeout_ns f =
-    let timeout = Time.sleep_ns timeout_ns >|= fun () -> Error (`Msg "DNS request timeout") in
+    let timeout = Mirage_sleep.ns timeout_ns >|= fun () -> Error (`Msg "DNS request timeout") in
     Lwt.pick [ f ; timeout ]
 
   let connect (t : t) = Lwt.return (Ok (t.protocol, t))
@@ -72,5 +70,3 @@ module Transport (R : Mirage_crypto_rng_mirage.S) (C : Mirage_clock.MCLOCK) (Tim
   let bind = Lwt.bind
 
   let lift = Lwt.return
-end
-

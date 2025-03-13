@@ -28,10 +28,7 @@ let ipv4_dns2 =
   let doc = Arg.info ~doc:"Manual Second DNS IP setting." [ "ipv4-dns2" ] in
   Mirage_runtime.register_arg Arg.(value & opt string "10.139.1.2" doc)
 
-module Main (R : Mirage_crypto_rng_mirage.S)(Clock : Mirage_clock.MCLOCK)(Time : Mirage_time.S) = struct
-  module Dispatcher = Dispatcher.Make(R)(Clock)(Time)
-  module Dns_transport = My_dns.Transport(R)(Clock)(Time)
-  module Dns_client = Dns_client.Make(Dns_transport)
+  module Dns_client = Dns_client.Make(My_dns)
 
   (* Set up networking and listen for incoming packets. *)
   let network dns_client dns_responses dns_servers qubesDB router =
@@ -39,22 +36,22 @@ module Main (R : Mirage_crypto_rng_mirage.S)(Clock : Mirage_clock.MCLOCK)(Time :
     Dao.set_iptables_error qubesDB "" >>= fun () ->
     (* Handle packets from both networks *)
     Lwt.choose [
-      Dispatcher.wait_clients Clock.elapsed_ns dns_client dns_servers qubesDB router ;
+      Dispatcher.wait_clients Mirage_mtime.elapsed_ns dns_client dns_servers qubesDB router ;
       Dispatcher.uplink_wait_update qubesDB router ;
-      Dispatcher.uplink_listen Clock.elapsed_ns dns_responses router
+      Dispatcher.uplink_listen Mirage_mtime.elapsed_ns dns_responses router
     ]
 
   (* Main unikernel entry point (called from auto-generated main.ml). *)
-  let start _random _clock _time =
+  let start () =
     let open Lwt.Syntax in
-    let start_time = Clock.elapsed_ns () in
+    let start_time = Mirage_mtime.elapsed_ns () in
     (* Start qrexec agent and QubesDB agent in parallel *)
     let* qrexec = RExec.connect ~domid:0 () in
     let agent_listener = RExec.listen qrexec Command.handler in
     let* qubesDB = DB.connect ~domid:0 () in
     let startup_time =
       let (-) = Int64.sub in
-      let time_in_ns = Clock.elapsed_ns () - start_time in
+      let time_in_ns = Mirage_mtime.elapsed_ns () - start_time in
       Int64.to_float time_in_ns /. 1e9
     in
     Log.info (fun f -> f "QubesDB and qrexec agents connected in %.3f s" startup_time);
@@ -113,5 +110,4 @@ module Main (R : Mirage_crypto_rng_mirage.S)(Clock : Mirage_clock.MCLOCK)(Time :
     (* Run until something fails or we get a shutdown request. *)
     Lwt.choose [agent_listener; net_listener; shutdown_rq] >>= fun () ->
     (* Give the console daemon time to show any final log messages. *)
-    Time.sleep_ns (1.0 *. 1e9 |> Int64.of_float)
-end
+    Mirage_sleep.ns (1.0 *. 1e9 |> Int64.of_float)
