@@ -38,6 +38,5 @@ jobs:
         run: |
           git config --global user.name "Automated ocamlformat GitHub action, developed by robur.coop"
           git config --global user.email "autoformat@robur.coop"
-          git add -A
-          git commit -m "formatted code"
+          git commit -m "formatted code" .
           git push
