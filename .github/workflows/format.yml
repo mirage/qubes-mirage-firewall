@@ -17,8 +17,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
 
       - name: Use OCaml ${{ matrix.ocaml-version }}
         uses: ocaml/setup-ocaml@v3
