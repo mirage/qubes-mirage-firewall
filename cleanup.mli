@@ -1,8 +1,8 @@
 (* Copyright (C) 2015, Thomas Leonard <thomas.leonard@unikernel.com>
    See the README file for details. *)
 
-(** Register actions to take when a resource is finished.
-    Like [Lwt_switch], but synchronous. *)
+(** Register actions to take when a resource is finished. Like [Lwt_switch], but
+    synchronous. *)
 
 type t
 
