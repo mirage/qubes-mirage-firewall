@@ -4,19 +4,19 @@
 open Fw_utils
 open Lwt.Infix
 
-let src = Logs.Src.create "client_eth" ~doc:"Ethernet networks for NetVM clients"
+let src =
+  Logs.Src.create "client_eth" ~doc:"Ethernet networks for NetVM clients"
+
 module Log = (val Logs.src_log src : Logs.LOG)
 
 type t = {
   mutable iface_of_ip : client_link Ipaddr.V4.Map.t;
-  changed : unit Lwt_condition.t;   (* Fires when [iface_of_ip] changes. *)
-  my_ip : Ipaddr.V4.t;  (* The IP that clients are given as their default gateway. *)
+  changed : unit Lwt_condition.t; (* Fires when [iface_of_ip] changes. *)
+  my_ip : Ipaddr.V4.t;
+      (* The IP that clients are given as their default gateway. *)
 }
 
-type host =
-  [ `Client of client_link
-  | `Firewall
-  | `External of Ipaddr.t ]
+type host = [ `Client of client_link | `Firewall | `External of Ipaddr.t ]
 
 let create config =
   let changed = Lwt_condition.create () in
@@ -30,14 +30,17 @@ let add_client t iface =
   let rec aux () =
     match Ipaddr.V4.Map.find_opt ip t.iface_of_ip with
     | Some old ->
-      (* Wait for old client to disappear before adding one with the same IP address.
+        (* Wait for old client to disappear before adding one with the same IP address.
          Otherwise, its [remove_client] call will remove the new client instead. *)
-      Log.info (fun f -> f ~header:iface#log_header "Waiting for old client %s to go away before accepting new one" old#log_header);
-      Lwt_condition.wait t.changed >>= aux
+        Log.info (fun f ->
+            f ~header:iface#log_header
+              "Waiting for old client %s to go away before accepting new one"
+              old#log_header);
+        Lwt_condition.wait t.changed >>= aux
     | None ->
-      t.iface_of_ip <- t.iface_of_ip |> Ipaddr.V4.Map.add ip iface;
-      Lwt_condition.broadcast t.changed ();
-      Lwt.return_unit
+        t.iface_of_ip <- t.iface_of_ip |> Ipaddr.V4.Map.add ip iface;
+        Lwt_condition.broadcast t.changed ();
+        Lwt.return_unit
   in
   aux ()
 
@@ -52,11 +55,12 @@ let lookup t ip = Ipaddr.V4.Map.find_opt ip t.iface_of_ip
 let classify t ip =
   match ip with
   | Ipaddr.V6 _ -> `External ip
-  | Ipaddr.V4 ip4 ->
-    if ip4 = t.my_ip then `Firewall
-    else match lookup t ip4 with
-      | Some client_link -> `Client client_link
-      | None -> `External ip
+  | Ipaddr.V4 ip4 -> (
+      if ip4 = t.my_ip then `Firewall
+      else
+        match lookup t ip4 with
+        | Some client_link -> `Client client_link
+        | None -> `External ip)
 
 let resolve t : host -> Ipaddr.t = function
   | `Client client_link -> Ipaddr.V4 client_link#other_ip
@@ -64,50 +68,53 @@ let resolve t : host -> Ipaddr.t = function
   | `External addr -> addr
 
 module ARP = struct
-  type arp = {
-    net : t;
-    client_link : client_link;
-  }
+  type arp = { net : t; client_link : client_link }
 
   let lookup t ip =
     if ip = t.net.my_ip then Some t.client_link#my_mac
     else if (Ipaddr.V4.to_octets ip).[3] = '\x01' then (
-      Log.info (fun f -> f ~header:t.client_link#log_header
-                   "Request for %a is invalid, but pretending it's me (see Qubes issue #5022)" Ipaddr.V4.pp ip);
-      Some t.client_link#my_mac
-    ) else None
+      Log.info (fun f ->
+          f ~header:t.client_link#log_header
+            "Request for %a is invalid, but pretending it's me (see Qubes \
+             issue #5022)"
+            Ipaddr.V4.pp ip);
+      Some t.client_link#my_mac)
+    else None
   (* We're now treating client networks as point-to-point links,
      so we no longer respond on behalf of other clients. *)
-    (*
+  (*
     else match Ipaddr.V4.Map.find_opt ip t.net.iface_of_ip with
     | Some client_iface -> Some client_iface#other_mac
     | None -> None
      *)
 
-  let create ~net client_link = {net; client_link}
+  let create ~net client_link = { net; client_link }
 
   let input_query t arp =
     let req_ipv4 = arp.Arp_packet.target_ip in
     let pf (f : ?header:string -> ?tags:_ -> _) fmt =
-      f ~header:t.client_link#log_header ("who-has %a? " ^^ fmt) Ipaddr.V4.pp req_ipv4
+      f ~header:t.client_link#log_header ("who-has %a? " ^^ fmt) Ipaddr.V4.pp
+        req_ipv4
     in
     if req_ipv4 = t.client_link#other_ip then (
       Log.info (fun f -> pf f "ignoring request for client's own IP");
-      None
-    ) else match lookup t req_ipv4 with
+      None)
+    else
+      match lookup t req_ipv4 with
       | None ->
-        Log.info (fun f -> pf f "unknown address; not responding");
-        None
+          Log.info (fun f -> pf f "unknown address; not responding");
+          None
       | Some req_mac ->
-        Log.info (fun f -> pf f "responding with %a" Macaddr.pp req_mac);
-        Some { Arp_packet.
-               operation = Arp_packet.Reply;
-               (* The Target Hardware Address and IP are copied from the request *)
-               target_ip = arp.Arp_packet.source_ip;
-               target_mac = arp.Arp_packet.source_mac;
-               source_ip = req_ipv4;
-               source_mac = req_mac;
-             }
+          Log.info (fun f -> pf f "responding with %a" Macaddr.pp req_mac);
+          Some
+            {
+              Arp_packet.operation = Arp_packet.Reply;
+              (* The Target Hardware Address and IP are copied from the request *)
+              target_ip = arp.Arp_packet.source_ip;
+              target_mac = arp.Arp_packet.source_mac;
+              source_ip = req_ipv4;
+              source_mac = req_mac;
+            }
 
   let input_gratuitous t arp =
     let source_ip = arp.Arp_packet.source_ip in
@@ -115,18 +122,28 @@ module ARP = struct
     let header = t.client_link#log_header in
     match lookup t source_ip with
     | Some real_mac when Macaddr.compare source_mac real_mac = 0 ->
-      Log.info (fun f -> f ~header "client suggests updating %s -> %s (as expected)"
-                   (Ipaddr.V4.to_string source_ip) (Macaddr.to_string source_mac));
+        Log.info (fun f ->
+            f ~header "client suggests updating %s -> %s (as expected)"
+              (Ipaddr.V4.to_string source_ip)
+              (Macaddr.to_string source_mac))
     | Some other_mac ->
-      Log.warn (fun f -> f ~header "client suggests incorrect update %s -> %s (should be %s)"
-                   (Ipaddr.V4.to_string source_ip) (Macaddr.to_string source_mac) (Macaddr.to_string other_mac));
+        Log.warn (fun f ->
+            f ~header "client suggests incorrect update %s -> %s (should be %s)"
+              (Ipaddr.V4.to_string source_ip)
+              (Macaddr.to_string source_mac)
+              (Macaddr.to_string other_mac))
     | None ->
-      Log.warn (fun f -> f ~header "client suggests incorrect update %s -> %s (unexpected IP)"
-                   (Ipaddr.V4.to_string source_ip) (Macaddr.to_string source_mac))
+        Log.warn (fun f ->
+            f ~header
+              "client suggests incorrect update %s -> %s (unexpected IP)"
+              (Ipaddr.V4.to_string source_ip)
+              (Macaddr.to_string source_mac))
 
   let input t arp =
     let op = arp.Arp_packet.operation in
     match op with
     | Arp_packet.Request -> input_query t arp
-    | Arp_packet.Reply -> input_gratuitous t arp; None
+    | Arp_packet.Reply ->
+        input_gratuitous t arp;
+        None
 end

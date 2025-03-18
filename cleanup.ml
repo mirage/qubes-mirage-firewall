@@ -4,9 +4,7 @@
 type t = (unit -> unit) list ref
 
 let create () = ref []
-
-let on_cleanup t fn =
-  t := fn :: !t
+let on_cleanup t fn = t := fn :: !t
 
 let cleanup t =
   let tasks = !t in
