@@ -48,7 +48,7 @@ It's OK to install the Docker or Podman package in a template VM if you want it 
 after a reboot, but the build of the firewall itself should be done in a regular AppVM.
 
 You can also build without that script, as for any normal Mirage unikernel;
-see [the Mirage installation instructions](https://mirage.io/wiki/install) for details.
+see [the Mirage installation instructions](https://mirageos.org/wiki/install) for details.
 
 The build script fixes the versions of the libraries it uses, ensuring that you will get
 exactly the same binary that is in the release. If you build without it, it will build
