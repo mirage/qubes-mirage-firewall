@@ -402,13 +402,14 @@ let conf_vif get_ts vif backend client_eth dns_client dns_servers ~client_ip
 
 (** A new client VM has been found in XenStore. Find its interface and connect
     to it. *)
-let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB =
+let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB
+    ~cleanup_tasks =
   let open Lwt.Syntax in
-  let cleanup_tasks = Cleanup.create () in
   Log.info (fun f ->
       f "add client vif %a with IP %a" Dao.ClientVif.pp vif Ipaddr.V4.pp
         client_ip);
   let { Dao.ClientVif.domid; device_id } = vif in
+
   let* backend = Netback.make ~domid ~device_id in
   let* eth = ClientEth.connect backend in
   let client_mac = Netback.frontend_mac backend in
@@ -436,7 +437,7 @@ let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB =
           (Printexc.to_string exn));
     Lwt.return_unit
   in
-  Lwt.return cleanup_tasks
+  Lwt.return_unit
 
 (** Watch XenStore for notifications of new clients. *)
 let wait_clients get_ts dns_client dns_servers qubesDB router =
@@ -456,11 +457,22 @@ let wait_clients get_ts dns_client dns_servers qubesDB router =
     match Seq.uncons seq with
     | None -> Lwt.return_unit
     | Some ((key, ipaddr), seq) when not (Dao.VifMap.mem key !clients) ->
-        let* cleanup =
-          add_client get_ts dns_client dns_servers ~router key ipaddr qubesDB
+        let cleanup_tasks = Cleanup.create () in
+        let* () =
+          Lwt.catch
+            (fun () ->
+              add_client get_ts dns_client dns_servers ~router key ipaddr
+                qubesDB ~cleanup_tasks)
+            (function
+              | Xs_protocol.Error _ ->
+                  Log.warn (fun f ->
+                      f "Client %a has not terminated its vif initialisation"
+                        Dao.ClientVif.pp key);
+                  Lwt.return_unit
+              | e -> Lwt.fail e)
         in
         Log.debug (fun f -> f "client %a arrived" Dao.ClientVif.pp key);
-        clients := Dao.VifMap.add key cleanup !clients;
+        clients := Dao.VifMap.add key cleanup_tasks !clients;
         go seq
     | Some (_, seq) -> go seq
   in
