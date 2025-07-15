@@ -441,7 +441,6 @@ let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB
 
 (** Watch XenStore for notifications of new clients. *)
 let wait_clients get_ts dns_client dns_servers qubesDB router =
-  let open Lwt.Syntax in
   let clients : Cleanup.t Dao.VifMap.t ref = ref Dao.VifMap.empty in
   Dao.watch_clients @@ fun new_set ->
   (* Check for removed clients *)
@@ -458,19 +457,18 @@ let wait_clients get_ts dns_client dns_servers qubesDB router =
     | None -> Lwt.return_unit
     | Some ((key, ipaddr), seq) when not (Dao.VifMap.mem key !clients) ->
         let cleanup_tasks = Cleanup.create () in
-        let* () =
-          Lwt.catch
-            (fun () ->
-              add_client get_ts dns_client dns_servers ~router key ipaddr
-                qubesDB ~cleanup_tasks)
-            (function
-              | Xs_protocol.Error _ ->
-                  Log.warn (fun f ->
-                      f "Client %a has not terminated its vif initialisation"
-                        Dao.ClientVif.pp key);
-                  Lwt.return_unit
-              | e -> Lwt.fail e)
-        in
+        Lwt.async (fun () ->
+            Lwt.catch
+              (fun () ->
+                add_client get_ts dns_client dns_servers ~router key ipaddr
+                  qubesDB ~cleanup_tasks)
+              (function
+                | Xs_protocol.Error _ ->
+                    Log.warn (fun f ->
+                        f "Client %a has not terminated its vif initialisation"
+                          Dao.ClientVif.pp key);
+                    Lwt.return_unit
+                | e -> Lwt.fail e));
         Log.debug (fun f -> f "client %a arrived" Dao.ClientVif.pp key);
         clients := Dao.VifMap.add key cleanup_tasks !clients;
         go seq
