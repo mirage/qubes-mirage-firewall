@@ -99,22 +99,17 @@ module ARP = struct
     if req_ipv4 = t.client_link#other_ip then (
       Log.info (fun f -> pf f "ignoring request for client's own IP");
       None)
-    else
-      match lookup t req_ipv4 with
-      | None ->
-          Log.info (fun f -> pf f "unknown address; not responding");
-          None
-      | Some req_mac ->
-          Log.info (fun f -> pf f "responding with %a" Macaddr.pp req_mac);
-          Some
-            {
-              Arp_packet.operation = Arp_packet.Reply;
-              (* The Target Hardware Address and IP are copied from the request *)
-              target_ip = arp.Arp_packet.source_ip;
-              target_mac = arp.Arp_packet.source_mac;
-              source_ip = req_ipv4;
-              source_mac = req_mac;
-            }
+    else (
+      Log.info (fun f -> pf f "responding with %a" Macaddr.pp t.client_link#my_mac);
+      Some
+        {
+          Arp_packet.operation = Arp_packet.Reply;
+          (* The Target Hardware Address and IP are copied from the request *)
+          target_ip = arp.Arp_packet.source_ip;
+          target_mac = arp.Arp_packet.source_mac;
+          source_ip = req_ipv4;
+          source_mac = t.client_link#my_mac;
+        })
 
   let input_gratuitous t arp =
     let source_ip = arp.Arp_packet.source_ip in
