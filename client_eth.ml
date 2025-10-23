@@ -100,7 +100,8 @@ module ARP = struct
       Log.info (fun f -> pf f "ignoring request for client's own IP");
       None)
     else (
-      Log.info (fun f -> pf f "responding with %a" Macaddr.pp t.client_link#my_mac);
+      Log.info (fun f ->
+          pf f "responding with %a" Macaddr.pp t.client_link#my_mac);
       Some
         {
           Arp_packet.operation = Arp_packet.Reply;
