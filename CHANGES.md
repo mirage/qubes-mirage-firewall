@@ -1,3 +1,10 @@
+### 0.9.5 (2025-10-29)
+
+- Update ARP entry behavior: the unikernel now responds with its MAC address for every APR request from a client. This fixes issues with some VPN clients (#221, @palainp, reviewed by @hannesm, fix confirmed by @pprudev).
+- Fix HVM client handling: HVM Clients, such as Windows, have two network interfaces but only use one. This causes deadlock states because the connection protocol for one interface is not completed, leading the unikernel to wait for the client to shut down. Now, each connection uses its own thread, and the unikernel can handle Windows HVM (#219 @palainp).
+- Add a GH action for code auto-formatting (#217 @hannesm).
+- Update to OCaml 5.3 + Mirage ecosystem (4.9 in #215 @hannesm and 4.10 in #216 @palainp).
+
 ### 0.9.4 (2025-02-10)
 
 - Fix an issue when qubes-mirage-firewall is used a a mullvad AppVM client. If
