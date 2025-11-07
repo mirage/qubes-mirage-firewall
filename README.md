@@ -79,12 +79,14 @@ qvm-create \
   --property provides_network=True \
   --property vcpus=1 \
   --property virt_mode=pvh \
+  --property audiovm='' \
   --label=green \
   --class StandaloneVM \
   mirage-firewall
 
 qvm-features mirage-firewall qubes-firewall 1
 qvm-features mirage-firewall no-default-kernelopts 1
+qvm-features mirage-firewall skip-update 1
 ```
 
 ### Deployment using saltstack

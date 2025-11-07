@@ -80,10 +80,12 @@ create-sys-mirage-fw:
       - provides-network: True
       - vcpus: 1
       - virt-mode: pvh
+      - audiovm: ""
     - features:
       - enable:
         - qubes-firewall
         - no-default-kernelopts
+        - skip-update
     - require: 
       - copy-mirage-kernel-to-dom0
 
