@@ -1,14 +1,13 @@
 open Lwt.Infix
 open Fw_utils
-module Netback = Backend.Make (Xenstore.Make (Xen_os.Xs))
-module ClientEth = Ethernet.Make (Netback)
-module UplinkEth = Ethernet.Make (Netif)
+module Netif = Netif.Make (Xenstore.Make (Xen_os.Xs))
+module Eth = Ethernet.Make (Netif)
 
 let src = Logs.Src.create "dispatcher" ~doc:"Networking dispatch"
 
 module Log = (val Logs.src_log src : Logs.LOG)
-module Arp = Arp.Make (UplinkEth)
-module I = Static_ipv4.Make (UplinkEth) (Arp)
+module Arp = Arp.Make (Eth)
+module I = Static_ipv4.Make (Eth) (Arp)
 module U = Udp.Make (I)
 
 class client_iface eth ~domid ~gateway_ip ~client_ip client_mac : client_link =
@@ -17,7 +16,7 @@ class client_iface eth ~domid ~gateway_ip ~client_ip client_mac : client_link =
     val mutable rules = []
     method get_rules = rules
     method set_rules new_db = rules <- Dao.read_rules new_db client_ip
-    method my_mac = ClientEth.mac eth
+    method my_mac = Eth.mac eth
     method other_mac = client_mac
     method my_ip = gateway_ip
     method other_ip = client_ip
@@ -25,11 +24,11 @@ class client_iface eth ~domid ~gateway_ip ~client_ip client_mac : client_link =
     method writev proto fillfn =
       Lwt.catch
         (fun () ->
-          ClientEth.write eth client_mac proto fillfn >|= function
+          Eth.write eth client_mac proto fillfn >|= function
           | Ok () -> ()
           | Error e ->
               Log.err (fun f ->
-                  f "error trying to send to client: @[%a@]" ClientEth.pp_error
+                  f "error trying to send to client: @[%a@]" Eth.pp_error
                     e))
         (fun ex ->
           (* Usually Netback_shutdown, because the client disconnected *)
@@ -43,7 +42,7 @@ class client_iface eth ~domid ~gateway_ip ~client_ip client_mac : client_link =
 
 class netvm_iface eth mac ~my_ip ~other_ip : interface =
   object
-    method my_mac = UplinkEth.mac eth
+    method my_mac = Eth.mac eth
     method my_ip = my_ip
     method other_ip = other_ip
 
@@ -51,8 +50,8 @@ class netvm_iface eth mac ~my_ip ~other_ip : interface =
       Lwt.catch
         (fun () ->
           mac >>= fun dst ->
-          UplinkEth.write eth dst ethertype fillfn
-          >|= or_raise "Write to uplink" UplinkEth.pp_error)
+          Eth.write eth dst ethertype fillfn
+          >|= or_raise "Write to uplink" Eth.pp_error)
         (fun ex ->
           Log.err (fun f ->
               f "uncaught exception trying to send to uplink: @[%s@]"
@@ -62,7 +61,7 @@ class netvm_iface eth mac ~my_ip ~other_ip : interface =
 
 type uplink = {
   net : Netif.t;
-  eth : UplinkEth.t;
+  eth : Eth.t;
   arp : Arp.t;
   interface : interface;
   mutable fragments : Fragments.Cache.t;
@@ -378,7 +377,7 @@ let conf_vif get_ts vif backend client_eth dns_client dns_servers ~client_ip
   let listener =
     Lwt.catch
       (fun () ->
-        Netback.listen backend ~header_size:Ethernet.Packet.sizeof_ethernet
+        Netif.listen backend ~header_size:Ethernet.Packet.sizeof_ethernet
           (fun frame ->
             match Ethernet.Packet.of_cstruct frame with
             | Error err ->
@@ -391,7 +390,7 @@ let conf_vif get_ts vif backend client_eth dns_client dns_servers ~client_ip
                     client_handle_ipv4 get_ts fragment_cache ~iface ~router
                       dns_client dns_servers payload
                 | `IPv6 -> Lwt.return_unit (* TODO: oh no! *)))
-        >|= or_raise "Listen on client interface" Netback.pp_error)
+        >|= or_raise "Listen on client interface" Netif.pp_error)
       (function Lwt.Canceled -> Lwt.return_unit | e -> Lwt.fail e)
   in
   Cleanup.on_cleanup cleanup_tasks (fun () -> Lwt.cancel listener);
@@ -410,9 +409,9 @@ let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB
         client_ip);
   let { Dao.ClientVif.domid; device_id } = vif in
 
-  let* backend = Netback.make ~domid ~device_id in
-  let* eth = ClientEth.connect backend in
-  let client_mac = Netback.frontend_mac backend in
+  let* backend = Netif.make_backend ~domid ~device_id in
+  let* eth = Eth.connect backend in
+  let client_mac = Netif.frontend_mac backend in
   let client_eth = router.clients in
   let gateway_ip = Client_eth.client_gw client_eth in
   let iface = new client_iface eth ~domid ~gateway_ip ~client_ip client_mac in
@@ -513,7 +512,7 @@ let rec uplink_listen get_ts dns_responses router =
             Netif.listen uplink.net ~header_size:Ethernet.Packet.sizeof_ethernet
               (fun frame ->
                 (* Handle one Ethernet frame from NetVM *)
-                UplinkEth.input uplink.eth ~arpv4:(Arp.input uplink.arp)
+                Eth.input uplink.eth ~arpv4:(Arp.input uplink.arp)
                   ~ipv4:(fun ip ->
                     let cache, r =
                       Nat_packet.of_ipv4_packet uplink.fragments
@@ -556,7 +555,7 @@ let rec uplink_listen get_ts dns_responses router =
                 (* mutable fragments : Fragments.Cache.t; *)
                 (* interface : interface; *)
                 Arp.disconnect uplink.arp >>= fun () ->
-                UplinkEth.disconnect uplink.eth >>= fun () ->
+                Eth.disconnect uplink.eth >>= fun () ->
                 Netif.disconnect uplink.net >>= fun () ->
                 Lwt_condition.broadcast router.uplink_disconnected ();
                 Lwt.return_unit
@@ -575,7 +574,7 @@ let connect config =
   let my_ip = config.Dao.our_ip in
   let gateway = config.Dao.netvm_ip in
   Netif.connect "0" >>= fun net ->
-  UplinkEth.connect net >>= fun eth ->
+  Eth.connect net >>= fun eth ->
   Arp.connect eth >>= fun arp ->
   Arp.add_ip arp my_ip >>= fun () ->
   let cidr = Ipaddr.V4.Prefix.make 0 my_ip in

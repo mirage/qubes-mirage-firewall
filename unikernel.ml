@@ -52,7 +52,6 @@ let start () =
   let start_time = Mirage_mtime.elapsed_ns () in
   (* Start qrexec agent and QubesDB agent in parallel *)
   let* qrexec = RExec.connect ~domid:0 () in
-  let agent_listener = RExec.listen qrexec Command.handler in
   let* qubesDB = DB.connect ~domid:0 () in
   let startup_time =
     let ( - ) = Int64.sub in
@@ -121,6 +120,6 @@ let start () =
   (* Report memory usage to XenStore *)
   Memory_pressure.init ();
   (* Run until something fails or we get a shutdown request. *)
-  Lwt.choose [ agent_listener; net_listener; shutdown_rq ] >>= fun () ->
+  Lwt.choose [ RExec.listen qrexec (); net_listener; shutdown_rq ] >>= fun () ->
   (* Give the console daemon time to show any final log messages. *)
   Mirage_sleep.ns (1.0 *. 1e9 |> Int64.of_float)
