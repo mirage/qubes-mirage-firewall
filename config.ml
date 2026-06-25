@@ -13,7 +13,8 @@ let main =
         package "vchan" ~min:"4.0.2";
         package "cstruct";
         package "tcpip" ~min:"3.7.0";
-        package ~min:"4.1.0" ~sublibs:[ "mirage" ] "arp"; (* arp 4.1.0 fixes OSEC-2026-02 *)
+        package ~min:"4.1.0" ~sublibs:[ "mirage" ] "arp";
+        (* arp 4.1.0 fixes OSEC-2026-02 *)
         package ~min:"3.0.0" "ethernet";
         package "shared-memory-ring" ~min:"3.0.0";
         package "mirage-net-xen" ~min:"2.1.4";
