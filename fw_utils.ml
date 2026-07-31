@@ -6,7 +6,14 @@
 (** An Ethernet interface. *)
 class type interface = object
   method my_mac : Macaddr.t
-  method writev : Ethernet.Packet.proto -> (Cstruct.t -> int) -> unit Lwt.t
+  (* [size] excludes the ethernet header, and must not exceed
+     [max_frame_size]. Above the MTU, the peer segments the frame. *)
+  method writev : ?size:int -> Ethernet.Packet.proto -> (Cstruct.t -> int) -> unit Lwt.t
+
+  (* The largest frame this interface carries in one piece, ethernet header
+     included, unlike [mtu] and [writev]'s [size]. *)
+  method max_frame_size : int
+  method mtu : int
   method my_ip : Ipaddr.V4.t
   method other_ip : Ipaddr.V4.t
 end
