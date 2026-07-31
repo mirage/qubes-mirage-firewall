@@ -12,10 +12,13 @@ module Log = (val Logs.src_log src : Logs.LOG)
    ourselves and hand the frame to the device. *)
 let write_frame eth netif ~where ~dst ~proto ?size fillfn =
   match size with
-  | Some size when size > Eth.mtu eth ->
+  | Some size when size > Eth.mtu eth -> (
       let hdr =
-        { Ethernet.Packet.source = Eth.mac eth; destination = dst;
-          ethertype = proto }
+        {
+          Ethernet.Packet.source = Eth.mac eth;
+          destination = dst;
+          ethertype = proto;
+        }
       in
       let header_size = Ethernet.Packet.sizeof_ethernet in
       Netif.write netif ~size:(header_size + size) (fun frame ->
@@ -24,17 +27,16 @@ let write_frame eth netif ~where ~dst ~proto ?size fillfn =
               Log.err (fun f -> f "%s: bad ethernet header: %s" where msg);
               0
           | Ok () -> header_size + fillfn (Cstruct.shift frame header_size))
-      >|= (function
-            | Ok () -> ()
-            | Error e ->
-                Log.err (fun f ->
-                    f "%s: failed to send a %d byte frame: %a" where size
-                      Netif.pp_error e))
+      >|= function
+      | Ok () -> ()
+      | Error e ->
+          Log.err (fun f ->
+              f "%s: failed to send a %d byte frame: %a" where size
+                Netif.pp_error e))
   | _ -> (
       Eth.write eth dst proto ?size fillfn >|= function
       | Ok () -> ()
-      | Error e ->
-          Log.err (fun f -> f "%s: @[%a@]" where Eth.pp_error e))
+      | Error e -> Log.err (fun f -> f "%s: @[%a@]" where Eth.pp_error e))
 
 module Arp = Arp.Make (Eth)
 module I = Static_ipv4.Make (Eth) (Arp)
@@ -456,7 +458,9 @@ let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB
   let client_mac = Netif.frontend_mac backend in
   let client_eth = router.clients in
   let gateway_ip = Client_eth.client_gw client_eth in
-  let iface = new client_iface eth backend ~domid ~gateway_ip ~client_ip client_mac in
+  let iface =
+    new client_iface eth backend ~domid ~gateway_ip ~client_ip client_mac
+  in
 
   Cleanup.on_cleanup cleanup_tasks (fun () -> remove_client router iface);
   Lwt.async (fun () ->
