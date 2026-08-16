@@ -170,13 +170,13 @@ let transmit_ipv4 packet (iface : #interface) =
       (* Ask for the whole packet, capped at what the link carries in one
          frame: below the cap it goes over whole, above it the buffer is short
          and into_cstruct fragments. Where the link carries no more than one
-         MTU there is nothing to decide, so size_of is not paid. *)
+         MTU there is nothing to decide, so length is not paid. *)
       let max_payload =
         iface#max_frame_size - Ethernet.Packet.sizeof_ethernet
       in
       let size =
         if max_payload <= iface#mtu then max_payload
-        else min (Nat_packet.size_of packet) max_payload
+        else min (Nat_packet.length packet) max_payload
       in
       iface#writev ~size `IPv4 (fun b ->
           match Nat_packet.into_cstruct packet b with
