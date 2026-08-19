@@ -280,7 +280,7 @@ let apply_rules t (rules : ('a, 'b) Packet.t -> Packet.action Lwt.t) ~dst
       Lwt.return_unit
 
 let ipv4_from_netvm t packet =
-  match Memory_pressure.status () with
+  match Qubes.Misc.check_memory ~fraction:20 () with
   | `Memory_critical -> Lwt.return_unit
   | `Ok -> (
       let (`IPv4 (ip, _transport)) = packet in
@@ -305,7 +305,7 @@ let ipv4_from_netvm t packet =
       )
 
 let ipv4_from_client resolver dns_servers t ~src packet =
-  match Memory_pressure.status () with
+  match Qubes.Misc.check_memory ~fraction:20 () with
   | `Memory_critical -> Lwt.return_unit
   | `Ok -> (
       (* Check for existing NAT entry for this packet *)
