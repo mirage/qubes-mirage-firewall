@@ -116,6 +116,12 @@ let start () =
   (* Report memory usage to XenStore *)
   Memory_pressure.init ();
   (* Run until something fails or we get a shutdown request. *)
-  Lwt.choose [ RExec.listen qrexec ~handler:Command.handler (); net_listener; Misc.shutdown ] >>= fun () ->
+  Lwt.choose
+    [
+      RExec.listen qrexec ~handler:Command.handler ();
+      net_listener;
+      Misc.shutdown;
+    ]
+  >>= fun () ->
   (* Give the console daemon time to show any final log messages. *)
   Mirage_sleep.ns (1.0 *. 1e9 |> Int64.of_float)
