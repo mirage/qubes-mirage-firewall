@@ -463,14 +463,23 @@ let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB
   in
 
   Cleanup.on_cleanup cleanup_tasks (fun () -> remove_client router iface);
-  Lwt.async (fun () ->
-      Lwt.catch
-        (fun () -> add_client router iface)
-        (fun ex ->
+  (* Admission parks while another client holds this IP, so it must be
+         cancellable: a stale waiter would otherwise register a dead interface
+         once the IP frees. Handlers run last-registered-first, so this cancel
+         precedes remove_client. *)
+  let admission =
+    Lwt.catch
+      (fun () -> add_client router iface)
+      (function
+        | Lwt.Canceled -> Lwt.return_unit
+        | ex ->
           Log.warn (fun f ->
               f "Error with client %a: %s" Dao.ClientVif.pp vif
                 (Printexc.to_string ex));
-          Lwt.return_unit));
+          Lwt.return_unit)
+  in
+  Cleanup.on_cleanup cleanup_tasks (fun () -> Lwt.cancel admission);
+  Lwt.async (fun () -> admission);
 
   let* () =
     Lwt.catch
