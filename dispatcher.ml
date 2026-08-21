@@ -440,7 +440,19 @@ let conf_vif get_ts vif backend client_eth dns_client dns_servers ~client_ip
   Cleanup.on_cleanup cleanup_tasks (fun () -> Lwt.cancel listener);
   (* NOTE(dinosaure): [qubes_updater] and [listener] can be forgotten, our [cleanup_task]
        will cancel them if the client is disconnected. *)
-  Lwt.async (fun () -> Lwt.pick [ qubesdb_updater; listener ]);
+  (* Guarded: an escape from Lwt.async kills the unikernel, not just this client,
+     and the listener re-raises anything that is not Lwt.Canceled - which a close
+     now makes routine. *)
+  Lwt.async (fun () ->
+      Lwt.catch
+        (fun () -> Lwt.pick [ qubesdb_updater; listener ])
+        (function
+          | Lwt.Canceled -> Lwt.return_unit
+          | ex ->
+            Log.warn (fun f ->
+                f "client %a: listener stopped: %s" Dao.ClientVif.pp vif
+                  (Printexc.to_string ex));
+            Lwt.return_unit));
   Lwt.return_unit
 
 (** A new client VM has been found in XenStore. Find its interface and connect
@@ -502,14 +514,38 @@ let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB
       Lwt.async (fun () -> admission);
 
       (* Re-serve on closure. make_backend then blocks in the handshake until
-         the frontend re-initialises, and the IP is free the whole time. *)
+         the frontend re-initialises, and the IP is free the whole time.
+
+         EVERYTHING in here must be caught. This runs under Lwt.async, where an
+         escaping exception reaches Lwt's async_exception_hook and takes the
+         whole unikernel down with it - it is not confined to this client. The
+         normal case is not even exceptional: when the guest shuts down, its
+         frontend directory disappears and the next handshake raises
+         Xs_protocol.Error, so an unguarded re-serve turns every ordinary guest
+         reboot into a firewall crash. wait_clients has always caught exactly
+         this around the first attempt; the loop needs the same guard. *)
       Lwt.async (fun () ->
-          let* () = closed in
-          Log.info (fun f ->
-              f "client %a closed its connection; serving the vif again"
-                Dao.ClientVif.pp vif);
-          Cleanup.cleanup conn_tasks;
-          serve ());
+          Lwt.catch
+            (fun () ->
+              let* () = closed in
+              Log.info (fun f ->
+                  f "client %a closed its connection; serving the vif again"
+                    Dao.ClientVif.pp vif);
+              Cleanup.cleanup conn_tasks;
+              serve ())
+            (function
+              | Xs_protocol.Error _ ->
+                (* The vif is gone - the guest shut down or was detached. Stop
+                   serving it; wait_clients handles the directory's removal. *)
+                Log.info (fun f ->
+                    f "client %a has gone; stopped serving its vif"
+                      Dao.ClientVif.pp vif);
+                Lwt.return_unit
+              | ex ->
+                Log.warn (fun f ->
+                    f "client %a: giving up on its vif: %s" Dao.ClientVif.pp vif
+                      (Printexc.to_string ex));
+                Lwt.return_unit));
 
       let* () =
         Lwt.catch
@@ -555,7 +591,13 @@ let wait_clients get_ts dns_client dns_servers qubesDB router =
                         f "Client %a has not terminated its vif initialisation"
                           Dao.ClientVif.pp key);
                     Lwt.return_unit
-                | e -> Lwt.fail e));
+                | e ->
+                    (* Never Lwt.fail inside Lwt.async: it would take down the
+                       firewall over one client. *)
+                    Log.warn (fun f ->
+                        f "Client %a failed: %s" Dao.ClientVif.pp key
+                          (Printexc.to_string e));
+                    Lwt.return_unit));
         Log.debug (fun f -> f "client %a arrived" Dao.ClientVif.pp key);
         clients := Dao.VifMap.add key cleanup_tasks !clients;
         go seq
