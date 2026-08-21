@@ -448,50 +448,83 @@ let conf_vif get_ts vif backend client_eth dns_client dns_servers ~client_ip
 let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB
     ~cleanup_tasks =
   let open Lwt.Syntax in
-  Log.info (fun f ->
-      f "add client vif %a with IP %a" Dao.ClientVif.pp vif Ipaddr.V4.pp
-        client_ip);
   let { Dao.ClientVif.domid; device_id } = vif in
+  (* A connection and a vif have different lifetimes: the vif lives until detach,
+     a connection over it can close and reopen many times. Per-connection state
+     lives in [conn_tasks], released on close so the IP frees; [cleanup_tasks]
+     keeps the vif's real lifetime and stops the loop. *)
+  let stop = ref false in
+  let current = ref (Cleanup.create ()) in
+  Cleanup.on_cleanup cleanup_tasks (fun () ->
+      stop := true;
+      Cleanup.cleanup !current);
+  let rec serve () =
+    if !stop then Lwt.return_unit
+    else begin
+      Log.info (fun f ->
+          f "add client vif %a with IP %a" Dao.ClientVif.pp vif Ipaddr.V4.pp
+            client_ip);
+      let conn_tasks = Cleanup.create () in
+      current := conn_tasks;
+      let closed, notify = Lwt.wait () in
+      let* backend =
+        Netif.make_backend
+          ~on_closed:(fun () ->
+              if Lwt.is_sleeping closed then Lwt.wakeup_later notify ();
+              Lwt.return_unit)
+          ~domid ~device_id ()
+      in
+      let* eth = Eth.connect backend in
+      let client_mac = Netif.frontend_mac backend in
+      let client_eth = router.clients in
+      let gateway_ip = Client_eth.client_gw client_eth in
+      let iface =
+        new client_iface eth backend ~domid ~gateway_ip ~client_ip client_mac
+      in
 
-  let* backend = Netif.make_backend ~domid ~device_id in
-  let* eth = Eth.connect backend in
-  let client_mac = Netif.frontend_mac backend in
-  let client_eth = router.clients in
-  let gateway_ip = Client_eth.client_gw client_eth in
-  let iface =
-    new client_iface eth backend ~domid ~gateway_ip ~client_ip client_mac
-  in
-
-  Cleanup.on_cleanup cleanup_tasks (fun () -> remove_client router iface);
-  (* Admission parks while another client holds this IP, so it must be
+      Cleanup.on_cleanup conn_tasks (fun () -> remove_client router iface);
+      (* Admission parks while another client holds this IP, so it must be
          cancellable: a stale waiter would otherwise register a dead interface
          once the IP frees. Handlers run last-registered-first, so this cancel
          precedes remove_client. *)
-  let admission =
-    Lwt.catch
-      (fun () -> add_client router iface)
-      (function
-        | Lwt.Canceled -> Lwt.return_unit
-        | ex ->
-          Log.warn (fun f ->
-              f "Error with client %a: %s" Dao.ClientVif.pp vif
-                (Printexc.to_string ex));
-          Lwt.return_unit)
-  in
-  Cleanup.on_cleanup cleanup_tasks (fun () -> Lwt.cancel admission);
-  Lwt.async (fun () -> admission);
+      let admission =
+        Lwt.catch
+          (fun () -> add_client router iface)
+          (function
+            | Lwt.Canceled -> Lwt.return_unit
+            | ex ->
+              Log.warn (fun f ->
+                  f "Error with client %a: %s" Dao.ClientVif.pp vif
+                    (Printexc.to_string ex));
+              Lwt.return_unit)
+      in
+      Cleanup.on_cleanup conn_tasks (fun () -> Lwt.cancel admission);
+      Lwt.async (fun () -> admission);
 
-  let* () =
-    Lwt.catch
-      (conf_vif get_ts vif backend client_eth dns_client dns_servers ~client_ip
-         ~iface ~router ~cleanup_tasks qubesDB)
-    @@ fun exn ->
-    Log.warn (fun f ->
-        f "Error with client %a: %s" Dao.ClientVif.pp vif
-          (Printexc.to_string exn));
-    Lwt.return_unit
+      (* Re-serve on closure. make_backend then blocks in the handshake until
+         the frontend re-initialises, and the IP is free the whole time. *)
+      Lwt.async (fun () ->
+          let* () = closed in
+          Log.info (fun f ->
+              f "client %a closed its connection; serving the vif again"
+                Dao.ClientVif.pp vif);
+          Cleanup.cleanup conn_tasks;
+          serve ());
+
+      let* () =
+        Lwt.catch
+          (conf_vif get_ts vif backend client_eth dns_client dns_servers
+             ~client_ip ~iface ~router ~cleanup_tasks:conn_tasks qubesDB)
+        @@ fun exn ->
+        Log.warn (fun f ->
+            f "Error with client %a: %s" Dao.ClientVif.pp vif
+              (Printexc.to_string exn));
+        Lwt.return_unit
+      in
+      Lwt.return_unit
+    end
   in
-  Lwt.return_unit
+  serve ()
 
 (** Watch XenStore for notifications of new clients. *)
 let wait_clients get_ts dns_client dns_servers qubesDB router =
