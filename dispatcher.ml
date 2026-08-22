@@ -473,9 +473,10 @@ let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB
   let rec serve () =
     if !stop then Lwt.return_unit
     else begin
+      let* vtype = Dao.vif_type vif in
       Log.info (fun f ->
-          f "add client vif %a with IP %a" Dao.ClientVif.pp vif Ipaddr.V4.pp
-            client_ip);
+          f "add client vif %a type=%s with IP %a" Dao.ClientVif.pp vif vtype
+            Ipaddr.V4.pp client_ip);
       let conn_tasks = Cleanup.create () in
       current := conn_tasks;
       let closed, notify = Lwt.wait () in
@@ -529,8 +530,8 @@ let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB
             (fun () ->
               let* () = closed in
               Log.info (fun f ->
-                  f "client %a closed its connection; serving the vif again"
-                    Dao.ClientVif.pp vif);
+                  f "client %a type=%s closed its connection; serving the vif \
+                     again" Dao.ClientVif.pp vif vtype);
               Cleanup.cleanup conn_tasks;
               serve ())
             (function

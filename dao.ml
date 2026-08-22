@@ -116,6 +116,17 @@ let vifs client domid =
       in
       Xen_os.Xs.immediate client vifs_of_domain
 
+(* The backend's "type" for a vif. Logging only. An HVM's two vifs carry the same
+   IP and differ only by domid, so a handover otherwise reads like a conflict.
+   Reported verbatim: the GUEST's vif is the one marked vif_ioemu. *)
+let vif_type { ClientVif.domid; device_id } =
+  Xen_os.Xs.make () >>= fun xs ->
+  Lwt.catch
+    (fun () ->
+      Xen_os.Xs.immediate xs (fun h ->
+          Xen_os.Xs.read h (Fmt.str "backend/vif/%d/%d/type" domid device_id)))
+    (fun _ -> Lwt.return "?")
+
 let watch_clients fn =
   Xen_os.Xs.make () >>= fun xs ->
   let backend_vifs = "backend/vif" in
