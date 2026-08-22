@@ -1,3 +1,15 @@
+## unreleased
+
+* Support clients that close and reconnect their vif (#230). A connection and a vif no longer
+  share a lifetime: per-connection state is released on close, the IP frees immediately, and the
+  vif is served again. A Windows guest closes its device at PnP start and on every driver restart.
+* Contain client failures: an exception escaping Lwt.async takes down the whole unikernel rather
+  than one client, and reconnection makes three such paths routine (two of them pre-existing).
+* client_eth: remove only our own IP entry. An HVM's two vifs share one IP, so cleanup for a
+  client that was never admitted could evict the live one.
+* Retry a failed reconnect instead of abandoning a live vif.
+* Log the backend's vif type, so an HVM's two vifs are distinguishable.
+
 ### 0.9.5 (2025-10-29)
 
 - Update ARP entry behavior: the unikernel now responds with its MAC address for every APR request from a client. This fixes issues with some VPN clients (#221, @palainp, reviewed by @hannesm, fix confirmed by @pprudev).

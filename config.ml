@@ -17,7 +17,7 @@ let main =
         (* arp 4.1.0 fixes OSEC-2026-02 *)
         package ~min:"3.0.0" "ethernet";
         package "shared-memory-ring" ~min:"3.0.0";
-        package "mirage-net-xen" ~min:"2.1.8";
+        package "mirage-net-xen" ~min:"2.2.0";
         package "ipaddr" ~min:"5.2.0";
         package "mirage-qubes" ~min:"2.0.1";
         package ~min:"3.0.1" "mirage-nat";
