@@ -525,28 +525,43 @@ let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB
          Xs_protocol.Error, so an unguarded re-serve turns every ordinary guest
          reboot into a firewall crash. wait_clients has always caught exactly
          this around the first attempt; the loop needs the same guard. *)
-      Lwt.async (fun () ->
-          Lwt.catch
-            (fun () ->
-              let* () = closed in
+      (* Retry anything that is not "the vif is gone": a guest resetting mid-handshake
+         leaves a revoked grant, a stale event-channel port or half-torn-down ring
+         keys, none of which are Xs_protocol.Error, and wait_clients only re-adds a
+         vif whose directory is ABSENT - so treating those as terminal abandoned a
+         live vif. Both spellings of gone are terminal: Error for a vanished
+         frontend, raw Enoent for a backend directory removed first. The delay
+         damps a client that cycles connect/close. *)
+      let rec reserve attempt =
+        Lwt.catch
+          (fun () ->
+            Cleanup.cleanup conn_tasks;
+            Mirage_sleep.ns (Duration.of_ms 100) >>= fun () ->
+            if !stop then Lwt.return_unit else serve ())
+          (function
+            | Xs_protocol.Error _ | Xs_protocol.Enoent _ ->
               Log.info (fun f ->
-                  f "client %a type=%s closed its connection; serving the vif \
-                     again" Dao.ClientVif.pp vif vtype);
-              Cleanup.cleanup conn_tasks;
-              serve ())
-            (function
-              | Xs_protocol.Error _ ->
-                (* The vif is gone - the guest shut down or was detached. Stop
-                   serving it; wait_clients handles the directory's removal. *)
-                Log.info (fun f ->
-                    f "client %a has gone; stopped serving its vif"
-                      Dao.ClientVif.pp vif);
-                Lwt.return_unit
-              | ex ->
-                Log.warn (fun f ->
-                    f "client %a: giving up on its vif: %s" Dao.ClientVif.pp vif
-                      (Printexc.to_string ex));
-                Lwt.return_unit));
+                  f "client %a has gone; stopped serving its vif"
+                    Dao.ClientVif.pp vif);
+              Lwt.return_unit
+            | ex when attempt < 10 ->
+              Log.warn (fun f ->
+                  f "client %a: connection attempt %d failed (%s); retrying"
+                    Dao.ClientVif.pp vif attempt (Printexc.to_string ex));
+              Mirage_sleep.ns (Duration.of_sec 1) >>= fun () ->
+              if !stop then Lwt.return_unit else reserve (attempt + 1)
+            | ex ->
+              Log.warn (fun f ->
+                  f "client %a: giving up on its vif after %d attempts: %s"
+                    Dao.ClientVif.pp vif attempt (Printexc.to_string ex));
+              Lwt.return_unit)
+      in
+      Lwt.async (fun () ->
+          let* () = closed in
+          Log.info (fun f ->
+              f "client %a type=%s closed its connection; serving the vif \
+                 again" Dao.ClientVif.pp vif vtype);
+          reserve 1);
 
       let* () =
         Lwt.catch
