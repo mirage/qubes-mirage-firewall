@@ -46,8 +46,13 @@ let add_client t iface =
 
 let remove_client t iface =
   let ip = iface#other_ip in
-  assert (Ipaddr.V4.Map.mem ip t.iface_of_ip);
-  t.iface_of_ip <- t.iface_of_ip |> Ipaddr.V4.Map.remove ip;
+  (* Remove only our own entry: [iface] may never have been admitted, so the entry
+     under [ip] can belong to a live client. An HVM hits this routinely - its two
+     vifs share an IP and the lower domid is cleaned first. *)
+  (match Ipaddr.V4.Map.find_opt ip t.iface_of_ip with
+   | Some cur when cur == iface ->
+     t.iface_of_ip <- t.iface_of_ip |> Ipaddr.V4.Map.remove ip
+   | _ -> ());
   Lwt_condition.broadcast t.changed ()
 
 let lookup t ip = Ipaddr.V4.Map.find_opt ip t.iface_of_ip

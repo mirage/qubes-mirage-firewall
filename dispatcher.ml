@@ -440,7 +440,19 @@ let conf_vif get_ts vif backend client_eth dns_client dns_servers ~client_ip
   Cleanup.on_cleanup cleanup_tasks (fun () -> Lwt.cancel listener);
   (* NOTE(dinosaure): [qubes_updater] and [listener] can be forgotten, our [cleanup_task]
        will cancel them if the client is disconnected. *)
-  Lwt.async (fun () -> Lwt.pick [ qubesdb_updater; listener ]);
+  (* Guarded: an escape from Lwt.async kills the unikernel, not just this client,
+     and the listener re-raises anything that is not Lwt.Canceled - which a close
+     now makes routine. *)
+  Lwt.async (fun () ->
+      Lwt.catch
+        (fun () -> Lwt.pick [ qubesdb_updater; listener ])
+        (function
+          | Lwt.Canceled -> Lwt.return_unit
+          | ex ->
+            Log.warn (fun f ->
+                f "client %a: listener stopped: %s" Dao.ClientVif.pp vif
+                  (Printexc.to_string ex));
+            Lwt.return_unit));
   Lwt.return_unit
 
 (** A new client VM has been found in XenStore. Find its interface and connect
@@ -448,41 +460,123 @@ let conf_vif get_ts vif backend client_eth dns_client dns_servers ~client_ip
 let add_client get_ts dns_client dns_servers ~router vif client_ip qubesDB
     ~cleanup_tasks =
   let open Lwt.Syntax in
-  Log.info (fun f ->
-      f "add client vif %a with IP %a" Dao.ClientVif.pp vif Ipaddr.V4.pp
-        client_ip);
   let { Dao.ClientVif.domid; device_id } = vif in
+  (* A connection and a vif have different lifetimes: the vif lives until detach,
+     a connection over it can close and reopen many times. Per-connection state
+     lives in [conn_tasks], released on close so the IP frees; [cleanup_tasks]
+     keeps the vif's real lifetime and stops the loop. *)
+  let stop = ref false in
+  let current = ref (Cleanup.create ()) in
+  Cleanup.on_cleanup cleanup_tasks (fun () ->
+      stop := true;
+      Cleanup.cleanup !current);
+  let rec serve () =
+    if !stop then Lwt.return_unit
+    else begin
+      let* vtype = Dao.vif_type vif in
+      Log.info (fun f ->
+          f "add client vif %a type=%s with IP %a" Dao.ClientVif.pp vif vtype
+            Ipaddr.V4.pp client_ip);
+      let conn_tasks = Cleanup.create () in
+      current := conn_tasks;
+      let closed, notify = Lwt.wait () in
+      let* backend =
+        Netif.make_backend
+          ~on_closed:(fun () ->
+              if Lwt.is_sleeping closed then Lwt.wakeup_later notify ();
+              Lwt.return_unit)
+          ~domid ~device_id ()
+      in
+      let* eth = Eth.connect backend in
+      let client_mac = Netif.frontend_mac backend in
+      let client_eth = router.clients in
+      let gateway_ip = Client_eth.client_gw client_eth in
+      let iface =
+        new client_iface eth backend ~domid ~gateway_ip ~client_ip client_mac
+      in
 
-  let* backend = Netif.make_backend ~domid ~device_id in
-  let* eth = Eth.connect backend in
-  let client_mac = Netif.frontend_mac backend in
-  let client_eth = router.clients in
-  let gateway_ip = Client_eth.client_gw client_eth in
-  let iface =
-    new client_iface eth backend ~domid ~gateway_ip ~client_ip client_mac
+      Cleanup.on_cleanup conn_tasks (fun () -> remove_client router iface);
+      (* Admission parks while another client holds this IP, so it must be
+         cancellable: a stale waiter would otherwise register a dead interface
+         once the IP frees. Handlers run last-registered-first, so this cancel
+         precedes remove_client. *)
+      let admission =
+        Lwt.catch
+          (fun () -> add_client router iface)
+          (function
+            | Lwt.Canceled -> Lwt.return_unit
+            | ex ->
+              Log.warn (fun f ->
+                  f "Error with client %a: %s" Dao.ClientVif.pp vif
+                    (Printexc.to_string ex));
+              Lwt.return_unit)
+      in
+      Cleanup.on_cleanup conn_tasks (fun () -> Lwt.cancel admission);
+      Lwt.async (fun () -> admission);
+
+      (* Re-serve on closure. make_backend then blocks in the handshake until
+         the frontend re-initialises, and the IP is free the whole time.
+
+         EVERYTHING in here must be caught. This runs under Lwt.async, where an
+         escaping exception reaches Lwt's async_exception_hook and takes the
+         whole unikernel down with it - it is not confined to this client. The
+         normal case is not even exceptional: when the guest shuts down, its
+         frontend directory disappears and the next handshake raises
+         Xs_protocol.Error, so an unguarded re-serve turns every ordinary guest
+         reboot into a firewall crash. wait_clients has always caught exactly
+         this around the first attempt; the loop needs the same guard. *)
+      (* Retry anything that is not "the vif is gone": a guest resetting mid-handshake
+         leaves a revoked grant, a stale event-channel port or half-torn-down ring
+         keys, none of which are Xs_protocol.Error, and wait_clients only re-adds a
+         vif whose directory is ABSENT - so treating those as terminal abandoned a
+         live vif. Both spellings of gone are terminal: Error for a vanished
+         frontend, raw Enoent for a backend directory removed first. The delay
+         damps a client that cycles connect/close. *)
+      let rec reserve attempt =
+        Lwt.catch
+          (fun () ->
+            Cleanup.cleanup conn_tasks;
+            Mirage_sleep.ns (Duration.of_ms 100) >>= fun () ->
+            if !stop then Lwt.return_unit else serve ())
+          (function
+            | Xs_protocol.Error _ | Xs_protocol.Enoent _ ->
+              Log.info (fun f ->
+                  f "client %a has gone; stopped serving its vif"
+                    Dao.ClientVif.pp vif);
+              Lwt.return_unit
+            | ex when attempt < 10 ->
+              Log.warn (fun f ->
+                  f "client %a: connection attempt %d failed (%s); retrying"
+                    Dao.ClientVif.pp vif attempt (Printexc.to_string ex));
+              Mirage_sleep.ns (Duration.of_sec 1) >>= fun () ->
+              if !stop then Lwt.return_unit else reserve (attempt + 1)
+            | ex ->
+              Log.warn (fun f ->
+                  f "client %a: giving up on its vif after %d attempts: %s"
+                    Dao.ClientVif.pp vif attempt (Printexc.to_string ex));
+              Lwt.return_unit)
+      in
+      Lwt.async (fun () ->
+          let* () = closed in
+          Log.info (fun f ->
+              f "client %a type=%s closed its connection; serving the vif \
+                 again" Dao.ClientVif.pp vif vtype);
+          reserve 1);
+
+      let* () =
+        Lwt.catch
+          (conf_vif get_ts vif backend client_eth dns_client dns_servers
+             ~client_ip ~iface ~router ~cleanup_tasks:conn_tasks qubesDB)
+        @@ fun exn ->
+        Log.warn (fun f ->
+            f "Error with client %a: %s" Dao.ClientVif.pp vif
+              (Printexc.to_string exn));
+        Lwt.return_unit
+      in
+      Lwt.return_unit
+    end
   in
-
-  Cleanup.on_cleanup cleanup_tasks (fun () -> remove_client router iface);
-  Lwt.async (fun () ->
-      Lwt.catch
-        (fun () -> add_client router iface)
-        (fun ex ->
-          Log.warn (fun f ->
-              f "Error with client %a: %s" Dao.ClientVif.pp vif
-                (Printexc.to_string ex));
-          Lwt.return_unit));
-
-  let* () =
-    Lwt.catch
-      (conf_vif get_ts vif backend client_eth dns_client dns_servers ~client_ip
-         ~iface ~router ~cleanup_tasks qubesDB)
-    @@ fun exn ->
-    Log.warn (fun f ->
-        f "Error with client %a: %s" Dao.ClientVif.pp vif
-          (Printexc.to_string exn));
-    Lwt.return_unit
-  in
-  Lwt.return_unit
+  serve ()
 
 (** Watch XenStore for notifications of new clients. *)
 let wait_clients get_ts dns_client dns_servers qubesDB router =
@@ -513,7 +607,13 @@ let wait_clients get_ts dns_client dns_servers qubesDB router =
                         f "Client %a has not terminated its vif initialisation"
                           Dao.ClientVif.pp key);
                     Lwt.return_unit
-                | e -> Lwt.fail e));
+                | e ->
+                    (* Never Lwt.fail inside Lwt.async: it would take down the
+                       firewall over one client. *)
+                    Log.warn (fun f ->
+                        f "Client %a failed: %s" Dao.ClientVif.pp key
+                          (Printexc.to_string e));
+                    Lwt.return_unit));
         Log.debug (fun f -> f "client %a arrived" Dao.ClientVif.pp key);
         clients := Dao.VifMap.add key cleanup_tasks !clients;
         go seq
