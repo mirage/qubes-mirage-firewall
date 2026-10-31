@@ -1,3 +1,8 @@
+### 0.9.6 (2026-10-31)
+- Audiovm is preconised to be set to None in documentation and in the salt installation file (#223 @alimirjamali, reviewed by @palainp)
+- Salt script is validated for Qubes 4.3 (#226 @100111001, reviewed by @palainp)
+- Ecosystem updates related to some OSEC advisories (#227 @palainp, reviewed by @hannesm), Ocaml 5.5 + GSO in mirage-net-xen (#231 @palainp, reviewed by @hannesm), and finally Ocaml 5.5.2 + fixes in ocaml-xenstore and mirage-net-xen (#325 @palainp)
+
 ### 0.9.5 (2025-10-29)
 
 - Update ARP entry behavior: the unikernel now responds with its MAC address for every APR request from a client. This fixes issues with some VPN clients (#221, @palainp, reviewed by @hannesm, fix confirmed by @pprudev).
